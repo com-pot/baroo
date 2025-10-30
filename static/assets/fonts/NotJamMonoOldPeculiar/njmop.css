@@ -1,0 +1,11 @@
+@font-face {
+    font-family: 'Not Jam Mono Old Peculiar 11';
+    src: url('/assets/fonts/NotJamMonoOldPeculiar/Not Jam Mono Old Peculiar 11.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --font-not-jam-mono-old-peculiar: 'Not Jam Mono Old Peculiar 11', monospace;
+}

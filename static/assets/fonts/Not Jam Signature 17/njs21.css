@@ -1,0 +1,11 @@
+@font-face {
+    font-family: 'Not Jam Signature 21';
+    src: url('/assets/fonts/Not Jam Signature 17/Not Jam Signature 21.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --font-not-jam-signature-21: 'Not Jam Signature 21', cursive, sans-serif;
+}

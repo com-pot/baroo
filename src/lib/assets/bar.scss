@@ -1,0 +1,120 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.offer {
+    display: grid;
+    grid-template-columns: auto auto auto auto;
+    gap: 1rem 0.5rem;
+}
+
+.offer .item {
+    display: contents;
+}
+
+.offer [data-value] {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 5rem;
+    height: 2rem;
+}
+
+.offer [data-value].active {
+    background-color: lightblue;
+}
+
+#orderDialog [data-action="confirm"] {
+    width: 80%;
+    min-height: 3rem;
+}
+
+.btn-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-block-end: 1rem;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    padding: 0.5rem 1rem;
+    border: 2px solid black;
+    border-radius: 0.5rem;
+
+    background-color: white;
+    cursor: pointer;
+    user-select: none;
+}
+
+.btn:has(input[type="radio"]) {
+    border-color: lightgray;
+}
+
+.btn:has(input[type="radio"]:checked) {
+    border-color: black;
+}
+
+.btn input[type="radio"] {
+    display: none;
+}
+
+.btn .text {
+    font-weight: bold;
+}
+
+// Dialog
+dialog {
+    position: relative;
+    background: none;
+    border: none;
+}
+
+dialog .card {
+    background-color: white;
+    border: 1px solid black;
+    border-radius: 0.5rem;
+    padding: 1rem;
+
+    max-width: 90vw;
+    width: 25rem;
+
+}
+
+dialog>[data-action="close"] {
+    width: 1.5em;
+    height: 1.5em;
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+
+    padding: 0;
+    display: grid;
+    place-content: center;
+
+    background: lightgray;
+    border: 2px solid darkgray;
+    border-radius: 10rem;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+dialog h2 {
+    margin-block-start: 0;
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+dialog .controls {
+    margin-block-start: 1rem;
+
+    display: flex;
+    justify-content: space-evenly;
+}

@@ -1,0 +1,28 @@
+@import url('/static/assets/fonts/Not\ Jam\ Signature\ 17/njs21.css');
+@import url('/static/assets/fonts/NotJamOldStyle11/njos.css');
+@import url('/static/assets/fonts/NotJamMonoOldPeculiar/njmop.css');
+
+body {
+    font-family: var(--font-not-jam-old-style);
+    // background-color: hsl(120 42% 10% / 1);
+    // color: hsl(120 82% 80% / 1);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-not-jam-signature-21);
+}
+
+h1 {
+    font-size: 4rem;
+}
+
+button, input, select, textarea {
+    font-family: inherit;
+    // color: inherit;
+
+    // background-color: hsl(120 42% 15% / 1);
+}
+
+code, pre, kbd, samp {
+    font-family: var(--font-not-jam-mono-old-peculiar);
+}

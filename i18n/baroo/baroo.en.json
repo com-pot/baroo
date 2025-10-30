@@ -1,0 +1,6 @@
+{
+    "$schema": "https://inlang.com/schema/inlang-message-format",
+    "baroo": {
+        "welcome": "Well met! I'm Baroo, your bar tab assistant."
+    }
+}

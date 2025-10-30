@@ -1,0 +1,10 @@
+services:
+  pb:
+    build:
+      dockerfile: ./docker/pb.dockerfile
+      context: .
+    ports:
+      - "43652:43652"
+    volumes:
+      - ./data/pb_data:/pb/pb_data
+      - ./data/pb_migrations:/pb/pb_migrations

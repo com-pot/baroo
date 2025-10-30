@@ -1,0 +1,11 @@
+@font-face {
+    font-family: 'Not Jam Old Style 14';
+    src: url('/assets/fonts/NotJamOldStyle11/NotJamOldStyle14.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --font-not-jam-old-style: 'Not Jam Old Style 14', serif;
+}

@@ -1,9 +1,10 @@
 <script lang="ts">
-    import "$assets/boot.scss";
+    import "$lib/assets/boot.scss";
     import { TagMapper } from "$lib/bar/tags";
     import { onMount } from "svelte";
 
     import type { PageData } from "./$types";
+    import { storageRefToStr } from "$lib/bar/refs";
 
     const { data }: { data: PageData } = $props();
 
@@ -71,7 +72,7 @@
         ndef.scan()
             .then(() => {
                 ndef.onreadingerror = () => {
-                    
+
                     console.log(
                         "Cannot read data from the NFC tag. Try another one?",
                     );
@@ -93,7 +94,10 @@
     }
 
     onMount(() => {
-        renderMappings();
+        mapper.load()
+            .then(() => {
+                renderMappings();
+            })
     });
 </script>
 
@@ -101,40 +105,48 @@
     <title>NFC mapper - {data.bar?.name || data.ref.key}</title>
 </svelte:head>
 
-<h1>NFC mapper - {data.bar?.name || data.ref.key}</h1>
+<nav class="breadcrumbs">
+    <a href="/backstage/bars">Bars</a> /
+    <a href="/backstage/bars/{storageRefToStr(data.ref)}">{data.bar?.name || storageRefToStr(data.ref)}</a> /
+    <span>Mapper</span>
+</nav>
 
-<div class="boot">
-    <button onclick={() => startMapper()}>Start mapper</button>
-</div>
+<main class="backstage-content">
+    <header class="page-header">
+        <h1>NFC mapper - {data.bar?.name || data.ref.key}</h1>
+        <div class="actions">
+            <button class="btn btn-sm btn-primary" onclick={() => startMapper()}>Start mapper</button>
+        </div>
+    </header>
 
-<div class="container">
-    <form onsubmit={(event) => persistUser(event)} autocomplete="off">
-        <fieldset class="grid-layout">
-            <div class="input-group">
-                <label for="tag">NFC tag:</label>
-                <input type="text" id="tag" name="tag" required readonly />
-            </div>
-
-            <div class="input-group">
-                <label for="userId">User id:</label>
-                <input type="text" id="userId" name="userId" required />
-            </div>
-
-            <div class="input-group">
-                <label for="nickName">Nickname:</label>
-                <input type="text" id="nickName" name="nickName" required />
-            </div>
-
-            <div class="input-group">
-                <input type="submit" value="Map NFC to User" />
-            </div>
-        </fieldset>
-    </form>
     <div id="status">
         <p>Status: <span id="status-message"></span></p>
     </div>
 
-    <table>
+    <form onsubmit={(event) => persistUser(event)} autocomplete="off">
+        <fieldset class="grid-layout">
+            <div class="input-pair">
+                <label for="tag" class="form-label">NFC tag:</label>
+                <input type="text" id="tag" name="tag" class="form-control" required readonly />
+            </div>
+
+            <div class="input-pair">
+                <label for="userId" class="form-label">User id:</label>
+                <input type="text" id="userId" name="userId" class="form-control" required />
+            </div>
+
+            <div class="input-pair">
+                <label for="nickName" class="form-label">Nickname:</label>
+                <input type="text" id="nickName" name="nickName" class="form-control" required />
+            </div>
+
+            <div class="input-pair">
+                <input type="submit" value="Map NFC to User" class="btn btn-primary" />
+            </div>
+        </fieldset>
+    </form>
+
+    <table class="table">
         <thead>
             <tr>
                 <th data-name="tag">NFC Tag</th>
@@ -144,20 +156,4 @@
         </thead>
         <tbody id="mappings"></tbody>
     </table>
-</div>
-
-<style data-name="forms">
-    .grid-layout {
-        display: grid;
-        grid-template-columns: 1fr 2fr;
-        gap: 0.5em 1em;
-        align-items: center;
-    }
-    .grid-layout .input-group {
-        display: contents;
-    }
-    .grid-layout input[type="submit"] {
-        grid-column: span 2;
-        justify-self: start;
-    }
-</style>
+</main>

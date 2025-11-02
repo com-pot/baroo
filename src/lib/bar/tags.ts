@@ -1,53 +1,96 @@
 import type { StorageRef } from "./storage.server"
 
 export class TagMapper {
-    private _mappings: {tag: string, userId: string, nickName: string}[] = []
-
-    public get mappings(): Readonly<typeof this._mappings> {
-        return this._mappings
+    public get mappings(): Readonly<TagMapping[]> {
+        return this.ctrl.getMappings()
     }
 
-    get key(): string {
-        return `mappings.${this.ref.key}`
+    private ctrl: MapperStorage
+
+    constructor(private readonly ref: StorageRef) {
+        this.ctrl = typeCtrls[this.ref.type](ref)
     }
 
-    constructor(private ref: StorageRef) {
-        if (ref.type !== 'local') {
-            throw new Error("TagMapper only supports local storage refs")
-        }
+    public isValid(data: unknown): data is TagMapping {
+        return isValidMapping(data)
     }
 
-    public isValid(data: unknown): data is TagMapper['_mappings'][0] {
-        if (typeof data !== 'object' || data === null) return false
-        const d = data as Record<string, unknown>
-        return typeof d.tag === 'string'
-            && typeof d.userId === 'string'
-            && typeof d.nickName === 'string'
-    }
-
-    /**
-     * @param {TagMapper['_mappings'][0]} item
-     */
-    public async put(item: TagMapper['_mappings'][0]) {
-        this._mappings = [
-            ...this._mappings.filter(m => m.tag !== item.tag),
-            item,
-        ]
-
-        await this.save()
-    }
-
-    private async save() {
-        localStorage.setItem(this.key, JSON.stringify(this._mappings))
+    public async put(item: TagMapping) {
+        await this.ctrl.put(item);
     }
 
     public async load() {
-        const stored = localStorage.getItem(this.key)
-        this._mappings = ((stored ? JSON.parse(stored) : []) as TagMapper['_mappings'])
-            .filter(m => m.tag && m.userId && m.nickName)
+        await this.ctrl.load()
     }
 
-    async get(tag: TagMapper['_mappings'][0]['tag']) {
-        return this._mappings.find(m => m.tag === tag)
+    async get(tag: TagMapping['tag']) {
+        return this.mappings.find(m => m.tag === tag)
     }
+}
+
+export type TagMapping = {tag: string, userId: string, nickName: string}
+export function isValidMapping(data: unknown): data is TagMapping {
+    if (typeof data !== 'object' || data === null) return false
+    const d = data as Record<string, unknown>
+    return typeof d.tag === 'string' && d.tag.length > 0
+        && typeof d.userId === 'string' && d.userId.length > 0
+        && typeof d.nickName === 'string' && d.nickName.length > 0
+}
+
+interface MapperStorage {
+    put(mapping: TagMapping): Promise<void>;
+    load(): Promise<void>;
+
+    getMappings(): Readonly<TagMapping[]>;
+
+}
+const typeCtrls: Record<StorageRef["key"], (ref: StorageRef) => MapperStorage> = {
+    local: ((ref) => {
+        const key = `mappings.${ref.key}`
+        let mappings = [] as TagMapping[]
+        return ({
+            async load() {
+                const stored = localStorage.getItem(key)
+                mappings = ((stored ? JSON.parse(stored) : []) as TagMapping[])
+                    .filter(m => m.tag && m.userId && m.nickName)
+            },
+            async put(mapping) {
+                mappings = [
+                    ...mappings.filter(m => m.tag !== mapping.tag),
+                    mapping,
+                ]
+                localStorage.setItem(key, JSON.stringify(mappings))
+            },
+            getMappings() {
+                return mappings
+            },
+        })
+    }),
+    db: (ref) => {
+        let mappings = [] as TagMapping[]
+
+        return {
+            getMappings: () => mappings,
+
+            async load() {
+                try {
+                    const response = await fetch(`/api/bars/${ref.key}/mappings`);
+                    if (!response.ok) {
+                        throw new Error(`Failed to load mappings: ${response.status} ${response.statusText}`);
+                    }
+                    mappings = await response.json();
+                } catch (error) {
+                    console.error('Failed to load mappings from API:', error);
+                    mappings = [];
+                }
+            },
+            async put(mapping) {
+                await fetch(`/api/bars/${ref.key}/mappings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(mapping)
+                });
+            }
+        }
+    },
 }

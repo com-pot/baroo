@@ -1,5 +1,31 @@
 import type { Handle } from '@sveltejs/kit';
 import { paraglideMiddleware } from '$lib/paraglide/server';
+import { sequence } from '@sveltejs/kit/hooks';
+import { FIXME_DEBUGGING_CREATE_DB_FROM_ENV } from '$lib/db.server';
+
+const handlePocketBase: Handle = async ({ event, resolve }) => {
+    const pb = event.locals.pb = await FIXME_DEBUGGING_CREATE_DB_FROM_ENV();
+
+    if (pb.authStore.isValid && pb.authStore.record) {
+        const user = await pb.collection(pb.authStore.record.collectionName)
+            .getOne(pb.authStore.record.id, { expand: 'roles', fields: '*,roles.*' });
+
+        event.locals.user = {
+            email: user.email,
+            name: user.name,
+            id: user.id,
+
+            roles: (user.expand?.roles as any[]).map(role => role.name)
+        }
+    }
+
+    event.locals.acl = {
+        hasRole: (role: string) => event.locals.user?.roles?.includes(role) || false
+    }
+
+    const response = await resolve(event);
+    return response;
+};
 
 const handleParaglide: Handle = ({ event, resolve }) => paraglideMiddleware(event.request, ({ request, locale }) => {
     event.request = request;
@@ -9,4 +35,7 @@ const handleParaglide: Handle = ({ event, resolve }) => paraglideMiddleware(even
     });
 });
 
-export const handle: Handle = handleParaglide;
+export const handle: Handle = sequence(
+    handlePocketBase,
+    handleParaglide,
+);

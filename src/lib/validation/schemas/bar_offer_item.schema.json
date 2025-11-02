@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "bar": {
+      "type": "string",
+      "minLength": 15,
+      "maxLength": 15,
+      "pattern": "^[a-z0-9]+$",
+      "description": "ID of the bar this item belongs to"
+    },
+    "key": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 10,
+      "pattern": "^[a-z0-9\\-]+$",
+      "description": "Unique key identifier for the offer item within a bar"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name of the offer item"
+    },
+    "pricing": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Pricing variants for the item (e.g., {'x': 50, '1': 100})"
+    }
+  },
+  "required": ["bar", "key", "name"],
+  "additionalProperties": false
+}

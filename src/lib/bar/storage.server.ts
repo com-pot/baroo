@@ -1,19 +1,13 @@
 import type { Db } from "../db.server";
 import type { Bar, BarMember, BarOfferItem } from "./BarModel";
+import { parseStorageRef } from "./refs";
 
-export function parseStorageRef(ref: string): StorageRef {
-    if (ref.startsWith('local:')) {
-        return { type: 'local', key: ref.slice('local:'.length) };
-    }
-
-    return { type: 'db', key: ref };
-}
 
 export async function loadBarData(pb: Db, ref: string|StorageRef) {
     if (typeof ref === 'string') ref = parseStorageRef(ref);
 
     if (ref.type === 'local') {
-        return {ref};
+        return {ref, offerItems: [], members: [], mappings: [], bar: null};
     }
 
     const bar = await pb.collection<Bar>('bars').getFirstListItem(`slug="${ref.key}"`);

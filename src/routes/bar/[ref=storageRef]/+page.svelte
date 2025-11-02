@@ -36,23 +36,9 @@
 
     const mapper = new TagMapper(data.ref);
     interface OrderData {
-        items: Pick<BarOrderItem, "key" | "value">[];
+        items: Pick<BarOrderItem, "key" | "variant">[];
     }
     const balanceCtrl = $state({
-        offer: [
-            { key: "kof", name: "Kofola", pricing: {} },
-            { key: "rad", name: "Radegast", pricing: {} },
-            { key: "sum", name: "Summer Citra", pricing: {} },
-            { key: "mou", name: "Moucha", pricing: {} },
-            { key: "cid", name: "Cider", pricing: {} },
-            { key: "per", name: "Perony", pricing: {} },
-            { key: "zil", name: "Zilvar", pricing: {} },
-            { key: "cvi", name: "Cvikov", pricing: {} },
-            { key: "kne", name: "Kněžna", pricing: {} },
-            { key: "med", name: "Medovina", pricing: {} },
-            { key: "a_o", name: "Asterix & Obelix", pricing: {} },
-        ] as BarOfferItem[],
-
         workingCopy: null as null | (MemberBalance & { _label: string }),
         currentOrder: null as null | OrderData,
 
@@ -139,7 +125,7 @@
         const counts: Record<string, number> = {};
         if (balanceCtrl.currentOrder) {
             for (const item of balanceCtrl.currentOrder.items) {
-                const key = `${item.key}-${item.value}`;
+                const key = `${item.key}-${item.variant}`;
                 counts[key] = (counts[key] || 0) + 1;
             }
         }
@@ -157,7 +143,7 @@
             }
         > = {};
         for (const item of balanceCtrl.workingCopy?.items || []) {
-            const offerItem = balanceCtrl.offer.find(
+            const offerItem = data.offerItems.find(
                 (o) => o.key === item.key,
             ) || { key: item.key, name: item.key, pricing: {} };
 
@@ -167,14 +153,14 @@
                     valueCounts: {},
                 };
             }
-            if (!itemCounts[item.key].valueCounts[item.value]) {
-                itemCounts[item.key].valueCounts[item.value] = {
-                    value: item.value,
-                    price: offerItem.pricing?.[item.value] || 0,
+            if (!itemCounts[item.key].valueCounts[item.variant]) {
+                itemCounts[item.key].valueCounts[item.variant] = {
+                    value: item.variant,
+                    price: offerItem.pricing?.[item.variant] || 0,
                     count: 0,
                 };
             }
-            itemCounts[item.key].valueCounts[item.value].count++;
+            itemCounts[item.key].valueCounts[item.variant].count++;
         }
 
         return Object.values(itemCounts).map((item) => ({
@@ -277,14 +263,6 @@
             },
         ]);
 
-        booted?.allReady.then(() => {
-            // const summaryRadio = document.querySelector('[name="action"][value="summary"]')
-            // summaryRadio.checked = true
-            // summaryRadio.dispatchEvent(new Event("change"))
-            // document.getElementById("userId").value = "22"
-            // document.forms.selectBadgeForm.dispatchEvent(new Event("submit"))
-        });
-
         return booted?.destroy;
     });
 </script>
@@ -341,7 +319,7 @@
         </h2>
         <h3>Položky</h3>
         <div class="offer">
-            {#each balanceCtrl.offer as item (item.key)}
+            {#each data.offerItems as item (item.key)}
                 <div class="item" data-key={item.key}>
                     <div class="actions">
                         <button
@@ -359,7 +337,7 @@
                             onclick={() =>
                                 balanceCtrl.addToOrder({
                                     key: item.key,
-                                    value: value as any,
+                                    variant: value as any,
                                 })}
                         >
                             <kdb>

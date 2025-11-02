@@ -1,0 +1,12 @@
+.pricing-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+
+    .price-tag {
+        background: #e7f3ff;
+        padding: 0.25rem 0.5rem;
+        border-radius: 3px;
+        font-size: 0.875rem;
+    }
+}

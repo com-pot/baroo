@@ -1,1 +1,104 @@
-@use "modern-normalize/modern-normalize.css";
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+
+    h2 {
+        margin: 0;
+    }
+}
+
+.actions {
+    display: flex;
+    gap: 0.5rem;
+
+    >form {
+        display: contents;
+    }
+}
+
+.items-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--item-size, 300px), 1fr));
+    gap: 1.5rem;
+}
+
+.empty-state {
+    background: white;
+    padding: 3rem;
+    text-align: center;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+    p {
+        color: #666;
+        margin: 0;
+    }
+}
+
+.card {
+    >header {
+        display: flex;
+
+        .actions {
+            margin-inline-start: auto;
+        }
+    }
+}
+
+.grid-layout {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 0.5em 1em;
+    align-items: center;
+}
+
+.input-pair {
+    small {
+        display: block;
+        margin-top: 0.25rem;
+        color: #666;
+        font-size: 0.875rem;
+    }
+
+    .error-message {
+        display: block;
+        margin-top: 0.25rem;
+        color: #dc3545;
+        font-size: 0.875rem;
+    }
+}
+
+.flow-block {
+    > :not(:first-child) {
+        margin-block-start: 1rem;
+    }
+}
+
+.grid-layout .input-pair {
+    display: contents;
+
+    >.form-control {
+        place-self: stretch;
+    }
+}
+
+
+.grid-layout input[type="submit"] {
+    grid-column: span 2;
+    justify-self: start;
+}
+
+.info-message {
+    max-width: 600px;
+
+    p {
+        margin: 0 0 1rem;
+        color: #666;
+    }
+
+    strong {
+        color: #333;
+    }
+}

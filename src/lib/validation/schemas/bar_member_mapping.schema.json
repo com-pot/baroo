@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "tag": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Serial ID tag to map to a member"
+    },
+    "userId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "User ID to associate with the tag"
+    },
+    "nickName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Nickname of the bar member"
+    }
+  },
+  "required": ["tag", "userId", "nickName"],
+  "additionalProperties": false
+}

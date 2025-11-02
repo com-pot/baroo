@@ -6,6 +6,9 @@ export async function createDb(auth: { token: string }): Promise<Pocketbase> {
     try {
         const pb = new Pocketbase(env.PB_BASE_URL)
         pb.authStore.save(auth.token);
+        await pb.collection('users').authRefresh({
+            expand: 'roles',
+        })
 
         return pb
     } catch (e) {

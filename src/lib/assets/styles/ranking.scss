@@ -1,0 +1,53 @@
+.ranking {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: member-counter;
+
+    li {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem;
+        border-bottom: 1px solid #eee;
+        counter-increment: member-counter;
+        position: relative;
+        padding-left: 2.5rem;
+
+        &::before {
+            content: counter(member-counter) ".";
+            position: absolute;
+            left: 0.75rem;
+            font-weight: bold;
+            color: #999;
+        }
+
+        &:first-child {
+            background: #fff9e6;
+
+            &::before {
+                color: #ffb700;
+            }
+        }
+
+        &:nth-child(2) {
+            background: #f5f5f5;
+        }
+
+        &:nth-child(3) {
+            background: #fef5f5;
+        }
+
+        &:last-child {
+            border-bottom: none;
+        }
+
+        .name {
+            font-weight: 500;
+        }
+
+        .score {
+            font-weight: bold;
+            color: #007bff;
+        }
+    }
+}

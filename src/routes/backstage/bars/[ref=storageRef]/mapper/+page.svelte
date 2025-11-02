@@ -4,7 +4,7 @@
     import { onMount } from "svelte";
 
     import type { PageData } from "./$types";
-    import { storageRefToStr } from "$lib/bar/refs";
+    import { stringifyStorageRef } from "$lib/bar/refs";
 
     const { data }: { data: PageData } = $props();
 
@@ -107,7 +107,7 @@
 
 <nav class="breadcrumbs">
     <a href="/backstage/bars">Bars</a> /
-    <a href="/backstage/bars/{storageRefToStr(data.ref)}">{data.bar?.name || storageRefToStr(data.ref)}</a> /
+    <a href="/backstage/bars/{stringifyStorageRef(data.ref)}">{data.bar?.name || stringifyStorageRef(data.ref)}</a> /
     <span>Mapper</span>
 </nav>
 

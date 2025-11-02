@@ -27,7 +27,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         });
 
         const result = mappings
-            .map((mapping: any): TagMapping => ({
+            .map((mapping): TagMapping => ({
                 tag: mapping.serialId,
                 userId: mapping.expand?.member?.id || '',
                 nickName: mapping.expand?.member?.nickName || ''
@@ -79,7 +79,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
                     filter: `bar="${bar.id}"`,
                     sort: '-seq'
                 });
-                const nextSeq = members.length > 0 ? (members[0] as any).seq + 1 : 1;
+                const nextSeq = members.length > 0 ? members[0].seq + 1 : 1;
 
                 member = await locals.pb.collection('bar_members').create({
                     bar: bar.id,

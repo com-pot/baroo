@@ -3,8 +3,9 @@
     import "$lib/assets/backstage.scss";
 
     import type { LayoutData } from './$types';
+    import type { Snippet } from "svelte";
 
-    let { data, children }: { data: LayoutData; children: any } = $props();
+    let { data, children }: { data: LayoutData; children: Snippet } = $props();
 </script>
 
 <div class="backstage-layout">

@@ -28,8 +28,7 @@
                     </div>
                     <div class="card-footer">
                         <div class="actions">
-                            <a href="/backstage/bars/{bar.slug}" class="btn btn-secondary">Edit</a>
-                            <a href="/backstage/bars/{bar.slug}/offer" class="btn btn-secondary">Manage offer</a>
+                            <a href="/backstage/bars/{bar.slug}" class="btn btn-secondary">Detail</a>
                         </div>
                     </div>
                 </article>

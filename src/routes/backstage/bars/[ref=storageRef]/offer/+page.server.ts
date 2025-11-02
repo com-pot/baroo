@@ -1,4 +1,6 @@
+import type { BarOfferItem } from '$lib/bar/BarModel';
 import { parseStorageRef } from '$lib/bar/refs';
+import { formatPbError } from '$lib/db.server';
 import { validate, getFieldErrors } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
@@ -55,7 +57,7 @@ export const actions: Actions = {
                 : {}
         };
 
-        const validationResult = validate('barOfferItem', data);
+        const validationResult = validate<BarOfferItem>('barOfferItem', data);
 
         if (!validationResult.valid) {
             return fail(400, {
@@ -66,16 +68,12 @@ export const actions: Actions = {
         }
 
         try {
-            await locals.pb.collection('bar_offer_items').create(validationResult.data as any);
+            await locals.pb.collection('bar_offer_items').create(validationResult.data);
             return { success: true, action: 'create' };
-        } catch (err: any) {
-            if (err.status === 400 && err.data?.data) {
-                const pbErrors: Record<string, string> = {};
-                for (const [field, fieldError] of Object.entries(err.data.data)) {
-                    pbErrors[field] = (fieldError as any).message;
-                }
-                return fail(400, { data, errors: pbErrors, action: 'create' });
-            }
+        } catch (err) {
+            const formattedError = formatPbError(err)
+            if (formattedError) return fail(400, formattedError);
+
             throw err;
         }
     },
@@ -108,7 +106,7 @@ export const actions: Actions = {
                 : {}
         };
 
-        const validationResult = validate('barOfferItem', data);
+        const validationResult = validate<BarOfferItem>('barOfferItem', data);
 
         if (!validationResult.valid) {
             return fail(400, {
@@ -119,16 +117,12 @@ export const actions: Actions = {
         }
 
         try {
-            await locals.pb.collection('bar_offer_items').update(itemId, validationResult.data as any);
+            await locals.pb.collection('bar_offer_items').update(itemId, validationResult.data);
             return { success: true, action: 'update' };
-        } catch (err: any) {
-            if (err.status === 400 && err.data?.data) {
-                const pbErrors: Record<string, string> = {};
-                for (const [field, fieldError] of Object.entries(err.data.data)) {
-                    pbErrors[field] = (fieldError as any).message;
-                }
-                return fail(400, { data: { ...data, itemId }, errors: pbErrors, action: 'update' });
-            }
+        } catch (err) {
+            const formattedError = formatPbError(err)
+            if (formattedError) return fail(400, formattedError);
+
             throw err;
         }
     },

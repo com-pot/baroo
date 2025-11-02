@@ -8,7 +8,7 @@ export function parseStorageRef(ref: string): StorageRef {
     return { type: 'db', key: ref };
 }
 
-export function storageRefToStr(ref: StorageRef): string {
+export function stringifyStorageRef(ref: StorageRef): string {
     if (ref.type === 'local') {
         return `local:${ref.key}`;
     }

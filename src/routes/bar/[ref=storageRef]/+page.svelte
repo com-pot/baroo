@@ -7,7 +7,6 @@
     import { onMount } from "svelte";
     import { runBoot } from "$lib/boot";
     import type {
-        BarOfferItem,
         BarOrderItem,
         MemberBalance,
     } from "$lib/bar/BarModel";
@@ -232,7 +231,7 @@
                                 statusEl.innerText =
                                     "Cannot read data from the NFC tag.";
                             };
-                            ndef.onreading = async (event: any) => {
+                            ndef.onreading = async (event) => {
                                 if (balanceCtrl.workingCopy) {
                                     statusEl.innerText = `Currently processing order for ${balanceCtrl.workingCopy.id}, please finish it first.`;
                                     return;
@@ -320,6 +319,7 @@
         <h3>Položky</h3>
         <div class="offer">
             {#each data.offerItems as item (item.key)}
+                {@const variants = Object.keys(item.pricing) as ("x"|"1")[]}
                 <div class="item" data-key={item.key}>
                     <div class="actions">
                         <button
@@ -331,21 +331,24 @@
                         >
                     </div>
                     <span>{item.name}</span>
-                    {#each ["x", "1"] as value (value)}
+                    {#each variants as variant (variant)}
                         <button
-                            data-value={value}
+                            data-value={variant}
                             onclick={() =>
                                 balanceCtrl.addToOrder({
                                     key: item.key,
-                                    variant: value as any,
+                                    variant,
                                 })}
                         >
                             <kdb>
-                                <kbd>{value}</kbd>
+                                <kbd>{variant}</kbd>
                                 <span role="separator">×</span>
-                                <span class="amount">{currentOrderCounts[`${item.key}-${value}`]}</span>
+                                <span class="amount">{currentOrderCounts[`${item.key}-${variant}`]}</span>
                             </kdb>
                         </button>
+                    {/each}
+                    {#each new Array(2 - variants.length) as _}
+                        <span class="spacer"></span>
                     {/each}
                 </div>
             {/each}

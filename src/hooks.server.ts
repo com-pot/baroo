@@ -8,14 +8,21 @@ const handlePocketBase: Handle = async ({ event, resolve }) => {
 
     if (pb.authStore.isValid && pb.authStore.record) {
         const user = await pb.collection(pb.authStore.record.collectionName)
-            .getOne(pb.authStore.record.id, { expand: 'roles', fields: '*,roles.*' });
+            .getOne<{
+                email: string,
+                name: string,
+                id: string,
+                expand: {
+                    roles: { name: string }[],
+                },
+            }>(pb.authStore.record.id, { expand: 'roles', fields: '*,roles.*' });
 
         event.locals.user = {
             email: user.email,
             name: user.name,
             id: user.id,
 
-            roles: (user.expand?.roles as any[]).map(role => role.name)
+            roles: (user.expand.roles).map(role => role.name)
         }
     }
 

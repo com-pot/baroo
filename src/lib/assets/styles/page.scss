@@ -17,11 +17,20 @@
         display: contents;
     }
 }
+.dropdown-menu {
+    form {
+        display: contents;
+    }
+}
 
 .items-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(var(--item-size, 300px), 1fr));
     gap: 1.5rem;
+
+    &.-tight {
+        gap: 0.5rem;
+    }
 }
 
 .empty-state {
@@ -38,11 +47,17 @@
 }
 
 .card {
-    >header {
+    >:is(header, .card-header:has(.actions)) {
         display: flex;
 
         .actions {
             margin-inline-start: auto;
+        }
+    }
+
+    .card-header {
+        > :is(h1, h2, h3, h4, h5, h6) {
+            margin: 0;
         }
     }
 }
@@ -100,5 +115,17 @@
 
     strong {
         color: #333;
+    }
+}
+
+.dashboard-grid {
+    &:not(.row) {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+    }
+
+    &.row {
+        gap: 1.5rem 0;
     }
 }

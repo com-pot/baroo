@@ -1,14 +1,14 @@
 <script lang="ts">
     import type { PageData, ActionData } from './$types';
     import { enhance } from '$app/forms';
-    import { storageRefToStr } from '$lib/bar/refs';
+    import { stringifyStorageRef } from '$lib/bar/refs';
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
     let editingItem = $state<any>(null);
     let showCreateForm = $state(false);
 
-    function startEdit(item: any) {
+    function startEdit(item) {
         editingItem = { ...item, pricing: JSON.stringify(item.pricing || {}, null, 2) };
         showCreateForm = false;
     }
@@ -26,7 +26,7 @@
 
 <nav class="breadcrumbs">
     <a href="/backstage/bars">Bars</a> /
-    <a href="/backstage/bars/{storageRefToStr(data.ref)}">{data.bar.name}</a> /
+    <a href="/backstage/bars/{stringifyStorageRef(data.ref)}">{data.bar.name}</a> /
     <span>Items</span>
 </nav>
 

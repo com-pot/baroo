@@ -113,7 +113,6 @@
                                 >Manage</button>
                                 <ul class="dropdown-menu">
                                     <li><a class="dropdown-item" href="/backstage/bars/{data.ref.key}/offer">Offer Items</a></li>
-                                    <li><a class="dropdown-item" href="/backstage/bars/{data.ref.key}/mapper">Member Mapping</a></li>
                                     <li role="separator" class="dropdown-divider"></li>
                                     <li>
                                         <form method="POST" use:enhance>
@@ -121,6 +120,7 @@
                                                 type="submit"
                                                 formaction="?/delete"
                                                 class="dropdown-item text-danger"
+                                                disabled
                                                 onclick={(e) => {
                                                     if (!confirm('Are you sure you want to delete this bar?')) {
                                                         e.preventDefault();
@@ -188,23 +188,32 @@
             <section class="col-md-4" data-name="member-stats">
                 <div class="card">
                     <div class="card-header">
-                        <h2>Members orders</h2>
+                        <h2>Members</h2>
+                        <div class="actions">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-secondary dropdown-toggle"
+                                    type="button"
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false"
+                                    aria-label="Manage members"
+                                ></button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="/backstage/bars/{data.ref.key}/mapper">Member Mapping</a></li>
+                                    <li><a class="dropdown-item" href="/backstage/bars/{data.ref.key}/summaries">Member Summaries</a></li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                     <div class="card-body">
-                        {#if data.stats?.memberStats && data.stats.memberStats.length > 0}
-                            <ol class="ranking">
-                                {#each data.stats.memberStats.slice(0, 10) as stat (stat.member.id)}
-                                    <li>
-                                        <span class="name">{stat.member.nickName}</span>
-                                        <span class="score">{stat.orderCount}</span>
-                                    </li>
-                                {/each}
-                            </ol>
-                        {:else}
-                            <div class="empty-state">
-                                <p>No orders yet</p>
-                            </div>
-                        {/if}
+                        <p>Most orders</p>
+                        <ol class="ranking">
+                            {#each data.stats?.memberStats.slice(0, 10) as stat (stat.member.id)}
+                                <li>
+                                    <span class="name">{stat.member.nickName}</span>
+                                    <span class="score">{stat.orderCount}</span>
+                                </li>
+                            {/each}
+                        </ol>
                     </div>
                 </div>
             </section>

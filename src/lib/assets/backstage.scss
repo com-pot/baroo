@@ -19,8 +19,17 @@
     justify-content: space-between;
     align-items: center;
 
+    .brand {
+        margin-block-start: -0.5rem;
+        margin-block-end: -0.5rem;
+
+        small {
+            color: #ccc;
+        }
+    }
     h1 {
         margin: 0;
+        line-height: 1;
         font-size: 1.5rem;
     }
 }
@@ -45,6 +54,11 @@
             background: rgba(255, 255, 255, 0.1);
         }
     }
+}
+
+.backstage-header + nav.breadcrumbs {
+    padding: 0.1rem 2rem;
+    background-color: #ddd;
 }
 
 .backstage-content {

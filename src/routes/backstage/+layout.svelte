@@ -11,7 +11,8 @@
 <div class="backstage-layout">
     <header class="backstage-header">
         <div class="brand">
-            <h1>Backstage</h1>
+            <h1>Baroo</h1>
+            <small>Backstage</small>
         </div>
         <nav class="backstage-nav">
             <ul>

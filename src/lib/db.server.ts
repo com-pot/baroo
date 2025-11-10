@@ -13,7 +13,7 @@ export async function createDb(auth: { token: string }): Promise<Pocketbase> {
         return pb
     } catch (e) {
         if (e instanceof ClientResponseError) {
-            return error(e.status, {
+            return error(e.status || 500, {
                 message: `Pocketbase error: ${e.message}`,
             })
         }

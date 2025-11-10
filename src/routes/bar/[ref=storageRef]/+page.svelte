@@ -1,16 +1,15 @@
 <script lang="ts">
     import "$lib/assets/bar.scss";
     import "$lib/assets/boot.scss";
-    import * as m from '$lib/paraglide/messages.js';
+    import * as m from "$lib/paraglide/messages.js";
+    import { source } from "sveltekit-sse";
 
     import type { PageData } from "./$types";
-    import { onMount } from "svelte";
+    import { onMount, tick } from "svelte";
     import { runBoot } from "$lib/boot";
-    import type {
-        BarOrderItem,
-        MemberBalance,
-    } from "$lib/bar/BarModel";
+    import type { BarOrderItem, MemberBalance } from "$lib/bar/BarModel";
     import { TagMapper } from "$lib/bar/tags";
+    import { get } from "svelte/store";
 
     const {
         data,
@@ -205,6 +204,23 @@
         );
     }
 
+    let eventStreamMessage = $state("");
+    const eventStreamSource = source("/bar/scanner-event-stream", {
+        close({ connect }) {
+            eventStreamMessage = 'connection:closed-by-server'
+            connect()
+        }
+    });
+    const cardId = $derived.by(() => {
+        if (eventStreamMessage?.startsWith('card:')) {
+            return eventStreamMessage.substring('card:'.length)
+        }
+    })
+    function copy(id: string) {
+        navigator.clipboard.writeText(id)
+    }
+    const eventStream = eventStreamSource.select("message");
+
     onMount(() => {
         const booted = runBoot([
             {
@@ -246,9 +262,17 @@
                                 }
 
                                 try {
-                                    (document.querySelector("#serialNumber") as HTMLInputElement)!.value = event.serialNumber;
-                                    (document.querySelector("#userId") as HTMLInputElement)!.value = member.userId;
-                                    document.forms.namedItem('selectBadgeForm')!.dispatchEvent(new Event("submit"));
+                                    (document.querySelector(
+                                        "#serialNumber",
+                                    ) as HTMLInputElement)!.value =
+                                        event.serialNumber;
+                                    (document.querySelector(
+                                        "#userId",
+                                    ) as HTMLInputElement)!.value =
+                                        member.userId;
+                                    document.forms
+                                        .namedItem("selectBadgeForm")!
+                                        .dispatchEvent(new Event("submit"));
                                     statusEl.innerText = `Tag ${event.serialNumber} recognized as ${member.nickName} (${member.userId}).`;
                                 } catch (error) {
                                     statusEl.innerText = `Error processing tag ${event.serialNumber}: ${error instanceof Error ? error.message : String(error)}`;
@@ -262,12 +286,22 @@
             },
         ]);
 
+        eventStream.subscribe((message) => {
+            console.log("stream message:", message);
+            if (message === "heartbeat") {
+                return;
+            }
+            eventStreamMessage = message;
+        });
+
         return booted?.destroy;
     });
 </script>
 
 <main>
-    <h1>{m['baroo.page_front.title']({barName: bar?.name || bar?.slug || ''})}</h1>
+    <h1>
+        {m["baroo.page_front.title"]({ barName: bar?.name || bar?.slug || "" })}
+    </h1>
     <form name="selectBadgeForm" data-boot onsubmit={submitSelectForm}>
         <p class="form-status">
             <span class="level">{status?.level}</span>
@@ -289,12 +323,17 @@
                 <span class="text">{m["baroo.bar.pos.action.summary"]()}</span>
             </label>
         </div>
-        <label for="userId">{m['baroo.bar.userRef']()}</label>
+        <label for="userId">{m["baroo.bar.userRef"]()}</label>
         <input name="userId" id="userId" required />
         <button type="submit">{m["generic.action.open"]()}</button>
 
         <input type="hidden" name="serialNumber" id="serialNumber" />
     </form>
+
+    <div class="card">
+        stream: {eventStreamMessage}
+        <button disabled={!cardId} onclick={() => copy(cardId || '')}>copy</button>
+    </div>
 
     <div class="nfc-scanner" data-boot-feature="nfc" data-boot-status="idle">
         NFC: <p class="status">Idle</p>
@@ -314,12 +353,14 @@
     >
     <div class="card">
         <h2>
-            Nová objednávka - <span class="name">{balanceCtrl.workingCopy?._label}</span>
+            Nová objednávka - <span class="name"
+                >{balanceCtrl.workingCopy?._label}</span
+            >
         </h2>
         <h3>Položky</h3>
         <div class="offer">
             {#each data.offerItems as item (item.key)}
-                {@const variants = Object.keys(item.pricing) as ("x"|"1")[]}
+                {@const variants = Object.keys(item.pricing) as ("x" | "1")[]}
                 <div class="item" data-key={item.key}>
                     <div class="actions">
                         <button
@@ -343,7 +384,11 @@
                             <kdb>
                                 <kbd>{variant}</kbd>
                                 <span role="separator">×</span>
-                                <span class="amount">{currentOrderCounts[`${item.key}-${variant}`]}</span>
+                                <span class="amount"
+                                    >{currentOrderCounts[
+                                        `${item.key}-${variant}`
+                                    ]}</span
+                                >
                             </kdb>
                         </button>
                     {/each}
@@ -379,7 +424,8 @@
     >
     <div class="card">
         <h2>
-            Přehled - <span class="name">{balanceCtrl.workingCopy?._label}</span>
+            Přehled - <span class="name">{balanceCtrl.workingCopy?._label}</span
+            >
         </h2>
 
         <h3>Položky</h3>

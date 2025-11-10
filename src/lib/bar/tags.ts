@@ -1,3 +1,4 @@
+import type { BarMember } from "./BarModel"
 import type { StorageRef } from "./storage.server"
 
 export class TagMapper {
@@ -28,7 +29,7 @@ export class TagMapper {
     }
 }
 
-export type TagMapping = {tag: string, userId: string, nickName: string}
+export type TagMapping = {tag: string, userId: BarMember["id"], nickName: BarMember["nickName"]}
 export function isValidMapping(data: unknown): data is TagMapping {
     if (typeof data !== 'object' || data === null) return false
     const d = data as Record<string, unknown>

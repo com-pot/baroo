@@ -10,8 +10,9 @@ export type BarOfferItem = {
 }
 
 export type BarMember = {
-    userId: string;
+    id: string;
     nickName: string;
+    seq: number;
 }
 
 export interface MemberBalance {

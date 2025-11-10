@@ -9,7 +9,7 @@
 
     let selectedMember = $state<typeof data.summaries[0] | null>(null);
     let timeline = $state<MemberTimelineEntry[]>([]);
-    let settlementAmount = $state('');
+    let settlementAmount = $state(0);
 
     function openMemberDetail(member: typeof data.summaries[0]) {
         selectedMember = member;
@@ -19,7 +19,7 @@
     function closeDrawer() {
         selectedMember = null;
         timeline = [];
-        settlementAmount = '';
+        settlementAmount = 0;
     }
 
     async function loadTimeline(memberId: string) {
@@ -91,10 +91,8 @@
                     <thead>
                         <tr>
                             <th>Member</th>
-                            <th class="text-end">Total Orders</th>
                             <th class="text-end">Settled</th>
-                            <th class="text-end">Pending</th>
-                            <th class="text-end">Last Settlement</th>
+                            <th class="text-end">Amount Due</th>
                             <th class="text-end">Status</th>
                         </tr>
                     </thead>
@@ -107,30 +105,17 @@
                                 tabindex="0"
                             >
                                 <td>
-                                    <strong>{summary.member.nickName}</strong>
                                     <small class="text-muted">#{summary.member.seq}</small>
+                                    <strong>{summary.member.nickName}</strong>
                                 </td>
-                                <td class="text-end">{summary.totalOrderItems}</td>
-                                <td class="text-end">{summary.settledOrderItems}</td>
+                                <td class="text-end">{summary.standing.settledOrderItems} / {summary.standing.totalOrderItems}</td>
                                 <td class="text-end">
-                                    <span class:text-warning={summary.pendingOrderItems > 0}>
-                                        {summary.pendingOrderItems}
-                                    </span>
-                                </td>
-                                <td class="text-end">
-                                    {#if summary.lastSettlement}
-                                        <div>
-                                            <small>{formatDate(summary.lastSettlement.date)}</small>
-                                            <div class="text-success">
-                                                {summary.lastSettlement.amountPaid.toFixed(2)} Kč
-                                            </div>
-                                        </div>
-                                    {:else}
-                                        <em class="text-muted">Never</em>
-                                    {/if}
+                                    <strong class:text-muted={summary.standing.amountDue <= 0}>
+                                        {summary.standing.amountDue.toFixed(2)} Kč
+                                    </strong>
                                 </td>
                                 <td class="text-end">
-                                    {#if summary.pendingOrderItems === 0}
+                                    {#if summary.standing.pendingOrderItems === 0}
                                         <span class="badge bg-success">Settled</span>
                                     {:else}
                                         <span class="badge bg-warning">Pending</span>
@@ -160,16 +145,12 @@
             <div class="drawer-body">
                 <div class="member-stats">
                     <div class="stat-item">
-                        <span class="label">Total Orders</span>
-                        <span class="value">{selectedMember.totalOrderItems}</span>
+                        <span class="label">Settled Orders</span>
+                        <span class="value">{selectedMember.standing.settledOrderItems} / {selectedMember.standing.totalOrderItems}</span>
                     </div>
-                    <div class="stat-item">
-                        <span class="label">Settled</span>
-                        <span class="value text-success">{selectedMember.settledOrderItems}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="label">Pending</span>
-                        <span class="value text-warning">{selectedMember.pendingOrderItems}</span>
+                    <div class="stat-item" data-slots="2">
+                        <div class="label">Amount Due</div>
+                        <div class="value">{selectedMember.standing.amountDue.toFixed(2)} Kč</div>
                     </div>
                 </div>
 
@@ -183,14 +164,17 @@
                                 name="amountPaid"
                                 class="form-control"
                                 placeholder="Amount paid"
-                                step="0.01"
-                                min="0.01"
+                                step="1"
+                                min="0"
                                 required
                                 bind:value={settlementAmount}
                             />
                             <span class="input-group-text">Kč</span>
                             <button type="submit" class="btn btn-primary">Settle</button>
                         </div>
+                        {#if form?.error}
+                            <div class="alert alert-danger mt-2">{form.error}</div>
+                        {/if}
                     </form>
                 </div>
 
@@ -306,6 +290,10 @@
                 font-size: 1.5rem;
                 font-weight: bold;
             }
+
+            &[data-slots="2"] {
+                grid-column: span 2;
+            }
         }
     }
 
@@ -339,7 +327,7 @@
 
         .timeline-marker {
             position: absolute;
-            left: -1.5rem;
+            left: calc(-1.5rem - 6px + 1px);
             top: 0.5rem;
             width: 12px;
             height: 12px;

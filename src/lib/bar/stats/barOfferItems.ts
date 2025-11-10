@@ -45,3 +45,14 @@ export async function getBarOfferItems(
 
     return offerItems
 }
+
+export async function getBarOfferIndex(
+    pb: NonNullable<App.Locals['pb']>,
+    bar: Pick<Bar, "slug">,
+): Promise<Record<BarOfferItem["key"], BarOfferItem>> {
+    const offerItems = await pb.collection('bar_offer_items').getFullList({
+        filter: `bar.slug = "${bar.slug}"`,
+    });
+
+    return Object.fromEntries(offerItems.map(item => [item.key, item]));
+}

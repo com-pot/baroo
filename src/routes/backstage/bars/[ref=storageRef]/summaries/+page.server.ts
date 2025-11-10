@@ -1,6 +1,6 @@
 import type { Bar } from '$lib/bar/BarModel';
 import { parseStorageRef } from '$lib/bar/refs';
-import { getMemberSummaries } from '$lib/bar/stats/memberSummaries';
+import { getMemberStanding, getMemberSummaries } from '$lib/bar/stats/memberSummaries';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 
@@ -44,6 +44,15 @@ export const actions: Actions = {
 
         if (isNaN(amountPaid) || amountPaid <= 0) {
             return fail(400, { error: 'Valid amount is required' });
+        }
+
+        const memberStanding = await getMemberStanding(locals.pb, { slug: ref.key }, { id: memberId });
+        const expectedAmount = memberStanding.amountDue;
+
+        if (Math.abs(amountPaid - expectedAmount) > 0.01) {
+            return fail(400, {
+                error: `Amount paid (${amountPaid.toFixed(2)} Kč) does not match expected amount (${expectedAmount.toFixed(2)} Kč). Please verify the amount.`
+            });
         }
 
         try {

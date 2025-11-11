@@ -1,6 +1,7 @@
 <script lang="ts">
     import "bootstrap/scss/bootstrap.scss";
     import "$lib/assets/backstage.scss";
+    import * as m from "$lib/paraglide/messages.js";
 
     import type { LayoutData } from './$types';
     import type { Snippet } from "svelte";
@@ -12,12 +13,12 @@
     <header class="backstage-header">
         <div class="brand">
             <h1>Baroo</h1>
-            <small>Backstage</small>
+            <small>{m["baroo.backstage.title"]()}</small>
         </div>
         <nav class="backstage-nav">
             <ul>
                 <li>
-                    <a href="/backstage/bars">Bars</a>
+                    <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a>
                 </li>
             </ul>
         </nav>

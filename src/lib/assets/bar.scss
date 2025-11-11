@@ -1,3 +1,32 @@
+// Main layout
+main {
+    max-width: 100%;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    background: linear-gradient(to bottom, #fafafa 0%, #ffffff 100%);
+}
+
+.page-header {
+    text-align: center;
+    margin-block-end: 2.5rem;
+    padding-block-end: 1.5rem;
+    border-bottom: 2px solid #f3f4f6;
+    
+    h1 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        color: #111827;
+    }
+}
+
+.main-content {
+    max-width: 32rem;
+    margin: 0 auto;
+}
+
 .container {
     display: flex;
     flex-direction: column;
@@ -5,25 +34,91 @@
 }
 
 .offer {
-    display: grid;
-    grid-template-columns: auto auto auto auto;
-    gap: 1rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 .offer .item {
-    display: contents;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.75rem;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+}
+
+.offer .item .actions {
+    display: flex;
+    justify-content: center;
+}
+
+.offer .item span {
+    padding-inline-start: 0.5rem;
 }
 
 .offer [data-value] {
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
-    width: 5rem;
-    height: 2rem;
+    gap: 0.5rem;
+    min-width: 5rem;
+    height: 2.5rem;
+    padding: 0.5rem 0.75rem;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    
+    &:hover {
+        background-color: #e9ecef;
+        border-color: #adb5bd;
+    }
+    
+    &:active {
+        background-color: #dee2e6;
+    }
+    
+    kbd {
+        background-color: white;
+        border: 1px solid #ced4da;
+        border-radius: 0.2rem;
+        padding: 0.1rem 0.4rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    [role="separator"] {
+        opacity: 0.5;
+    }
+    
+    .amount {
+        min-width: 1.5rem;
+        text-align: right;
+        font-weight: 600;
+        color: #495057;
+    }
 }
 
 .offer [data-value].active {
     background-color: lightblue;
+}
+
+.offer .item [data-action="removeFromOrder"] {
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.25rem;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    
+    &:hover {
+        opacity: 1;
+    }
 }
 
 #orderDialog [data-action="confirm"] {
@@ -33,30 +128,35 @@
 
 .btn-group {
     display: flex;
-    gap: 0.5rem;
-    margin-block-end: 1rem;
+    gap: 0.75rem;
+    width: 100%;
 }
 
 .btn {
+    flex: 1;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
-
-    padding: 0.5rem 1rem;
-    border: 2px solid black;
+    padding: 0.875rem 1.25rem;
+    border: 2px solid #d1d5db;
     border-radius: 0.5rem;
-
     background-color: white;
     cursor: pointer;
     user-select: none;
-}
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
 
-.btn:has(input[type="radio"]) {
-    border-color: lightgray;
+    &:hover {
+        border-color: #9ca3af;
+        background-color: #f9fafb;
+    }
 }
 
 .btn:has(input[type="radio"]:checked) {
-    border-color: black;
+    border-color: #374151;
+    background-color: #f3f4f6;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
 }
 
 .btn input[type="radio"] {
@@ -64,7 +164,7 @@
 }
 
 .btn .text {
-    font-weight: bold;
+    font-weight: 600;
 }
 
 // Dialog
@@ -78,11 +178,13 @@ dialog .card {
     background-color: white;
     border: 1px solid black;
     border-radius: 0.5rem;
-    padding: 1rem;
+    padding: 1.5rem;
 
     max-width: 90vw;
-    width: 25rem;
-
+    min-width: 35rem;
+    width: auto;
+    max-height: 85vh;
+    overflow-y: auto;
 }
 
 dialog>[data-action="close"] {
@@ -117,4 +219,324 @@ dialog .controls {
 
     display: flex;
     justify-content: space-evenly;
+}
+
+// User nickname display
+.user-nickname {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.75rem 1rem;
+    background-color: #f9fafb;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    animation: fadeIn 0.3s ease-in;
+    
+    .label {
+        font-size: 1.25rem;
+        line-height: 1;
+    }
+    
+    .value {
+        color: #111827;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+// Info sections
+.info-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-block-start: 2rem;
+}
+
+.info-card {
+    padding: 1rem 1.25rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    
+    .info-header {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        margin-block-end: 0.75rem;
+        
+        .icon {
+            font-size: 1.25rem;
+            line-height: 1;
+        }
+        
+        .title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #374151;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+    }
+    
+    .info-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        
+        .message {
+            color: #6b7280;
+            font-size: 0.95rem;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        
+        .copy-btn {
+            padding: 0.5rem 1rem;
+            background-color: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            
+            &:hover {
+                background-color: #e5e7eb;
+                border-color: #9ca3af;
+            }
+            
+            &:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+        }
+        
+        .status {
+            margin: 0;
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+    }
+}
+
+// Form styling
+form[name="selectBadgeForm"] {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    
+    .form-status {
+        padding: 0.875rem 1rem;
+        border-radius: 0.5rem;
+        background-color: #f3f4f6;
+        border-left: 4px solid #9ca3af;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.9rem;
+        
+        &[data-level="✅"] {
+            background-color: #f0fdf4;
+            border-left-color: #22c55e;
+        }
+        
+        &[data-level="⚠️"] {
+            background-color: #fefce8;
+            border-left-color: #eab308;
+        }
+        
+        &[data-level="❌"] {
+            background-color: #fef2f2;
+            border-left-color: #ef4444;
+        }
+        
+        .level {
+            font-size: 1.25rem;
+            line-height: 1;
+        }
+        
+        .text {
+            flex: 1;
+            color: #374151;
+        }
+    }
+    
+    .form-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #374151;
+        margin-block-end: 0.25rem;
+    }
+    
+    input[type="text"],
+    input:not([type="radio"]):not([type="hidden"]) {
+        width: 100%;
+        padding: 0.875rem 1rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+        
+        &::placeholder {
+            color: #9ca3af;
+        }
+        
+        &:focus {
+            outline: none;
+            border-color: #6b7280;
+            box-shadow: 0 0 0 4px rgba(107, 114, 128, 0.1);
+        }
+    }
+    
+    .submit-btn {
+        width: 100%;
+        padding: 1rem 1.5rem;
+        background-color: #111827;
+        color: white;
+        border: none;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        
+        &:hover {
+            background-color: #1f2937;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        &:active {
+            background-color: #374151;
+            transform: translateY(0);
+        }
+    }
+}
+
+// Summary table styling
+.summary {
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        
+        thead {
+            background-color: #f3f4f6;
+            
+            th {
+                padding: 0.75rem;
+                text-align: left;
+                font-weight: 600;
+                border-bottom: 2px solid #e5e7eb;
+            }
+        }
+        
+        tbody {
+            tr {
+                border-bottom: 1px solid #e5e7eb;
+                
+                &:last-child {
+                    border-bottom: none;
+                }
+                
+                &:hover {
+                    background-color: #f9fafb;
+                }
+                
+                td {
+                    padding: 0.75rem;
+                    
+                    &[data-name="amount"] {
+                        color: #374151;
+                        font-size: 0.95rem;
+                    }
+                    
+                    &[data-name="price"] {
+                        font-weight: 600;
+                        text-align: right;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+    main {
+        padding: 0.75rem;
+    }
+    
+    .page-header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .main-content {
+        max-width: 100%;
+    }
+    
+    form[name="selectBadgeForm"] {
+        padding: 1rem;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    dialog .card {
+        min-width: 85vw;
+        max-width: 95vw;
+        padding: 1rem;
+    }
+    
+    .offer {
+        grid-template-columns: auto 1fr auto auto;
+        font-size: 0.9rem;
+    }
+}
+
+// Add subtle hover effects to cards
+.info-card {
+    transition: box-shadow 0.2s ease;
+    
+    &:hover {
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+    }
+}
+
+// Improve button and control spacing
+dialog .offer {
+    margin-block-start: 1rem;
+    margin-block-end: 1rem;
+}
+
+dialog h3 {
+    margin-block-start: 1.5rem;
+    margin-block-end: 0.75rem;
 }

@@ -6,7 +6,9 @@ export type Bar = {
 export type BarOfferItem = {
     key: string;
     name: string;
-    pricing: Record<string, number>
+    pricing: Record<string, number>;
+    variantLabels?: Record<string, string>; // Maps normalized keys to display labels
+    variantVolumes?: Record<string, number>; // Maps variant keys to volume in milliliters (ML)
 }
 
 export type BarMember = {

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import * as m from '$lib/paraglide/messages.js';
     import type { PageData, ActionData } from './$types';
     import { enhance } from '$app/forms';
     import { onMount } from 'svelte';
@@ -67,22 +68,22 @@
 </script>
 
 <nav class="breadcrumbs">
-    <a href="/backstage/bars">Bars</a> /
+    <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a> /
     <a href="/backstage/bars/{data.ref.key}">{data.bar?.name}</a> /
-    Summaries
+    {m["baroo.backstage.summaries.breadcrumb"]()}
 </nav>
 
 <main class="backstage-content" data-page="bar.summaries">
     <header class="page-header">
-        <h1>Member Summaries</h1>
+        <h1>{m["baroo.backstage.summaries.title"]()}</h1>
         <div class="actions">
-            <a href="/backstage/bars/{data.ref.key}" class="btn btn-secondary">Back to Dashboard</a>
+            <a href="/backstage/bars/{data.ref.key}" class="btn btn-secondary">{m["baroo.backstage.summaries.back_to_dashboard"]()}</a>
         </div>
     </header>
 
     {#if data.summaries.length === 0}
         <div class="empty-state">
-            <p>No members found. Add members to your bar to see summaries.</p>
+            <p>{m["baroo.backstage.summaries.no_members"]()}</p>
         </div>
     {:else}¨
         <div class="card">
@@ -90,10 +91,10 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>Member</th>
-                            <th class="text-end">Settled</th>
-                            <th class="text-end">Amount Due</th>
-                            <th class="text-end">Status</th>
+                            <th>{m["baroo.backstage.summaries.member"]()}</th>
+                            <th class="text-end">{m["baroo.backstage.summaries.settled"]()}</th>
+                            <th class="text-end">{m["baroo.backstage.summaries.amount_due"]()}</th>
+                            <th class="text-end">{m["baroo.backstage.summaries.status"]()}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -116,9 +117,9 @@
                                 </td>
                                 <td class="text-end">
                                     {#if summary.standing.pendingOrderItems === 0}
-                                        <span class="badge bg-success">Settled</span>
+                                        <span class="badge bg-success">{m["baroo.backstage.summaries.status_settled"]()}</span>
                                     {:else}
-                                        <span class="badge bg-warning">Pending</span>
+                                        <span class="badge bg-warning">{m["baroo.backstage.summaries.status_pending"]()}</span>
                                     {/if}
                                 </td>
                             </tr>
@@ -138,39 +139,39 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="drawer" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
             <header class="drawer-header">
-                <h2>{selectedMember.member.nickName} - Timeline</h2>
-                <button class="btn-close" onclick={closeDrawer} aria-label="Close"></button>
+                <h2>{m["baroo.backstage.summaries.timeline_title"]({ nickName: selectedMember.member.nickName })}</h2>
+                <button class="btn-close" onclick={closeDrawer} aria-label={m["baroo.backstage.summaries.close"]()}></button>
             </header>
 
             <div class="drawer-body">
                 <div class="member-stats">
                     <div class="stat-item">
-                        <span class="label">Settled Orders</span>
+                        <span class="label">{m["baroo.backstage.summaries.settled_orders"]()}</span>
                         <span class="value">{selectedMember.standing.settledOrderItems} / {selectedMember.standing.totalOrderItems}</span>
                     </div>
                     <div class="stat-item" data-slots="2">
-                        <div class="label">Amount Due</div>
+                        <div class="label">{m["baroo.backstage.summaries.amount_due"]()}</div>
                         <div class="value">{selectedMember.standing.amountDue.toFixed(2)} Kč</div>
                     </div>
                 </div>
 
                 <div class="settlement-form card">
                     <form method="POST" action="?/settleMember" use:enhance class="card-body">
-                        <h3>Settle Tab</h3>
+                        <h3>{m["baroo.backstage.summaries.settle_tab"]()}</h3>
                         <input type="hidden" name="memberId" value={selectedMember.member.id} />
                         <div class="input-group">
                             <input
                                 type="number"
                                 name="amountPaid"
                                 class="form-control"
-                                placeholder="Amount paid"
+                                placeholder={m["baroo.backstage.summaries.amount_paid"]()}
                                 step="1"
                                 min="0"
                                 required
                                 bind:value={settlementAmount}
                             />
                             <span class="input-group-text">Kč</span>
-                            <button type="submit" class="btn btn-primary">Settle</button>
+                            <button type="submit" class="btn btn-primary">{m["baroo.backstage.summaries.settle"]()}</button>
                         </div>
                         {#if form?.error}
                             <div class="alert alert-danger mt-2">{form.error}</div>
@@ -181,7 +182,7 @@
                 <div class="timeline">
                     {#if timeline.length === 0}
                         <div class="empty-state">
-                            <p>Loading timeline...</p>
+                            <p>{m["baroo.backstage.summaries.loading"]()}</p>
                         </div>
                     {:else}
                         {#each timeline as event (event.date)}
@@ -190,13 +191,13 @@
                                 <div class="timeline-content">
                                     {#if event.type === 'settlement'}
                                         <div class="timeline-event settlement">
-                                            <strong>Settled tab</strong>
-                                            <div class="amount">Paid {event.data.amountPaid?.toFixed(2)} Kč</div>
+                                            <strong>{m["baroo.backstage.summaries.settled_event"]()}</strong>
+                                            <div class="amount">{m["baroo.backstage.summaries.paid"]({ amount: event.data.amountPaid?.toFixed(2) || "0" })}</div>
                                             <time>{formatDate(event.date)}</time>
                                         </div>
                                     {:else if event.type === 'order'}
                                         <div class="timeline-event order">
-                                            <strong>Ordered</strong>
+                                            <strong>{m["baroo.backstage.summaries.ordered_event"]()}</strong>
                                             <div class="order-detail">
                                                 "{event.data.key}" ({event.data.variant})
                                             </div>

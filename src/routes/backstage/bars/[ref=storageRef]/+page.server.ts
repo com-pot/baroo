@@ -1,6 +1,6 @@
 import type { Bar } from '$lib/bar/BarModel';
 import { parseStorageRef } from '$lib/bar/refs';
-import { getBarOfferItems } from '$lib/bar/stats/barOfferItems';
+import { getBarOfferItems, collectKegClosureData } from '$lib/bar/stats/barOfferItems';
 import { getMemberOrders } from '$lib/bar/stats/memberOrders';
 import { formatPbError } from '$lib/db.server';
 import { validate, getFieldErrors } from '$lib/validation/validator';
@@ -27,9 +27,25 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
     const memberStats = await getMemberOrders(locals.pb, { slug: bar.slug });
 
+    const offerItems = await getBarOfferItems(locals.pb, bar);
+
+    // Get last closure events for each offer item
+    const closureEvents: Record<string, any> = {};
+    for (const offerItem of offerItems) {
+        const closureList = await locals.pb.collection('events')
+            .getList(1, 1, {
+                filter: `type = "keg-closure" && target = "bar:${bar.slug}" && data.offerItemKey = "${offerItem.data.key}"`,
+                sort: '-created'
+            });
+        if (closureList.items.length > 0) {
+            closureEvents[offerItem.data.key] = closureList.items[0];
+        }
+    }
+
     const stats = {
         memberStats,
-        offerItems: await getBarOfferItems(locals.pb, bar)
+        offerItems,
+        closureEvents,
     };
 
     return { ref, bar, stats };
@@ -59,6 +75,31 @@ export const actions: Actions = {
         }
 
         try {
+            // First, collect the statistics from the current keg (before uncorking the new one)
+            // This saves data about how much was consumed, who consumed what, etc.
+            const closureData = await collectKegClosureData(locals.pb, { slug: ref.key }, offerItemKey);
+            
+            // Only create a closure event if there was actually a previous keg (lastUncorkDate exists)
+            // and if there were any orders on it (totalOrders > 0)
+            if (closureData.lastUncorkDate && closureData.totalOrders > 0) {
+                await locals.pb.collection('events')
+                    .create({
+                        type: 'keg-closure',
+                        target: `bar:${ref.key}`,
+                        data: {
+                            offerItemKey,
+                            offerItemName: closureData.offerItemName,
+                            uncorkedAt: closureData.lastUncorkDate,
+                            closedAt: new Date().toISOString(),
+                            totalLiters: closureData.totalLiters,
+                            totalOrders: closureData.totalOrders,
+                            variantCounts: closureData.variantCounts,
+                            memberStats: closureData.memberStats,
+                        },
+                    });
+            }
+
+            // Now create the new uncork event
             await locals.pb.collection('events')
                 .create({
                     type: 'keg-uncork',
@@ -70,6 +111,7 @@ export const actions: Actions = {
 
             return { success: true, action: 'createEvent' };
         } catch (err) {
+            console.error('Failed to create event:', err);
             return fail(500, { error: 'Failed to create event' });
         }
     },
@@ -107,8 +149,8 @@ export const actions: Actions = {
             }
 
             const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref.key}"`);
-            await locals.pb.collection('bars').update(bar.id, validationResult.data);
-            return { success: true };
+            const updatedBar = await locals.pb.collection('bars').update(bar.id, validationResult.data);
+            return { success: true, data: { slug: updatedBar.slug, name: updatedBar.name } };
         } catch (err) {
             const formattedError = formatPbError(err)
             if (formattedError) return fail(400, formattedError);

@@ -1,5 +1,6 @@
 <script lang="ts">
     import "$lib/assets/boot.scss";
+    import * as m from "$lib/paraglide/messages.js";
     import { TagMapper } from "$lib/bar/tags";
     import { onMount } from "svelte";
 
@@ -15,7 +16,7 @@
         e.preventDefault();
         const data = Object.fromEntries(new FormData(form).entries());
         if (!mapper.isValid(data)) {
-            alert("Invalid data, please check the form.");
+            alert(m["baroo.backstage.mapper.invalid_data"]());
             return false;
         }
         mapper.put(data);
@@ -23,7 +24,7 @@
         renderMappings();
         form.reset();
         document.getElementById("status-message")!.innerText =
-            `Mapped tag ${data.tag} to user ${data.userId} (${data.nickName})`;
+            m["baroo.backstage.mapper.mapped"]({ tag: String(data.tag), userId: String(data.userId), nickName: String(data.nickName) });
 
         return false;
     }
@@ -64,7 +65,7 @@
         if (!("NDEFReader" in window)) {
             tagInput.readOnly = false;
             document.getElementById("status-message")!.innerText =
-                "Web NFC is not supported. Please use a compatible browser (like Chrome on Android).";
+                m["baroo.backstage.mapper.nfc_not_supported"]();
             return;
         }
 
@@ -74,7 +75,7 @@
                 ndef.onreadingerror = () => {
 
                     console.log(
-                        "Cannot read data from the NFC tag. Try another one?",
+                        m["baroo.backstage.mapper.read_error"](),
                     );
                 };
                 ndef.onreading = async (event: any) => {
@@ -89,7 +90,7 @@
                 };
             })
             .catch((error) => {
-                alert(`Error! Scan failed to start: ${error}.`);
+                alert(m["baroo.backstage.mapper.scan_error"]({ error: String(error) }));
             });
     }
 
@@ -102,46 +103,46 @@
 </script>
 
 <svelte:head>
-    <title>NFC mapper - {data.bar?.name || data.ref.key}</title>
+    <title>{m["baroo.backstage.mapper.title"]({ barName: data.bar?.name || data.ref.key })}</title>
 </svelte:head>
 
 <nav class="breadcrumbs">
-    <a href="/backstage/bars">Bars</a> /
+    <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a> /
     <a href="/backstage/bars/{stringifyStorageRef(data.ref)}">{data.bar?.name || stringifyStorageRef(data.ref)}</a> /
-    <span>Mapper</span>
+    <span>{m["baroo.backstage.mapper.breadcrumb"]()}</span>
 </nav>
 
 <main class="backstage-content">
     <header class="page-header">
-        <h1>NFC mapper - {data.bar?.name || data.ref.key}</h1>
+        <h1>{m["baroo.backstage.mapper.title"]({ barName: data.bar?.name || data.ref.key })}</h1>
         <div class="actions">
-            <button class="btn btn-sm btn-primary" onclick={() => startMapper()}>Start mapper</button>
+            <button class="btn btn-sm btn-primary" onclick={() => startMapper()}>{m["baroo.backstage.mapper.start_mapper"]()}</button>
         </div>
     </header>
 
     <div id="status">
-        <p>Status: <span id="status-message"></span></p>
+        <p>{m["baroo.backstage.mapper.status"]()} <span id="status-message"></span></p>
     </div>
 
     <form onsubmit={(event) => persistUser(event)} autocomplete="off">
         <fieldset class="grid-layout">
             <div class="input-pair">
-                <label for="tag" class="form-label">NFC tag:</label>
+                <label for="tag" class="form-label">{m["baroo.backstage.mapper.nfc_tag"]()}</label>
                 <input type="text" id="tag" name="tag" class="form-control" required readonly />
             </div>
 
             <div class="input-pair">
-                <label for="userId" class="form-label">User id:</label>
+                <label for="userId" class="form-label">{m["baroo.backstage.mapper.user_id"]()}</label>
                 <input type="text" id="userId" name="userId" class="form-control" required />
             </div>
 
             <div class="input-pair">
-                <label for="nickName" class="form-label">Nickname:</label>
+                <label for="nickName" class="form-label">{m["baroo.backstage.mapper.nickname"]()}</label>
                 <input type="text" id="nickName" name="nickName" class="form-control" required />
             </div>
 
             <div class="input-pair">
-                <input type="submit" value="Map NFC to User" class="btn btn-primary" />
+                <input type="submit" value={m["baroo.backstage.mapper.map_button"]()} class="btn btn-primary" />
             </div>
         </fieldset>
     </form>
@@ -149,9 +150,9 @@
     <table class="table">
         <thead>
             <tr>
-                <th data-name="tag">NFC Tag</th>
-                <th data-name="userId">User ID</th>
-                <th data-name=" ">User Name</th>
+                <th data-name="tag">{m["baroo.backstage.mapper.nfc_tag_col"]()}</th>
+                <th data-name="userId">{m["baroo.backstage.mapper.user_id_col"]()}</th>
+                <th data-name=" ">{m["baroo.backstage.mapper.user_name_col"]()}</th>
             </tr>
         </thead>
         <tbody id="mappings"></tbody>

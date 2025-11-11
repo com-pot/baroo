@@ -34,6 +34,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     };
 };
 
+// Helper function to normalize variant names for database storage
+function normalizeVariant(variant: string): string {
+    return variant
+        .toLowerCase()
+        .normalize('NFD') // Decompose diacritics
+        .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+        .replace(/[^a-z0-9]/g, ''); // Remove non-alphanumeric
+}
+
 export const actions: Actions = {
     create: async ({ request, params, locals }) => {
         if (!locals.pb) {
@@ -48,13 +57,43 @@ export const actions: Actions = {
         const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref.key}"`);
 
         const formData = await request.formData();
+        
+        // Build pricing object from variant fields with normalized keys
+        // Also build variant labels mapping to preserve original display names
+        // Also build variant volumes mapping to store ML values
+        const pricing: Record<string, number> = {};
+        const variantLabels: Record<string, string> = {};
+        const variantVolumes: Record<string, number> = {};
+        let index = 0;
+        while (formData.has(`variant_name_${index}`)) {
+            const variantName = formData.get(`variant_name_${index}`)?.toString()?.trim();
+            const variantPrice = formData.get(`variant_price_${index}`)?.toString()?.trim();
+            const variantVolume = formData.get(`variant_volume_${index}`)?.toString()?.trim();
+            
+            if (variantName && variantPrice) {
+                // Normalize variant name for database compatibility
+                const normalizedName = normalizeVariant(variantName);
+                pricing[normalizedName] = parseFloat(variantPrice);
+                // Store original label for display
+                variantLabels[normalizedName] = variantName;
+                // Store volume in ML if provided (check for non-empty string and valid number)
+                if (variantVolume && variantVolume !== '') {
+                    const volumeNum = parseFloat(variantVolume);
+                    if (!isNaN(volumeNum) && volumeNum > 0) {
+                        variantVolumes[normalizedName] = volumeNum;
+                    }
+                }
+            }
+            index++;
+        }
+        
         const data = {
             bar: bar.id,
             key: formData.get('key')?.toString() || '',
             name: formData.get('name')?.toString() || '',
-            pricing: formData.get('pricing')?.toString()
-                ? JSON.parse(formData.get('pricing')!.toString())
-                : {}
+            pricing,
+            variantLabels, // Store original display labels
+            variantVolumes // Store ML values for each variant
         };
 
         const validationResult = validate<BarOfferItem>('barOfferItem', data);
@@ -97,13 +136,42 @@ export const actions: Actions = {
             return fail(400, { error: 'Item ID is required' });
         }
 
+        // Build pricing object from variant fields with normalized keys
+        // Also build variant labels mapping to preserve original display names
+        // Also build variant volumes mapping to store ML values
+        const pricing: Record<string, number> = {};
+        const variantLabels: Record<string, string> = {};
+        const variantVolumes: Record<string, number> = {};
+        let index = 0;
+        while (formData.has(`variant_name_${index}`)) {
+            const variantName = formData.get(`variant_name_${index}`)?.toString()?.trim();
+            const variantPrice = formData.get(`variant_price_${index}`)?.toString()?.trim();
+            const variantVolume = formData.get(`variant_volume_${index}`)?.toString()?.trim();
+            
+            if (variantName && variantPrice) {
+                // Normalize variant name for database compatibility
+                const normalizedName = normalizeVariant(variantName);
+                pricing[normalizedName] = parseFloat(variantPrice);
+                // Store original label for display
+                variantLabels[normalizedName] = variantName;
+                // Store volume in ML if provided (check for non-empty string and valid number)
+                if (variantVolume && variantVolume !== '') {
+                    const volumeNum = parseFloat(variantVolume);
+                    if (!isNaN(volumeNum) && volumeNum > 0) {
+                        variantVolumes[normalizedName] = volumeNum;
+                    }
+                }
+            }
+            index++;
+        }
+
         const data = {
             bar: bar.id,
             key: formData.get('key')?.toString() || '',
             name: formData.get('name')?.toString() || '',
-            pricing: formData.get('pricing')?.toString()
-                ? JSON.parse(formData.get('pricing')!.toString())
-                : {}
+            pricing,
+            variantLabels, // Store original display labels
+            variantVolumes // Store ML values for each variant
         };
 
         const validationResult = validate<BarOfferItem>('barOfferItem', data);

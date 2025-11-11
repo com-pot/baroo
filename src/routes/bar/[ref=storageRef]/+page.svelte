@@ -3,6 +3,7 @@
     import "$lib/assets/boot.scss";
     import * as m from "$lib/paraglide/messages.js";
     import { source } from "sveltekit-sse";
+    import { browser } from "$app/environment";
 
     import type { PageData } from "./$types";
     import { onMount, tick } from "svelte";
@@ -18,6 +19,8 @@
     } = $props();
 
     let status = $state<{ level: "✅" | "ℹ️" | "⚠️" | "❌"; text: string }>();
+    let userIdInput = $state("");
+    let userNickname = $state<string | null>(null);
 
     let bar = $derived.by(() => {
         if (data.bar) {
@@ -51,6 +54,9 @@
                       _label: label || id,
                   };
 
+            // Always update the label with the current nickname
+            balance._label = label || id;
+
             this.workingCopy = balance;
             this.currentOrder = {
                 items: [],
@@ -60,8 +66,8 @@
         },
 
         addToOrder(item: OrderData["items"][number]) {
-            if (!this.currentOrder) {
-                setStatus("⚠️", "No current order");
+                if (!this.currentOrder) {
+                setStatus("⚠️", m["baroo.bar.status.no_order"]());
                 return;
             }
             this.currentOrder.items.push(item);
@@ -69,46 +75,78 @@
 
         removeFromOrder(key: OrderData["items"][number]["key"]) {
             if (!this.currentOrder) {
-                setStatus("⚠️", "No current order");
+                setStatus("⚠️", m["baroo.bar.status.no_order"]());
                 return;
-            }
-
-            this.currentOrder.items = this.currentOrder.items.filter(
+            }            this.currentOrder.items = this.currentOrder.items.filter(
                 (item) => item.key !== key,
             );
         },
         async confirmOrder() {
             if (!this.workingCopy) {
-                setStatus("❌", "No working copy");
+                setStatus("❌", m["baroo.bar.status.no_working_copy"]());
                 return;
             }
             if (!this.currentOrder) {
-                setStatus("❌", "No order");
+                setStatus("❌", m["baroo.bar.status.no_order"]());
                 return;
             }
-            this.workingCopy.items.push(
-                ...this.currentOrder.items.map((item) => ({
-                    ...item,
-                    createdAt: new Date(),
-                })),
-            );
+            
+            const newItems = this.currentOrder.items.map((item) => ({
+                ...item,
+                createdAt: new Date(),
+            }));
+            
+            this.workingCopy.items.push(...newItems);
+            
+            // Save to localStorage
             localStorage.setItem(
                 `balance[${this.workingCopy.id}]`,
                 JSON.stringify(this.workingCopy),
             );
+
+            // Save to database if not local
+            if (data.ref.type !== 'local') {
+                try {
+                    const formData = new FormData();
+                    formData.append('userId', this.workingCopy.id);
+                    formData.append('items', JSON.stringify(this.currentOrder.items));
+                    
+                    const response = await fetch('?/createOrder', {
+                        method: 'POST',
+                        body: formData,
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.type === 'success') {
+                        setStatus("✅", "Objednávka úspěšně uložena");
+                    } else {
+                        console.error('Failed to save order:', result);
+                        setStatus("⚠️", "Objednávka uložena lokálně, ale nepodařilo se uložit do databáze");
+                    }
+                } catch (error) {
+                    console.error('Error saving order:', error);
+                    setStatus("⚠️", "Objednávka uložena lokálně, ale nepodařilo se uložit do databáze");
+                }
+            }
 
             this.reset();
         },
 
         async showSummary(id: string, label?: string) {
             const value = localStorage.getItem(`balance[${id}]`);
-            balanceCtrl.workingCopy = value
+            const balance = value
                 ? JSON.parse(value)
                 : {
                       id,
                       items: [],
                       _label: label || id,
                   };
+
+            // Always update the label with the current nickname
+            balance._label = label || id;
+            
+            balanceCtrl.workingCopy = balance;
 
             summaryDialog!.showModal();
         },
@@ -184,24 +222,47 @@
         status = { level, text };
     }
 
+    function lookupUserNickname(userId: string) {
+        if (!userId) {
+            userNickname = null;
+            return;
+        }
+        // Try to find member by userId in the mapper
+        const member = mapper.mappings.find((m) => {
+            return m.userId === userId;
+        });
+        userNickname = member?.nickName || null;
+    }
+
     async function submitSelectForm(e: SubmitEvent) {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
         const data = Object.fromEntries(new FormData(form).entries());
 
-        const member = await mapper.get(data.serialNumber as string);
+        // Try to get member from serialNumber first (NFC scan), then from userId (manual entry)
+        let member = await mapper.get(data.serialNumber as string);
+        if (!member && data.userId) {
+            // If no member found by serial number, look up by userId
+            member = mapper.mappings.find((m) => {
+                return m.userId === String(data.userId);
+            }) || null;
+        }
+        
+        // Block action if user is not mapped
+        if (!member && data.userId) {
+            setStatus("⚠️", m["baroo.bar.status.user_not_mapped"]({ userId: String(data.userId) }));
+            return; // Don't proceed with opening order/summary
+        }
+        
+        const displayName = member?.nickName || userNickname || String(data.userId);
+        
         if (data.action === "summary") {
-            balanceCtrl.showSummary(
-                String(data.userId),
-                `${member?.nickName || data.userId}`,
-            );
+            balanceCtrl.showSummary(String(data.userId), displayName);
             return;
         }
         form.reset();
-        balanceCtrl.startOrder(
-            String(data.userId),
-            `${member?.nickName || data.userId}`,
-        );
+        userNickname = null;
+        balanceCtrl.startOrder(String(data.userId), displayName);
     }
 
     let eventStreamMessage = $state("");
@@ -249,7 +310,7 @@
                             };
                             ndef.onreading = async (event) => {
                                 if (balanceCtrl.workingCopy) {
-                                    statusEl.innerText = `Currently processing order for ${balanceCtrl.workingCopy.id}, please finish it first.`;
+                                    statusEl.innerText = m["baroo.bar.status.processing"]({ userId: balanceCtrl.workingCopy.id });
                                     return;
                                 }
 
@@ -257,7 +318,7 @@
                                     event.serialNumber,
                                 );
                                 if (!member) {
-                                    statusEl.innerText = `Unknown tag ${event.serialNumber}`;
+                                    statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialNumber: event.serialNumber });
                                     return;
                                 }
 
@@ -273,9 +334,16 @@
                                     document.forms
                                         .namedItem("selectBadgeForm")!
                                         .dispatchEvent(new Event("submit"));
-                                    statusEl.innerText = `Tag ${event.serialNumber} recognized as ${member.nickName} (${member.userId}).`;
+                                    statusEl.innerText = m["baroo.bar.status.tag_recognized"]({ 
+                                        serialNumber: event.serialNumber, 
+                                        nickName: member.nickName, 
+                                        userId: member.userId 
+                                    });
                                 } catch (error) {
-                                    statusEl.innerText = `Error processing tag ${event.serialNumber}: ${error instanceof Error ? error.message : String(error)}`;
+                                    statusEl.innerText = m["baroo.bar.status.error_processing"]({ 
+                                        serialNumber: event.serialNumber, 
+                                        error: error instanceof Error ? error.message : String(error) 
+                                    });
                                 }
                             };
                         })
@@ -299,47 +367,93 @@
 </script>
 
 <main>
-    <h1>
-        {m["baroo.page_front.title"]({ barName: bar?.name || bar?.slug || "" })}
-    </h1>
-    <form name="selectBadgeForm" data-boot onsubmit={submitSelectForm}>
-        <p class="form-status">
-            <span class="level">{status?.level}</span>
-            <span class="text">{status?.text}</span>
-        </p>
-        <div class="btn-group">
-            <label class="btn">
-                <input
-                    type="radio"
-                    name="action"
-                    value="order"
-                    required
-                    checked
-                />
-                <span class="text">{m["baroo.bar.pos.action.order"]()}</span>
-            </label>
-            <label class="btn">
-                <input type="radio" name="action" value="summary" required />
-                <span class="text">{m["baroo.bar.pos.action.summary"]()}</span>
-            </label>
-        </div>
-        <label for="userId">{m["baroo.bar.userRef"]()}</label>
-        <input name="userId" id="userId" required />
-        <button type="submit">{m["generic.action.open"]()}</button>
-
-        <input type="hidden" name="serialNumber" id="serialNumber" />
-    </form>
-
-    <div class="card">
-        stream: {eventStreamMessage}
-        <button disabled={!cardId} onclick={() => copy(cardId || '')}>copy</button>
+    <div class="page-header">
+        <h1>
+            {m["baroo.page_front.title"]({ barName: bar?.name || bar?.slug || "" })}
+        </h1>
     </div>
 
-    <div class="nfc-scanner" data-boot-feature="nfc" data-boot-status="idle">
-        NFC: <p class="status">Idle</p>
+    <div class="main-content">
+        <form name="selectBadgeForm" data-boot onsubmit={submitSelectForm}>
+            {#if status?.text}
+                <div class="form-status" data-level={status.level}>
+                    <span class="level">{status.level}</span>
+                    <span class="text">{status.text}</span>
+                </div>
+            {/if}
+            
+            <div class="form-section">
+                <div class="btn-group">
+                    <label class="btn">
+                        <input
+                            type="radio"
+                            name="action"
+                            value="order"
+                            required
+                            checked
+                        />
+                        <span class="text">{m["baroo.bar.pos.action.order"]()}</span>
+                    </label>
+                    <label class="btn">
+                        <input type="radio" name="action" value="summary" required />
+                        <span class="text">{m["baroo.bar.pos.action.summary"]()}</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <label for="userId">{m["baroo.bar.userRef"]()}</label>
+                <input 
+                    name="userId" 
+                    id="userId" 
+                    required 
+                    bind:value={userIdInput}
+                    oninput={(e) => lookupUserNickname((e.target as HTMLInputElement).value)}
+                    placeholder="Zadejte ID..."
+                />
+                {#if userNickname}
+                    <div class="user-nickname">
+                        <span class="label">👤</span>
+                        <span class="value">{userNickname}</span>
+                    </div>
+                {/if}
+            </div>
+
+            <button type="submit" class="submit-btn">{m["generic.action.open"]()}</button>
+
+            <input type="hidden" name="serialNumber" id="serialNumber" />
+        </form>
+
+        <div class="info-sections">
+            <div class="info-card">
+                <div class="info-header">
+                    <span class="icon">📡</span>
+                    <span class="title">{m["baroo.bar.stream"]()}</span>
+                </div>
+                <div class="info-content">
+                    <span class="message">{eventStreamMessage || '—'}</span>
+                    {#if cardId}
+                        <button class="copy-btn" onclick={() => copy(cardId || '')}>
+                            {m["generic.action.copy"]()}
+                        </button>
+                    {/if}
+                </div>
+            </div>
+
+            <div class="info-card nfc-scanner" data-boot-feature="nfc" data-boot-status="idle">
+                <div class="info-header">
+                    <span class="icon">📱</span>
+                    <span class="title">{m["baroo.bar.nfc"]()}</span>
+                </div>
+                <div class="info-content">
+                    <p class="status">{m["baroo.bar.status.idle"]()}</p>
+                </div>
+            </div>
+        </div>
     </div>
 </main>
 
+{#if browser}
 <dialog
     id="orderDialog"
     bind:this={orderDialog}
@@ -348,16 +462,14 @@
     <button
         class="accent-warning"
         data-action="close"
-        aria-label="Zrušit"
+        aria-label={m["baroo.bar.order.cancel"]()}
         onclick={() => orderDialog!.close()}>✖</button
     >
     <div class="card">
         <h2>
-            Nová objednávka - <span class="name"
-                >{balanceCtrl.workingCopy?._label}</span
-            >
+            {m["baroo.bar.order.title_new"]({ userName: balanceCtrl.workingCopy?._label || "" })}
         </h2>
-        <h3>Položky</h3>
+        <h3>{m["baroo.bar.order.items"]()}</h3>
         <div class="offer">
             {#each data.offerItems as item (item.key)}
                 {@const variants = Object.keys(item.pricing) as ("x" | "1")[]}
@@ -365,7 +477,7 @@
                     <div class="actions">
                         <button
                             data-action="removeFromOrder"
-                            aria-label="Pryč s tím"
+                            aria-label={m["baroo.bar.order.cancel"]()}
                             onclick={() =>
                                 balanceCtrl.removeFromOrder(item.key)}
                             >❌</button
@@ -373,6 +485,7 @@
                     </div>
                     <span>{item.name}</span>
                     {#each variants as variant (variant)}
+                        {@const displayLabel = item.variantLabels?.[variant] || variant}
                         <button
                             data-value={variant}
                             onclick={() =>
@@ -381,18 +494,16 @@
                                     variant,
                                 })}
                         >
-                            <kdb>
-                                <kbd>{variant}</kbd>
-                                <span role="separator">×</span>
-                                <span class="amount"
-                                    >{currentOrderCounts[
-                                        `${item.key}-${variant}`
-                                    ]}</span
-                                >
-                            </kdb>
+                            <kbd>{displayLabel}</kbd>
+                            <span role="separator">×</span>
+                            <span class="amount"
+                                >{currentOrderCounts[
+                                    `${item.key}-${variant}`
+                                ] || 0}</span
+                            >
                         </button>
                     {/each}
-                    {#each new Array(2 - variants.length) as _}
+                    {#each new Array(Math.max(0, 2 - variants.length)) as _}
                         <span class="spacer"></span>
                     {/each}
                 </div>
@@ -405,7 +516,7 @@
                 onclick={() =>
                     balanceCtrl.confirmOrder().then(() => {
                         orderDialog!.close();
-                    })}>Potvrdit</button
+                    })}>{m["baroo.bar.order.confirm"]()}</button
             >
         </div>
     </div>
@@ -419,23 +530,22 @@
     <button
         class="accent-warning"
         data-action="close"
-        aria-label="Zrušit"
+        aria-label={m["baroo.bar.order.cancel"]()}
         onclick={() => summaryDialog!.close()}>✖</button
     >
     <div class="card">
         <h2>
-            Přehled - <span class="name">{balanceCtrl.workingCopy?._label}</span
-            >
+            {m["baroo.bar.order.title_summary"]({ userName: balanceCtrl.workingCopy?._label || "" })}
         </h2>
 
-        <h3>Položky</h3>
+        <h3>{m["baroo.bar.order.items"]()}</h3>
         <div class="summary">
             <table>
                 <thead>
                     <tr>
-                        <th data-name="item">Položka</th>
-                        <th data-name="amount">Množství</th>
-                        <th data-name="price">Cena</th>
+                        <th data-name="item">{m["baroo.bar.summary.item"]()}</th>
+                        <th data-name="amount">{m["baroo.bar.summary.amount"]()}</th>
+                        <th data-name="price">{m["baroo.bar.summary.price"]()}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -451,3 +561,4 @@
         </div>
     </div>
 </dialog>
+{/if}

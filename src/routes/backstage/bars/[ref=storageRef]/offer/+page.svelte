@@ -1,4 +1,5 @@
 <script lang="ts">
+    import * as m from '$lib/paraglide/messages.js';
     import type { PageData, ActionData } from './$types';
     import { enhance } from '$app/forms';
     import { stringifyStorageRef } from '$lib/bar/refs';
@@ -7,65 +8,88 @@
 
     let editingItem = $state<any>(null);
     let showCreateForm = $state(false);
+    let pricingVariants = $state<Array<{ name: string; price: string; volume: string }>>([]);
 
     function startEdit(item) {
-        editingItem = { ...item, pricing: JSON.stringify(item.pricing || {}, null, 2) };
+        editingItem = { ...item };
+        // Convert pricing object to array of variants
+        pricingVariants = Object.entries(item.pricing || {}).map(([name, price]) => ({
+            name,
+            price: String(price),
+            volume: String(item.variantVolumes?.[name] || '')
+        }));
+        if (pricingVariants.length === 0) {
+            pricingVariants = [{ name: '', price: '', volume: '' }];
+        }
         showCreateForm = false;
     }
 
     function cancelEdit() {
         editingItem = null;
         showCreateForm = false;
+        pricingVariants = [];
     }
 
     function startCreate() {
         showCreateForm = true;
         editingItem = null;
+        pricingVariants = [{ name: '', price: '', volume: '' }];
+    }
+
+    function addVariant() {
+        pricingVariants = [...pricingVariants, { name: '', price: '', volume: '' }];
+    }
+
+    function removeVariant(index: number) {
+        pricingVariants = pricingVariants.filter((_, i) => i !== index);
+        if (pricingVariants.length === 0) {
+            pricingVariants = [{ name: '', price: '', volume: '' }];
+        }
     }
 </script>
 
 <nav class="breadcrumbs">
-    <a href="/backstage/bars">Bars</a> /
+    <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a> /
     <a href="/backstage/bars/{stringifyStorageRef(data.ref)}">{data.bar.name}</a> /
-    <span>Items</span>
+    <span>{m["baroo.backstage.offer.breadcrumb"]()}</span>
 </nav>
 
 <main class="backstage-content items-page">
 
     <header class="page-header">
         <div>
-            <h2>Manage bar items</h2>
+            <h2>{m["baroo.backstage.offer.title"]()}</h2>
         </div>
     </header>
 
     {#if data.ref.type === 'local'}
         <div class="card card-body info-message">
-            <p><strong>This is a local (localStorage) bar.</strong></p>
-            <p>Items for local bars cannot be managed through the backstage. They are managed locally in the browser.</p>
+            <p><strong>{m["baroo.backstage.offer.local_info"]()}</strong></p>
+            <p>{m["baroo.backstage.offer.local_info_details"]()}</p>
         </div>
     {:else}
         <div class="content-layout">
             <section class="card">
                 <header class="card-header">
-                    <h3>Offer Items</h3>
+                    <h3>{m["baroo.backstage.offer.offer_items"]()}</h3>
                     <div class="actions">
-                        <button type="button" class="btn btn-primary" onclick={startCreate}>Add Item</button>
+                        <button type="button" class="btn btn-primary" onclick={startCreate}>{m["baroo.backstage.offer.add_item"]()}</button>
                     </div>
                 </header>
 
                 {#if data.items.length === 0}
                     <div class="empty-state">
-                        <p>No items yet. Add your first offer item.</p>
+                        <p>{m["baroo.backstage.offer.no_items"]()}</p>
                     </div>
                 {:else}
 
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>Key</th>
-                            <th>Name</th>
-                            <th>Pricing</th>
-                            <th>Actions</th>
+                            <th>{m["baroo.backstage.offer.key"]()}</th>
+                            <th>{m["baroo.backstage.offer.name"]()}</th>
+                            <th>{m["baroo.backstage.offer.pricing"]()}</th>
+                            <th>{m["baroo.backstage.offer.actions"]()}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -77,17 +101,18 @@
                                     <div class="pricing-display">
                                         {#if item.pricing && Object.keys(item.pricing).length > 0}
                                             {#each Object.entries(item.pricing) as [variant, price]}
-                                                <span class="price-tag">{variant}: {price}</span>
+                                                {@const displayLabel = item.variantLabels?.[variant] || variant}
+                                                <span class="price-tag">{displayLabel}: {price}</span>
                                             {/each}
                                         {:else}
-                                            <span class="text-muted">No pricing</span>
+                                            <span class="text-muted">{m["baroo.backstage.offer.no_pricing"]()}</span>
                                         {/if}
                                     </div>
                                 </td>
                                 <td>
                                     <div class="actions">
                                         <button type="button" class="btn btn-link" onclick={() => startEdit(item)}>
-                                            Edit
+                                            {m["baroo.backstage.offer.edit"]()}
                                         </button>
                                         <form method="POST" action="?/delete" use:enhance>
                                             <input type="hidden" name="itemId" value={item.id} />
@@ -95,12 +120,12 @@
                                                 type="submit"
                                                 class="btn btn-link text-danger"
                                                 onclick={(e) => {
-                                                    if (!confirm('Delete this item?')) {
+                                                    if (!confirm(m["baroo.backstage.offer.delete_confirm"]())) {
                                                         e.preventDefault();
                                                     }
                                                 }}
                                             >
-                                                Delete
+                                                {m["baroo.backstage.offer.delete"]()}
                                             </button>
                                         </form>
                                     </div>
@@ -116,7 +141,7 @@
             {#if showCreateForm || editingItem}
                 <aside class="card">
                 <div class="card-body">
-                    <h3>{editingItem ? 'Edit Item' : 'Create Item'}</h3>
+                    <h3>{editingItem ? m["baroo.backstage.offer.edit_item"]() : m["baroo.backstage.offer.create_item"]()}</h3>
                     <form
                         method="POST"
                         action={editingItem ? '?/update' : '?/create'}
@@ -134,7 +159,7 @@
                             <input type="hidden" name="itemId" value={editingItem.id} />
                         {/if}
                         <div class="input-pair col-md-5">
-                            <label for="key" class="form-label">Key</label>
+                            <label for="key" class="form-label">{m["baroo.backstage.offer.key"]()}</label>
                             <input
                                 type="text"
                                 id="key"
@@ -143,16 +168,16 @@
                                 value={form?.data?.key ?? editingItem?.key ?? ''}
                                 required
                                 pattern="[a-z0-9\-]+"
-                                placeholder="beer-500"
+                                placeholder={m["baroo.backstage.offer.placeholder_key"]()}
                                 class:error={form?.errors?.key}
                             />
                             {#if form?.errors?.key}
                                 <span class="error-message">{form.errors.key}</span>
                             {/if}
-                            <small>3-10 characters, lowercase, numbers, hyphens</small>
+                            <small>{m["baroo.backstage.offer.key_help"]()}</small>
                         </div>
                         <div class="input-pair col-md-7">
-                            <label for="name" class="form-label">Name</label>
+                            <label for="name" class="form-label">{m["baroo.backstage.offer.name"]()}</label>
                             <input
                                 type="text"
                                 id="name"
@@ -160,7 +185,7 @@
                                 class="form-control"
                                 value={form?.data?.name ?? editingItem?.name ?? ''}
                                 required
-                                placeholder="Beer 500ml"
+                                placeholder={m["baroo.backstage.offer.placeholder_name"]()}
                                 class:error={form?.errors?.name}
                             />
                             {#if form?.errors?.name}
@@ -168,26 +193,58 @@
                             {/if}
                         </div>
                         <div class="input-pair col-12">
-                            <label for="pricing" class="form-label">Pricing (JSON)</label>
-                            <textarea
-                                id="pricing"
-                                name="pricing"
-                                rows="6"
-                                placeholder='&#123;"x": 50, "1": 100&#125;'
-                                class="form-control"
-                                class:error={form?.errors?.pricing}
-                            >{form?.data?.pricing ?? editingItem?.pricing ?? '{}'}</textarea>
+                            <label class="form-label">{m["baroo.backstage.offer.pricing_variants"]()}</label>
+                            <div class="pricing-variants">
+                                {#each pricingVariants as variant, index}
+                                    <div class="variant-row">
+                                        <input
+                                            type="text"
+                                            name="variant_name_{index}"
+                                            class="form-control"
+                                            placeholder={m["baroo.backstage.offer.variant_name_placeholder"]()}
+                                            bind:value={variant.name}
+                                        />
+                                        <input
+                                            type="number"
+                                            name="variant_price_{index}"
+                                            class="form-control"
+                                            placeholder={m["baroo.backstage.offer.variant_price_placeholder"]()}
+                                            bind:value={variant.price}
+                                            step="0.01"
+                                        />
+                                        <input
+                                            type="number"
+                                            name="variant_volume_{index}"
+                                            class="form-control"
+                                            placeholder="ML"
+                                            bind:value={variant.volume}
+                                            step="1"
+                                            min="0"
+                                        />
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-danger"
+                                            onclick={() => removeVariant(index)}
+                                            disabled={pricingVariants.length === 1}
+                                        >
+                                            {m["baroo.backstage.offer.remove_variant"]()}
+                                        </button>
+                                    </div>
+                                {/each}
+                                <button type="button" class="btn btn-sm btn-secondary" onclick={addVariant}>
+                                    {m["baroo.backstage.offer.add_variant"]()}
+                                </button>
+                            </div>
                             {#if form?.errors?.pricing}
                                 <span class="error-message">{form.errors.pricing}</span>
                             {/if}
-                            <small>JSON object with variant keys and numeric prices</small>
                         </div>
                         <div class="col-12 actions">
                             <button type="submit" class="btn btn-primary">
-                                {editingItem ? 'Update' : 'Create'}
+                                {editingItem ? m["baroo.backstage.offer.update"]() : m["baroo.backstage.offer.create"]()}
                             </button>
                             <button type="button" class="btn btn-secondary" onclick={cancelEdit}>
-                                Cancel
+                                {m["baroo.backstage.offer.cancel"]()}
                             </button>
                         </div>
                     </form>
@@ -197,3 +254,18 @@
         </div>
     {/if}
 </main>
+
+<style lang="scss">
+.pricing-variants {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+
+    .variant-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 100px auto;
+        gap: 0.5rem;
+        align-items: center;
+    }
+}
+</style>

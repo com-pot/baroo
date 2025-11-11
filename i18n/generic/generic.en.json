@@ -1,6 +1,9 @@
 {
     "$schema": "https://inlang.com/schema/inlang-message-format",
     "generic": {
-        "action.open": "Open"
+        "action": {
+            "open": "Open",
+            "copy": "copy"
+        }
     }
 }

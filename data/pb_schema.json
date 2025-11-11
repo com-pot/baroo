@@ -451,6 +451,26 @@
         "type": "json"
       },
       {
+        "hidden": false,
+        "id": "json4857820724",
+        "maxSize": 0,
+        "name": "variantLabels",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "hidden": false,
+        "id": "json4857820725",
+        "maxSize": 0,
+        "name": "variantVolumes",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
         "autogeneratePattern": "",
         "hidden": false,
         "id": "text3027082717",

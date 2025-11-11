@@ -29,7 +29,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         const result = mappings
             .map((mapping): TagMapping => ({
                 tag: mapping.serialId,
-                userId: mapping.expand?.member?.id || '',
+                userId: String(mapping.expand?.member?.seq || ''),
                 nickName: mapping.expand?.member?.nickName || ''
             }))
             .filter((mapping) => isValidMapping(mapping));

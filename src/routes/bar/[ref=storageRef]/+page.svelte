@@ -21,7 +21,6 @@
     let status = $state<{ level: "✅" | "ℹ️" | "⚠️" | "❌"; text: string }>();
     let mode = $state<"order" | "summary">("order");
     let userIdInput = $state("");
-    let userNickname = $state<string | null>(null);
 
     let bar = $derived.by(() => {
         if (data.bar) {
@@ -156,7 +155,6 @@
             this.currentOrder = null;
             userIdInput = "";
             mode = "order"
-
         },
     });
     const currentOrderCounts = $derived.by(() => {
@@ -243,14 +241,13 @@
             return; // Don't proceed with opening order/summary
         }
 
-        const displayName = member?.nickName || userNickname || String(data.userId);
+        const displayName = member?.nickName || String(data.userId);
 
         if (data.action === "summary") {
             balanceCtrl.showSummary(String(data.userId), displayName);
             return;
         }
-        form.reset();
-        userNickname = null;
+
         balanceCtrl.startOrder(String(data.userId), displayName);
     }
 
@@ -372,12 +369,16 @@
                             name="action"
                             value="order"
                             required
-                            checked
+                            checked={mode === "order"}
+                            onchange={() => mode = 'order'}
                         />
                         <span class="text">{m["baroo.bar.pos.action.order"]()}</span>
                     </label>
                     <label class="btn btn-baroo">
-                        <input type="radio" name="action" value="summary" required />
+                        <input type="radio" name="action" value="summary" required
+                        checked={mode === "summary"}
+                        onchange={() => mode = 'summary'}
+                    />
                         <span class="text">{m["baroo.bar.pos.action.summary"]()}</span>
                     </label>
                 </div>
@@ -396,13 +397,6 @@
                     />
                     <button type="submit" class="btn btn-primary" aria-label={m["generic.action.open"]()}>⏎</button>
                 </div>
-
-                {#if userNickname}
-                    <div class="user-nickname">
-                        <span class="label">👤</span>
-                        <span class="value">{userNickname}</span>
-                    </div>
-                {/if}
             </div>
 
             <input type="hidden" name="serialNumber" id="serialNumber" />

@@ -19,7 +19,7 @@ export function computeCountsByVariant(pricing: BarOfferItem["pricing"], orderIt
     return variantCounts;
 }
 
-const defaultVariantToVolume: Record<string, number> = {
+export const defaultVariantToVolume: Record<string, number> = {
     'x': 0.3,
     '1': 0.5,
 }
@@ -28,18 +28,18 @@ const defaultVariantToVolume: Record<string, number> = {
 const DEFAULT_VOLUME_LITERS = 0.5;
 
 export function computeTotalVolume(
-    variantCounts: Record<string, number>, 
+    variantCounts: Record<string, number>,
     variantVolumes?: Record<string, number>
 ) {
     let totalVolume = 0;
-    
+
     for (const [variant, count] of Object.entries(variantCounts)) {
         // Use custom variant volumes if provided, otherwise fall back to defaults
         // Convert ML to liters by dividing by 1000
-        const volumeInLiters = variantVolumes?.[variant] 
-            ? variantVolumes[variant] / 1000 
+        const volumeInLiters = variantVolumes?.[variant]
+            ? variantVolumes[variant] / 1000
             : (defaultVariantToVolume[variant] || DEFAULT_VOLUME_LITERS);
-        
+
         totalVolume += volumeInLiters * count;
     }
 

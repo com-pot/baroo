@@ -1,4 +1,6 @@
+import type { BaseModel } from "pocketbase";
 import type { Bar, BarOfferItem, BarOrderItem } from "../BarModel";
+import { defaultVariantToVolume } from "../barAggregation";
 
 export async function getBarOfferItems(
     pb: NonNullable<App.Locals['pb']>,
@@ -116,9 +118,7 @@ export async function collectKegClosureData(
         if (volumeInML) {
             totalLiters += (volumeInML / 1000) * count;
         } else {
-            // Fallback to default volumes
-            const defaultVolumes: Record<string, number> = { 'x': 0.3, '1': 0.5 };
-            totalLiters += (defaultVolumes[variant] || 0.5) * count;
+            totalLiters += (defaultVariantToVolume[variant] || 0.5) * count;
         }
     }
 
@@ -155,8 +155,7 @@ export async function collectKegClosureData(
         if (volumeInML) {
             memberConsumption[memberId].liters += volumeInML / 1000;
         } else {
-            const defaultVolumes: Record<string, number> = { 'x': 0.3, '1': 0.5 };
-            memberConsumption[memberId].liters += defaultVolumes[orderItem.variant] || 0.5;
+            memberConsumption[memberId].liters += defaultVariantToVolume[orderItem.variant] || 0.5;
         }
 
         // Calculate amount spent
@@ -183,3 +182,14 @@ export async function collectKegClosureData(
         memberStats,
     };
 }
+
+export type AppEvent<T extends object = object> = {
+    type: string;
+    target: string;
+    data: T;
+} & BaseModel;
+
+export type PackageOpenEvent = AppEvent<{
+    offerItemKey: string;
+    closureData: Awaited<ReturnType<typeof collectKegClosureData>>;
+}>

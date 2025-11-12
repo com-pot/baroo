@@ -1,6 +1,6 @@
 import type { Bar } from '$lib/bar/BarModel';
 import { parseStorageRef } from '$lib/bar/refs';
-import { getBarOfferItems, collectKegClosureData } from '$lib/bar/stats/barOfferItems';
+import { getBarOfferItems, collectKegClosureData, type PackageOpenEvent } from '$lib/bar/stats/barOfferItems';
 import { getMemberOrders } from '$lib/bar/stats/memberOrders';
 import { formatPbError } from '$lib/db.server';
 import { validate, getFieldErrors } from '$lib/validation/validator';
@@ -86,7 +86,7 @@ export const actions: Actions = {
                         offerItemKey,
                         closureData,
                     },
-                })
+                } satisfies PackageOpenEvent)
 
             return { success: true, action: 'createEvent' };
         } catch (err) {

@@ -3,8 +3,10 @@
     import type { PageData, ActionData } from './$types';
     import { enhance } from '$app/forms';
     import { onMount } from 'svelte';
+    import Drawer from "$lib/components/Drawer.svelte"
     import { computeCountsByVariant, computeTotalVolume } from '$lib/bar/barAggregation';
     import { stringifyStorageRef } from '$lib/bar/refs';
+    import ClosureDetails from './ClosureDetails.svelte';
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -308,70 +310,10 @@
     {#if openDrawer && data.stats?.closureEvents?.[openDrawer.offerItemKey]?.[openDrawer.closureIndex]}
         {@const closure = data.stats.closureEvents[openDrawer.offerItemKey][openDrawer.closureIndex]}
         {@const sequenceNumber = data.stats.closureEvents[openDrawer.offerItemKey].length - openDrawer.closureIndex}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="drawer-overlay" onclick={() => openDrawer = null}></div>
-        <aside class="drawer">
-            <header class="drawer-header">
-                <h3>#{sequenceNumber} - {closure.data.offerItemName}</h3>
-                <button
-                    type="button"
-                    class="btn-close"
-                    aria-label="Close"
-                    onclick={() => openDrawer = null}
-                ></button>
-            </header>
-            <div class="drawer-body">
-                <div class="closure-details">
-                    <div class="closure-info">
-                        <p><strong>Opened:</strong> {new Date(closure.data.uncorkedAt).toLocaleString()}</p>
-                        <p><strong>Closed:</strong> {new Date(closure.data.closedAt).toLocaleString()}</p>
-                        <p><strong>Total:</strong> {closure.data.totalLiters}L ({closure.data.totalOrders} orders)</p>
-                    </div>
-
-                    {#if closure.data.variantCounts && Object.keys(closure.data.variantCounts).length > 0}
-                        <div class="variant-breakdown">
-                            <strong>Variants:</strong>
-                            <div class="items-grid -tight">
-                                {#each Object.entries(closure.data.variantCounts) as [variant, count]}
-                                    <div class="tile">
-                                        <span class="label">{variant}</span>
-                                        <span role="separator">×</span>
-                                        <span class="value">{count}</span>
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-
-                    {#if closure.data.memberStats && closure.data.memberStats.length > 0}
-                        <div class="member-stats">
-                            <strong>Top Consumers:</strong>
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Member</th>
-                                        <th>Liters</th>
-                                        <th>Orders</th>
-                                        <th>Spent</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {#each closure.data.memberStats as member}
-                                        <tr>
-                                            <td>{member.memberName}</td>
-                                            <td>{member.liters}L</td>
-                                            <td>{member.count}</td>
-                                            <td>{member.spent} Kč</td>
-                                        </tr>
-                                    {/each}
-                                </tbody>
-                            </table>
-                        </div>
-                    {/if}
-                </div>
-            </div>
-        </aside>
+        <Drawer bind:isOpen={() => !!openDrawer, (value) => openDrawer = value ? openDrawer : null}>
+            {#snippet heading()}#{sequenceNumber} - {closure.data.offerItemName}{/snippet}
+            <ClosureDetails event={closure} />
+        </Drawer>
     {/if}
 </main>
 
@@ -419,61 +361,6 @@
             }
         }
     }
-}
-
-.drawer-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1040;
-    cursor: pointer;
-}
-
-.drawer {
-    position: fixed;
-    top: 0;
-    right: 0;
-    height: 100vh;
-    width: min(90vw, 600px);
-    background: white;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
-    z-index: 1050;
-    display: flex;
-    flex-direction: column;
-    animation: slideIn 0.3s ease-out;
-
-    @keyframes slideIn {
-        from {
-            transform: translateX(100%);
-        }
-        to {
-            transform: translateX(0);
-        }
-    }
-}
-
-.drawer-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 1px solid #dee2e6;
-    background: #f8f9fa;
-
-    h3 {
-        margin: 0;
-        font-size: 1.25rem;
-    }
-
-    .btn-close {
-        flex-shrink: 0;
-    }
-}
-
-.drawer-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.5rem;
 }
 
 .closure-details {

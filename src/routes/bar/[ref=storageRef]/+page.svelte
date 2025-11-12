@@ -1,4 +1,5 @@
 <script lang="ts">
+    import "bootstrap/scss/bootstrap.scss";
     import "$lib/assets/bar.scss";
     import "$lib/assets/boot.scss";
     import * as m from "$lib/paraglide/messages.js";
@@ -6,11 +7,10 @@
     import { browser } from "$app/environment";
 
     import type { PageData } from "./$types";
-    import { onMount, tick } from "svelte";
+    import { onMount } from "svelte";
     import { runBoot } from "$lib/boot";
     import type { BarOrderItem, MemberBalance } from "$lib/bar/BarModel";
     import { TagMapper } from "$lib/bar/tags";
-    import { get } from "svelte/store";
 
     const {
         data,
@@ -19,6 +19,7 @@
     } = $props();
 
     let status = $state<{ level: "✅" | "ℹ️" | "⚠️" | "❌"; text: string }>();
+    let mode = $state<"order" | "summary">("order");
     let userIdInput = $state("");
     let userNickname = $state<string | null>(null);
 
@@ -90,14 +91,14 @@
                 setStatus("❌", m["baroo.bar.status.no_order"]());
                 return;
             }
-            
+
             const newItems = this.currentOrder.items.map((item) => ({
                 ...item,
                 createdAt: new Date(),
             }));
-            
+
             this.workingCopy.items.push(...newItems);
-            
+
             // Save to localStorage
             localStorage.setItem(
                 `balance[${this.workingCopy.id}]`,
@@ -110,14 +111,14 @@
                     const formData = new FormData();
                     formData.append('userId', this.workingCopy.id);
                     formData.append('items', JSON.stringify(this.currentOrder.items));
-                    
+
                     const response = await fetch('?/createOrder', {
                         method: 'POST',
                         body: formData,
                     });
-                    
+
                     const result = await response.json();
-                    
+
                     if (result.type === 'success') {
                         setStatus("✅", "Objednávka úspěšně uložena");
                     } else {
@@ -145,7 +146,6 @@
 
             // Always update the label with the current nickname
             balance._label = label || id;
-            
             balanceCtrl.workingCopy = balance;
 
             summaryDialog!.showModal();
@@ -154,6 +154,9 @@
         reset() {
             this.workingCopy = null;
             this.currentOrder = null;
+            userIdInput = "";
+            mode = "order"
+
         },
     });
     const currentOrderCounts = $derived.by(() => {
@@ -222,18 +225,6 @@
         status = { level, text };
     }
 
-    function lookupUserNickname(userId: string) {
-        if (!userId) {
-            userNickname = null;
-            return;
-        }
-        // Try to find member by userId in the mapper
-        const member = mapper.mappings.find((m) => {
-            return m.userId === userId;
-        });
-        userNickname = member?.nickName || null;
-    }
-
     async function submitSelectForm(e: SubmitEvent) {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
@@ -242,20 +233,18 @@
         // Try to get member from serialNumber first (NFC scan), then from userId (manual entry)
         let member = await mapper.get(data.serialNumber as string);
         if (!member && data.userId) {
-            // If no member found by serial number, look up by userId
-            member = mapper.mappings.find((m) => {
-                return m.userId === String(data.userId);
-            }) || null;
+            member = mapper.mappings
+                .find((m) => m.userId === String(data.userId));
         }
-        
+
         // Block action if user is not mapped
         if (!member && data.userId) {
             setStatus("⚠️", m["baroo.bar.status.user_not_mapped"]({ userId: String(data.userId) }));
             return; // Don't proceed with opening order/summary
         }
-        
+
         const displayName = member?.nickName || userNickname || String(data.userId);
-        
+
         if (data.action === "summary") {
             balanceCtrl.showSummary(String(data.userId), displayName);
             return;
@@ -334,15 +323,15 @@
                                     document.forms
                                         .namedItem("selectBadgeForm")!
                                         .dispatchEvent(new Event("submit"));
-                                    statusEl.innerText = m["baroo.bar.status.tag_recognized"]({ 
-                                        serialNumber: event.serialNumber, 
-                                        nickName: member.nickName, 
-                                        userId: member.userId 
+                                    statusEl.innerText = m["baroo.bar.status.tag_recognized"]({
+                                        serialNumber: event.serialNumber,
+                                        nickName: member.nickName,
+                                        userId: member.userId
                                     });
                                 } catch (error) {
-                                    statusEl.innerText = m["baroo.bar.status.error_processing"]({ 
-                                        serialNumber: event.serialNumber, 
-                                        error: error instanceof Error ? error.message : String(error) 
+                                    statusEl.innerText = m["baroo.bar.status.error_processing"]({
+                                        serialNumber: event.serialNumber,
+                                        error: error instanceof Error ? error.message : String(error)
                                     });
                                 }
                             };
@@ -374,17 +363,10 @@
     </div>
 
     <div class="main-content">
-        <form name="selectBadgeForm" data-boot onsubmit={submitSelectForm}>
-            {#if status?.text}
-                <div class="form-status" data-level={status.level}>
-                    <span class="level">{status.level}</span>
-                    <span class="text">{status.text}</span>
-                </div>
-            {/if}
-            
+        <form name="selectBadgeForm" class="card card-body" data-boot onsubmit={submitSelectForm}>
             <div class="form-section">
                 <div class="btn-group">
-                    <label class="btn">
+                    <label class="btn btn-baroo">
                         <input
                             type="radio"
                             name="action"
@@ -394,7 +376,7 @@
                         />
                         <span class="text">{m["baroo.bar.pos.action.order"]()}</span>
                     </label>
-                    <label class="btn">
+                    <label class="btn btn-baroo">
                         <input type="radio" name="action" value="summary" required />
                         <span class="text">{m["baroo.bar.pos.action.summary"]()}</span>
                     </label>
@@ -402,15 +384,19 @@
             </div>
 
             <div class="form-section">
-                <label for="userId">{m["baroo.bar.userRef"]()}</label>
-                <input 
-                    name="userId" 
-                    id="userId" 
-                    required 
-                    bind:value={userIdInput}
-                    oninput={(e) => lookupUserNickname((e.target as HTMLInputElement).value)}
-                    placeholder="Zadejte ID..."
-                />
+                <div class="input-group input-group-lg">
+                    <input
+                        name="userId"
+                        id="userId"
+                        class="form-control"
+                        required
+                        aria-label={m["baroo.bar.userRef"]()}
+                        bind:value={userIdInput}
+                        placeholder="Zadejte ID..."
+                    />
+                    <button type="submit" class="btn btn-primary" aria-label={m["generic.action.open"]()}>⏎</button>
+                </div>
+
                 {#if userNickname}
                     <div class="user-nickname">
                         <span class="label">👤</span>
@@ -419,18 +405,22 @@
                 {/if}
             </div>
 
-            <button type="submit" class="submit-btn">{m["generic.action.open"]()}</button>
-
             <input type="hidden" name="serialNumber" id="serialNumber" />
         </form>
 
         <div class="info-sections">
-            <div class="info-card">
-                <div class="info-header">
+            {#if status?.text}
+                <div class="form-status" data-level={status.level}>
+                    <span class="level">{status.level}</span>
+                    <span class="text">{status.text}</span>
+                </div>
+            {/if}
+            <div class="card info-card">
+                <div class="card-header">
                     <span class="icon">📡</span>
                     <span class="title">{m["baroo.bar.stream"]()}</span>
                 </div>
-                <div class="info-content">
+                <div class="card-body">
                     <span class="message">{eventStreamMessage || '—'}</span>
                     {#if cardId}
                         <button class="copy-btn" onclick={() => copy(cardId || '')}>
@@ -511,7 +501,7 @@
         </div>
         <div class="controls">
             <button
-                class="accent-primary"
+                class="btn btn-primary"
                 data-action="confirm"
                 onclick={() =>
                     balanceCtrl.confirmOrder().then(() => {

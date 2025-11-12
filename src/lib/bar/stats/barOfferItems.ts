@@ -13,6 +13,7 @@ export async function getBarOfferItems(
     const offerItems: {
         data: typeof offerItemsRaw[0],
         lastKegUncork: Date | null,
+        uncorkCount: number,
         orderItems: BarOrderItem[],
     }[] = []
 
@@ -23,6 +24,13 @@ export async function getBarOfferItems(
                 sort: '-created'
             })
         const lastUncorkEvent = kegUncorkList.items[0];
+
+        const uncorkCountResult = await pb.collection('events')
+            .getList(1, 1, {
+                filter: `type = "keg-uncork" && target = "bar:${bar.slug}" && data.offerItemKey = "${offerItem.key}"`,
+                sort: '-created'
+            })
+        const uncorkCount = uncorkCountResult.totalItems > 0 ? uncorkCountResult.totalItems : 1;
 
         const orderItemFilterClauses = [
             `key = "${offerItem.key}"`,
@@ -40,6 +48,7 @@ export async function getBarOfferItems(
         offerItems.push({
             data: offerItem,
             lastKegUncork: lastUncorkEvent?.created || null,
+            uncorkCount,
             orderItems: orderItemsList,
         })
     }

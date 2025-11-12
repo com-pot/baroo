@@ -73,7 +73,7 @@
                 <header class="card-header">
                     <h3>{m["baroo.backstage.offer.offer_items"]()}</h3>
                     <div class="actions">
-                        <button type="button" class="btn btn-primary" onclick={startCreate}>{m["baroo.backstage.offer.add_item"]()}</button>
+                        <button type="button" class="btn btn-outline-primary" onclick={startCreate}>{m["baroo.backstage.offer.add_item"]()}</button>
                     </div>
                 </header>
 
@@ -192,9 +192,23 @@
                                 <span class="error-message">{form.errors.name}</span>
                             {/if}
                         </div>
-                        <div class="input-pair col-12">
+                        <div class="col-12">
                             <label class="form-label">{m["baroo.backstage.offer.pricing_variants"]()}</label>
                             <div class="pricing-variants">
+                                <div class="variant-row header">
+                                    <strong>{m["baroo.backstage.offer.variant_name"]()}</strong>
+                                    <strong>{m["baroo.backstage.offer.variant_price"]()}</strong>
+                                    <strong>{m["baroo.backstage.offer.variant_volume"]()}</strong>
+                                    <span class="actions">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm"
+                                            style="opacity: 0; pointer-events: none;"
+                                        >
+                                            {m["baroo.backstage.offer.remove_variant"]()}
+                                        </button>
+                                    </span>
+                                </div>
                                 {#each pricingVariants as variant, index}
                                     <div class="variant-row">
                                         <input
@@ -204,34 +218,42 @@
                                             placeholder={m["baroo.backstage.offer.variant_name_placeholder"]()}
                                             bind:value={variant.name}
                                         />
-                                        <input
-                                            type="number"
-                                            name="variant_price_{index}"
-                                            class="form-control"
-                                            placeholder={m["baroo.backstage.offer.variant_price_placeholder"]()}
-                                            bind:value={variant.price}
-                                            step="0.01"
-                                        />
-                                        <input
-                                            type="number"
-                                            name="variant_volume_{index}"
-                                            class="form-control"
-                                            placeholder="ML"
-                                            bind:value={variant.volume}
-                                            step="1"
-                                            min="0"
-                                        />
-                                        <button
-                                            type="button"
-                                            class="btn btn-sm btn-danger"
-                                            onclick={() => removeVariant(index)}
-                                            disabled={pricingVariants.length === 1}
-                                        >
-                                            {m["baroo.backstage.offer.remove_variant"]()}
-                                        </button>
+                                        <div class="input-group">
+                                            <input
+                                                type="number"
+                                                name="variant_price_{index}"
+                                                class="form-control"
+                                                placeholder={m["baroo.backstage.offer.variant_price_placeholder"]()}
+                                                bind:value={variant.price}
+                                                step="0.01"
+                                            />
+                                            <span class="input-group-text">Kč</span>
+                                        </div>
+
+                                        <div class="input-group">
+                                            <input
+                                                type="number"
+                                                name="variant_volume_{index}"
+                                                class="form-control"
+                                                bind:value={variant.volume}
+                                                step="1"
+                                                min="0"
+                                            />
+                                            <span class="input-group-text">ml</span>
+                                        </div>
+                                        <div class="actions">
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-danger"
+                                                onclick={() => removeVariant(index)}
+                                                disabled={pricingVariants.length === 1}
+                                            >
+                                                {m["baroo.backstage.offer.remove_variant"]()}
+                                            </button>
+                                        </div>
                                     </div>
                                 {/each}
-                                <button type="button" class="btn btn-sm btn-secondary" onclick={addVariant}>
+                                <button type="button" class="btn btn-outline-secondary" onclick={addVariant}>
                                     {m["baroo.backstage.offer.add_variant"]()}
                                 </button>
                             </div>
@@ -257,15 +279,18 @@
 
 <style lang="scss">
 .pricing-variants {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr 125px auto;
+    gap: 0.5rem 0.5rem;
+    align-items: center;
 
     .variant-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr 100px auto;
-        gap: 0.5rem;
-        align-items: center;
+        display: contents;
+    }
+    > button {
+        grid-column: 1 / -1;
+        place-self: end center;
+        margin: 0.2rem;
     }
 }
 </style>

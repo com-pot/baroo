@@ -47,11 +47,11 @@ export const actions: Actions = {
         }
 
         const memberStanding = await getMemberStanding(locals.pb, { slug: ref.key }, { id: memberId });
-        const expectedAmount = memberStanding.amountDue;
+        const amountDue = memberStanding.amountDue;
 
-        if (Math.abs(amountPaid - expectedAmount) > 0.01) {
+        if (amountPaid < amountDue) {
             return fail(400, {
-                error: `Amount paid (${amountPaid.toFixed(2)} Kč) does not match expected amount (${expectedAmount.toFixed(2)} Kč). Please verify the amount.`
+                error: `Amount paid (${amountPaid.toFixed(2)} Kč) does not match expected amount (${amountDue.toFixed(2)} Kč). Please verify the amount.`
             });
         }
 
@@ -61,6 +61,7 @@ export const actions: Actions = {
                 target: `bar:${ref.key}`,
                 data: {
                     member: memberId,
+                    amountDue: amountDue,
                     amountPaid,
                 },
             });

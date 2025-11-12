@@ -74,9 +74,9 @@
                 "member_summaries": "Member Summaries",
                 "most_orders": "Most orders",
                 "offer_items_keg_usage": "Offer Items & Keg Usage",
-                "last_uncorked": "Last uncorked:",
                 "never": "Never",
                 "uncork": "Uncork",
+                "package_sequenced": "Package #{sequenceNumber}",
                 "total_volume": "Total Volume:",
                 "no_items": "No offer items yet.",
                 "add_items_link": "Add some items",
@@ -127,6 +127,7 @@
                 "pricing_variants": "Price Variants",
                 "variant_name": "Variant",
                 "variant_price": "Price",
+                "variant_volume": "Volume",
                 "add_variant": "Add Variant",
                 "remove_variant": "Remove",
                 "variant_name_placeholder": "e.g., x, 1, large",
@@ -153,7 +154,7 @@
                 "settle": "Settle",
                 "loading": "Loading timeline...",
                 "settled_event": "Settled tab",
-                "paid": "Paid {amount} Kč",
+                "paid": "Paid {amountWithCurrency}",
                 "ordered_event": "Ordered",
                 "close": "Close"
             }

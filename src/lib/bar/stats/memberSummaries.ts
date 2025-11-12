@@ -26,6 +26,7 @@ export type MemberTimelineEntry = { date: Date; } & (
     | {
         type: 'settlement';
         data: {
+            amountDue: number;
             amountPaid: number;
         };
     }
@@ -59,15 +60,15 @@ export function computeTotalPrice(
     orderItems: BarOrderItem[],
     barOffer: Record<BarOrderItem["key"], BarOfferItem>,
 ): number {
-    let amountDue = 0;
+    let total = 0;
     for (const order of orderItems) {
         const pricing = barOffer[order.key]?.pricing;
         const price = pricing?.[order.variant];
         if (price) {
-            amountDue += price;
+            total += price;
         }
     }
-    return amountDue
+    return total
 }
 export async function getMemberStanding(
     pb: NonNullable<App.Locals['pb']>,
@@ -159,7 +160,9 @@ export async function getMemberTimeline(
             type: 'settlement',
             date: event.created,
             data: {
+                ...event.data,
                 amountPaid: event.data.amountPaid,
+                amountDue: event.data.amountDue,
             },
         });
     }

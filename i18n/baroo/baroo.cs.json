@@ -74,9 +74,9 @@
                 "member_summaries": "Přehledy Členů",
                 "most_orders": "Nejvíce objednávek",
                 "offer_items_keg_usage": "Položky Nabídky & Využití Sudů",
-                "last_uncorked": "Naposledy otevřeno:",
                 "never": "Nikdy",
-                "uncork": "Otevřít",
+                "uncork": "Napočnout",
+                "package_sequenced": "Balení #{sequenceNumber}",
                 "total_volume": "Celkový Objem:",
                 "no_items": "Zatím žádné položky nabídky.",
                 "add_items_link": "Přidejte nějaké položky",
@@ -127,6 +127,7 @@
                 "pricing_variants": "Varianty Cen",
                 "variant_name": "Varianta",
                 "variant_price": "Cena",
+                "variant_volume": "Objem",
                 "add_variant": "Přidat Variantu",
                 "remove_variant": "Odebrat",
                 "variant_name_placeholder": "např. x, 1, velké",
@@ -147,15 +148,21 @@
                 "status_settled": "Uhrazeno",
                 "status_pending": "Čekající",
                 "timeline_title": "{nickName} - Časová Osa",
-                "settled_orders": "Uhrazené Objednávky",
+                "settled_orders": "Uhrazeno obj.",
                 "settle_tab": "Uhradit Účet",
                 "amount_paid": "Uhrazená částka",
                 "settle": "Uhradit",
                 "loading": "Načítání časové osy...",
                 "settled_event": "Uhrazen účet",
-                "paid": "Uhrazeno {amount} Kč",
+                "due": "Dluženo {amountWithCurrency}",
+                "paid": "Uhrazeno {amountWithCurrency}",
                 "ordered_event": "Objednáno",
                 "close": "Zavřít"
+            },
+            "settlement": {
+                "nada": "Nic k úhradě.",
+                "due": "K úhradě: {amountWithCurrency}",
+                "toReturn": "Vrátit: {amountWithCurrency}"
             }
         }
     }

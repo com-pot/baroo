@@ -4,6 +4,9 @@
         "action": {
             "open": "Otevřít",
             "copy": "kopírovat"
+        },
+        "list": {
+            "no_items": "Žádné položky k zobrazení."
         }
     }
 }

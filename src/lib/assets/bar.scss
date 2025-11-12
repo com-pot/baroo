@@ -12,7 +12,7 @@ main {
     margin-block-end: 2.5rem;
     padding-block-end: 1.5rem;
     border-bottom: 2px solid #f3f4f6;
-    
+
     h1 {
         margin: 0;
         font-size: 2rem;
@@ -72,16 +72,16 @@ main {
     border-radius: 0.25rem;
     cursor: pointer;
     transition: all 0.2s;
-    
+
     &:hover {
         background-color: #e9ecef;
         border-color: #adb5bd;
     }
-    
+
     &:active {
         background-color: #dee2e6;
     }
-    
+
     kbd {
         background-color: white;
         border: 1px solid #ced4da;
@@ -90,11 +90,11 @@ main {
         font-size: 0.85rem;
         font-weight: 600;
     }
-    
+
     [role="separator"] {
         opacity: 0.5;
     }
-    
+
     .amount {
         min-width: 1.5rem;
         text-align: right;
@@ -115,7 +115,7 @@ main {
     padding: 0.25rem;
     opacity: 0.7;
     transition: opacity 0.2s;
-    
+
     &:hover {
         opacity: 1;
     }
@@ -126,13 +126,7 @@ main {
     min-height: 3rem;
 }
 
-.btn-group {
-    display: flex;
-    gap: 0.75rem;
-    width: 100%;
-}
-
-.btn {
+.btn-baroo {
     flex: 1;
     display: inline-flex;
     align-items: center;
@@ -231,12 +225,12 @@ dialog .controls {
     border-radius: 0.5rem;
     border: 1px solid #e5e7eb;
     animation: fadeIn 0.3s ease-in;
-    
+
     .label {
         font-size: 1.25rem;
         line-height: 1;
     }
-    
+
     .value {
         color: #111827;
         font-weight: 600;
@@ -264,23 +258,16 @@ dialog .controls {
 }
 
 .info-card {
-    padding: 1rem 1.25rem;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    
-    .info-header {
+    .card-header {
         display: flex;
         align-items: center;
         gap: 0.625rem;
-        margin-block-end: 0.75rem;
-        
+
         .icon {
             font-size: 1.25rem;
             line-height: 1;
         }
-        
+
         .title {
             font-weight: 600;
             font-size: 0.9rem;
@@ -289,20 +276,20 @@ dialog .controls {
             letter-spacing: 0.025em;
         }
     }
-    
-    .info-content {
+
+    .card-body {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-        
+
         .message {
             color: #6b7280;
             font-size: 0.95rem;
             font-family: monospace;
             word-break: break-all;
         }
-        
+
         .copy-btn {
             padding: 0.5rem 1rem;
             background-color: #f3f4f6;
@@ -313,18 +300,18 @@ dialog .controls {
             cursor: pointer;
             transition: all 0.2s ease;
             white-space: nowrap;
-            
+
             &:hover {
                 background-color: #e5e7eb;
                 border-color: #9ca3af;
             }
-            
+
             &:disabled {
                 opacity: 0.5;
                 cursor: not-allowed;
             }
         }
-        
+
         .status {
             margin: 0;
             color: #6b7280;
@@ -333,86 +320,61 @@ dialog .controls {
     }
 }
 
+.form-status {
+    padding: 0.875rem 1rem;
+    border-radius: 0.5rem;
+    background-color: #f3f4f6;
+    border-left: 4px solid #9ca3af;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+
+    &[data-level="✅"] {
+        background-color: #f0fdf4;
+        border-left-color: #22c55e;
+    }
+
+    &[data-level="⚠️"] {
+        background-color: #fefce8;
+        border-left-color: #eab308;
+    }
+
+    &[data-level="❌"] {
+        background-color: #fef2f2;
+        border-left-color: #ef4444;
+    }
+
+    .level {
+        font-size: 1.25rem;
+        line-height: 1;
+    }
+
+    .text {
+        flex: 1;
+        color: #374151;
+    }
+}
+
 // Form styling
 form[name="selectBadgeForm"] {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    padding: 1.5rem;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    
-    .form-status {
-        padding: 0.875rem 1rem;
-        border-radius: 0.5rem;
-        background-color: #f3f4f6;
-        border-left: 4px solid #9ca3af;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        font-size: 0.9rem;
-        
-        &[data-level="✅"] {
-            background-color: #f0fdf4;
-            border-left-color: #22c55e;
-        }
-        
-        &[data-level="⚠️"] {
-            background-color: #fefce8;
-            border-left-color: #eab308;
-        }
-        
-        &[data-level="❌"] {
-            background-color: #fef2f2;
-            border-left-color: #ef4444;
-        }
-        
-        .level {
-            font-size: 1.25rem;
-            line-height: 1;
-        }
-        
-        .text {
-            flex: 1;
-            color: #374151;
-        }
-    }
-    
+
     .form-section {
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
     }
-    
+
     label {
         font-weight: 600;
         font-size: 0.9rem;
         color: #374151;
         margin-block-end: 0.25rem;
     }
-    
-    input[type="text"],
-    input:not([type="radio"]):not([type="hidden"]) {
-        width: 100%;
-        padding: 0.875rem 1rem;
-        border: 2px solid #e5e7eb;
-        border-radius: 0.5rem;
-        font-size: 1rem;
-        transition: all 0.2s ease;
-        
-        &::placeholder {
-            color: #9ca3af;
-        }
-        
-        &:focus {
-            outline: none;
-            border-color: #6b7280;
-            box-shadow: 0 0 0 4px rgba(107, 114, 128, 0.1);
-        }
-    }
-    
+
     .submit-btn {
         width: 100%;
         padding: 1rem 1.5rem;
@@ -425,13 +387,13 @@ form[name="selectBadgeForm"] {
         cursor: pointer;
         transition: all 0.2s ease;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-        
+
         &:hover {
             background-color: #1f2937;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             transform: translateY(-1px);
         }
-        
+
         &:active {
             background-color: #374151;
             transform: translateY(0);
@@ -444,10 +406,10 @@ form[name="selectBadgeForm"] {
     table {
         width: 100%;
         border-collapse: collapse;
-        
+
         thead {
             background-color: #f3f4f6;
-            
+
             th {
                 padding: 0.75rem;
                 text-align: left;
@@ -455,27 +417,27 @@ form[name="selectBadgeForm"] {
                 border-bottom: 2px solid #e5e7eb;
             }
         }
-        
+
         tbody {
             tr {
                 border-bottom: 1px solid #e5e7eb;
-                
+
                 &:last-child {
                     border-bottom: none;
                 }
-                
+
                 &:hover {
                     background-color: #f9fafb;
                 }
-                
+
                 td {
                     padding: 0.75rem;
-                    
+
                     &[data-name="amount"] {
                         color: #374151;
                         font-size: 0.95rem;
                     }
-                    
+
                     &[data-name="price"] {
                         font-weight: 600;
                         text-align: right;
@@ -491,42 +453,28 @@ form[name="selectBadgeForm"] {
     main {
         padding: 0.75rem;
     }
-    
+
     .page-header h1 {
         font-size: 1.5rem;
     }
-    
+
     .main-content {
         max-width: 100%;
     }
-    
+
     form[name="selectBadgeForm"] {
         padding: 1rem;
     }
-    
-    .btn-group {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
+
     dialog .card {
         min-width: 85vw;
         max-width: 95vw;
         padding: 1rem;
     }
-    
+
     .offer {
         grid-template-columns: auto 1fr auto auto;
         font-size: 0.9rem;
-    }
-}
-
-// Add subtle hover effects to cards
-.info-card {
-    transition: box-shadow 0.2s ease;
-    
-    &:hover {
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
     }
 }
 

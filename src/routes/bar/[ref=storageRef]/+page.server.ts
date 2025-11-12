@@ -3,6 +3,7 @@ import { FIXME_DEBUGGING_CREATE_DB_FROM_ENV } from "$lib/db.server";
 import type { PageServerLoad, Actions } from "./$types";
 import { fail } from "@sveltejs/kit";
 import type { BarOrderItem } from "$lib/bar/BarModel";
+import { createSlug } from "$lib/strings";
 
 export const load: PageServerLoad = async ({ params }) => {
     const db = await FIXME_DEBUGGING_CREATE_DB_FROM_ENV()
@@ -16,7 +17,7 @@ export const load: PageServerLoad = async ({ params }) => {
 export const actions: Actions = {
     createOrder: async ({ request, params, locals }) => {
         const pb = locals.pb || await FIXME_DEBUGGING_CREATE_DB_FROM_ENV();
-        
+
         const formData = await request.formData();
         const userId = formData.get('userId')?.toString();
         const itemsJson = formData.get('items')?.toString();
@@ -38,11 +39,11 @@ export const actions: Actions = {
 
         try {
             console.log('[createOrder] Starting order creation for userId:', userId, 'items:', items);
-            
+
             // Get the bar
             const bar = await pb.collection('bars')
                 .getFirstListItem(`slug="${params.ref}"`);
-            
+
             console.log('[createOrder] Found bar:', bar.id, bar.slug);
 
             // Get or create the customer
@@ -68,24 +69,15 @@ export const actions: Actions = {
                 }
             }
 
-            // Helper function to normalize variant names to be database-compatible
-            function normalizeVariant(variant: string): string {
-                return variant
-                    .toLowerCase()
-                    .normalize('NFD') // Decompose diacritics
-                    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-                    .replace(/[^a-z0-9]/g, ''); // Remove non-alphanumeric
-            }
-
             // Create order items
             const createdItems = [];
             for (const item of items) {
-                const normalizedVariant = normalizeVariant(item.variant);
-                console.log('[createOrder] Creating order item:', { 
-                    customer: customer.id, 
-                    key: item.key, 
+                const normalizedVariant = createSlug(item.variant);
+                console.log('[createOrder] Creating order item:', {
+                    customer: customer.id,
+                    key: item.key,
                     variant: item.variant,
-                    normalizedVariant 
+                    normalizedVariant
                 });
                 try {
                     const orderItem = await pb.collection<BarOrderItem>('bar_order_items')

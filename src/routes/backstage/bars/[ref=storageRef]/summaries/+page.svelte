@@ -9,8 +9,13 @@
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
     let selectedMember = $state<typeof data.summaries[0] | null>(null);
-    let timeline = $state<MemberTimelineEntry[]>([]);
+    let timeline = $state<MemberTimelineEntry[] | null>(null);
     let settlementAmount = $state(0);
+    let toDue = $derived.by(() => {
+        if (!selectedMember?.standing.amountDue) return null
+
+        return selectedMember.standing.amountDue - settlementAmount;
+    })
 
     function openMemberDetail(member: typeof data.summaries[0]) {
         selectedMember = member;
@@ -19,7 +24,7 @@
 
     function closeDrawer() {
         selectedMember = null;
-        timeline = [];
+        timeline = null;
         settlementAmount = 0;
     }
 
@@ -173,6 +178,14 @@
                             <span class="input-group-text">Kč</span>
                             <button type="submit" class="btn btn-primary">{m["baroo.backstage.summaries.settle"]()}</button>
                         </div>
+                        {#if toDue === null}
+                            <p>{m["baroo.backstage.settlement.nada"]()}</p>
+                        {:else if toDue > 0}
+                            <p>{m["baroo.backstage.settlement.due"]({ amountWithCurrency: toDue.toFixed(2) + ' Kč' })}</p>
+                        {:else}
+                            <p>{m["baroo.backstage.settlement.toReturn"]({ amountWithCurrency: (-toDue).toFixed(2) + ' Kč' })}</p>
+                        {/if}
+
                         {#if form?.error}
                             <div class="alert alert-danger mt-2">{form.error}</div>
                         {/if}
@@ -180,9 +193,13 @@
                 </div>
 
                 <div class="timeline">
-                    {#if timeline.length === 0}
+                    {#if timeline === null}
                         <div class="empty-state">
                             <p>{m["baroo.backstage.summaries.loading"]()}</p>
+                        </div>
+                    {:else if timeline.length === 0}
+                        <div class="empty-state">
+                            <p>{m["generic.list.no_items"]()}</p>
                         </div>
                     {:else}
                         {#each timeline as event (event.date)}
@@ -192,7 +209,8 @@
                                     {#if event.type === 'settlement'}
                                         <div class="timeline-event settlement">
                                             <strong>{m["baroo.backstage.summaries.settled_event"]()}</strong>
-                                            <div class="amount">{m["baroo.backstage.summaries.paid"]({ amount: event.data.amountPaid?.toFixed(2) || "0" })}</div>
+                                            <div class="amount">{m["baroo.backstage.summaries.due"]({ amountWithCurrency: (event.data.amountDue?.toFixed(2) || "0") + " Kč" })}</div>
+                                            <div class="amount">{m["baroo.backstage.summaries.paid"]({ amountWithCurrency: (event.data.amountPaid?.toFixed(2) || "0") + " Kč" })}</div>
                                             <time>{formatDate(event.date)}</time>
                                         </div>
                                     {:else if event.type === 'order'}

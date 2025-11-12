@@ -8,6 +8,8 @@
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
+    let openDrawer: { offerItemKey: string; closureIndex: number } | null = $state(null);
+
     const offerItemUsage = $derived.by(() => {
         return (data.stats?.offerItems || [])
             .map((offerItemStats) => {
@@ -213,8 +215,6 @@
                                     <span class="name">{stat.member.nickName}</span>
                                     <span class="stats">
                                         <span class="stat-item">{stat.orderCount}×</span>
-                                        <span class="stat-item">{stat.totalLiters}L</span>
-                                        <span class="stat-item">{stat.totalSpent} Kč</span>
                                     </span>
                                 </li>
                             {/each}
@@ -235,31 +235,49 @@
                             <div class="card">
                                 <header class="card-header">
                                     <h3>{offerItem.data.name}</h3>
+                                    <div class="actions">
+                                        <div class="dropdown">
+                                            <button
+                                                class="btn btn-sm btn-secondary dropdown-toggle"
+                                                type="button"
+                                                data-bs-toggle="dropdown"
+                                                aria-expanded="false"
+                                            >
+                                                {m['baroo.backstage.bar.package_sequenced']({ sequenceNumber: offerItem.uncorkCount })}
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <form method="POST" action="?/createEvent" use:enhance>
+                                                        <input type="hidden" name="eventType" value="keg-uncork" />
+                                                        <input type="hidden" name="offerItemKey" value={offerItem.data.key} />
+                                                        <button type="submit" class="dropdown-item">
+                                                            {m["baroo.backstage.bar.uncork"]()}
+                                                        </button>
+                                                    </form>
+                                                </li>
+                                                {#if data.stats?.closureEvents?.[offerItem.data.key] && data.stats.closureEvents[offerItem.data.key].length > 0}
+                                                    <li><hr class="dropdown-divider" /></li>
+                                                    {#each data.stats.closureEvents[offerItem.data.key] as closure, index}
+                                                        <li>
+                                                            <button
+                                                                type="button"
+                                                                class="dropdown-item"
+                                                                onclick={() => {
+                                                                    openDrawer = { offerItemKey: offerItem.data.key, closureIndex: index };
+                                                                }}
+                                                            >
+                                                                #{data.stats.closureEvents[offerItem.data.key].length - index} - {new Date(closure.created).toLocaleDateString()}
+                                                            </button>
+                                                        </li>
+                                                    {/each}
+                                                {/if}
+                                            </ul>
+                                        </div>
+                                    </div>
+
                                 </header>
 
                                 <div class="card-body flow-block offer-item-body">
-                                    <div class="alert alert-info alert-sm last-uncork-info">
-                                        <div class="row">
-                                            <div class="col">
-                                                <strong>{m["baroo.backstage.bar.last_uncorked"]()}</strong>
-                                                {#if offerItem.lastKegUncork}
-                                                <time>{offerItem.lastKegUncork.toLocaleString()}</time>
-                                                {:else}
-                                                    <em>{m["baroo.backstage.bar.never"]()}</em>
-                                                {/if}
-                                            </div>
-                                            <div class="col-auto">
-                                                <form method="POST" action="?/createEvent" use:enhance>
-                                                    <input type="hidden" name="eventType" value="keg-uncork" />
-                                                    <input type="hidden" name="offerItemKey" value={offerItem.data.key} />
-                                                    <button type="submit" class="btn btn-outline-primary btn-sm">
-                                                        {m["baroo.backstage.bar.uncork"]()}
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        </div>
-
-                                    </div>
                                     <div class="items-grid -tight">
                                         {#each Object.entries(offerItem.variantCounts) as [variant, count]}
                                             <div class="tile">
@@ -273,61 +291,6 @@
                                     <div class="alert alert-success">
                                         <strong>{m["baroo.backstage.bar.total_volume"]()}</strong> {offerItem.totalVolume.toFixed(1)}L
                                     </div>
-
-                                    {#if data.stats?.closureEvents?.[offerItem.data.key]}
-                                        {@const closure = data.stats.closureEvents[offerItem.data.key]}
-                                        <details class="previous-keg-stats">
-                                            <summary>Previous Keg Stats</summary>
-                                            <div class="closure-details">
-                                                <div class="closure-info">
-                                                    <p><strong>Opened:</strong> {new Date(closure.data.uncorkedAt).toLocaleString()}</p>
-                                                    <p><strong>Closed:</strong> {new Date(closure.data.closedAt).toLocaleString()}</p>
-                                                    <p><strong>Total:</strong> {closure.data.totalLiters}L ({closure.data.totalOrders} orders)</p>
-                                                </div>
-                                                
-                                                {#if closure.data.variantCounts && Object.keys(closure.data.variantCounts).length > 0}
-                                                    <div class="variant-breakdown">
-                                                        <strong>Variants:</strong>
-                                                        <div class="items-grid -tight">
-                                                            {#each Object.entries(closure.data.variantCounts) as [variant, count]}
-                                                                <div class="tile">
-                                                                    <span class="label">{variant}</span>
-                                                                    <span role="separator">×</span>
-                                                                    <span class="value">{count}</span>
-                                                                </div>
-                                                            {/each}
-                                                        </div>
-                                                    </div>
-                                                {/if}
-
-                                                {#if closure.data.memberStats && closure.data.memberStats.length > 0}
-                                                    <div class="member-stats">
-                                                        <strong>Top Consumers:</strong>
-                                                        <table class="table table-sm">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th>Member</th>
-                                                                    <th>Liters</th>
-                                                                    <th>Orders</th>
-                                                                    <th>Spent</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {#each closure.data.memberStats.slice(0, 5) as member}
-                                                                    <tr>
-                                                                        <td>{member.memberName}</td>
-                                                                        <td>{member.liters}L</td>
-                                                                        <td>{member.count}</td>
-                                                                        <td>{member.spent} Kč</td>
-                                                                    </tr>
-                                                                {/each}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                {/if}
-                                            </div>
-                                        </details>
-                                    {/if}
                                 </div>
                             </div>
                         {/each}
@@ -339,6 +302,76 @@
                 {/if}
             </section>
         </div>
+    {/if}
+
+    <!-- Drawer for closure event details -->
+    {#if openDrawer && data.stats?.closureEvents?.[openDrawer.offerItemKey]?.[openDrawer.closureIndex]}
+        {@const closure = data.stats.closureEvents[openDrawer.offerItemKey][openDrawer.closureIndex]}
+        {@const sequenceNumber = data.stats.closureEvents[openDrawer.offerItemKey].length - openDrawer.closureIndex}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="drawer-overlay" onclick={() => openDrawer = null}></div>
+        <aside class="drawer">
+            <header class="drawer-header">
+                <h3>#{sequenceNumber} - {closure.data.offerItemName}</h3>
+                <button
+                    type="button"
+                    class="btn-close"
+                    aria-label="Close"
+                    onclick={() => openDrawer = null}
+                ></button>
+            </header>
+            <div class="drawer-body">
+                <div class="closure-details">
+                    <div class="closure-info">
+                        <p><strong>Opened:</strong> {new Date(closure.data.uncorkedAt).toLocaleString()}</p>
+                        <p><strong>Closed:</strong> {new Date(closure.data.closedAt).toLocaleString()}</p>
+                        <p><strong>Total:</strong> {closure.data.totalLiters}L ({closure.data.totalOrders} orders)</p>
+                    </div>
+
+                    {#if closure.data.variantCounts && Object.keys(closure.data.variantCounts).length > 0}
+                        <div class="variant-breakdown">
+                            <strong>Variants:</strong>
+                            <div class="items-grid -tight">
+                                {#each Object.entries(closure.data.variantCounts) as [variant, count]}
+                                    <div class="tile">
+                                        <span class="label">{variant}</span>
+                                        <span role="separator">×</span>
+                                        <span class="value">{count}</span>
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
+
+                    {#if closure.data.memberStats && closure.data.memberStats.length > 0}
+                        <div class="member-stats">
+                            <strong>Top Consumers:</strong>
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Member</th>
+                                        <th>Liters</th>
+                                        <th>Orders</th>
+                                        <th>Spent</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {#each closure.data.memberStats as member}
+                                        <tr>
+                                            <td>{member.memberName}</td>
+                                            <td>{member.liters}L</td>
+                                            <td>{member.count}</td>
+                                            <td>{member.spent} Kč</td>
+                                        </tr>
+                                    {/each}
+                                </tbody>
+                            </table>
+                        </div>
+                    {/if}
+                </div>
+            </div>
+        </aside>
     {/if}
 </main>
 
@@ -374,12 +407,12 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        
+
         .stats {
             display: flex;
             gap: 0.5rem;
             font-size: 0.9rem;
-            
+
             .stat-item {
                 color: #6c757d;
                 font-weight: 500;
@@ -388,53 +421,88 @@
     }
 }
 
-.previous-keg-stats {
-    margin-top: 1rem;
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
-    padding: 0.5rem;
+.drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+    cursor: pointer;
+}
+
+.drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: min(90vw, 600px);
+    background: white;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    animation: slideIn 0.3s ease-out;
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+        }
+        to {
+            transform: translateX(0);
+        }
+    }
+}
+
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid #dee2e6;
     background: #f8f9fa;
 
-    summary {
-        cursor: pointer;
-        font-weight: 600;
-        padding: 0.5rem;
-        color: #495057;
-        user-select: none;
+    h3 {
+        margin: 0;
+        font-size: 1.25rem;
+    }
 
-        &:hover {
-            color: #0066cc;
+    .btn-close {
+        flex-shrink: 0;
+    }
+}
+
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+.closure-details {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+
+    .closure-info {
+        font-size: 0.95rem;
+
+        p {
+            margin: 0.5rem 0;
         }
     }
 
-    .closure-details {
-        padding: 1rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
+    .variant-breakdown,
+    .member-stats {
+        strong {
+            display: block;
+            margin-bottom: 0.75rem;
+            color: #495057;
+            font-size: 1rem;
+        }
+    }
 
-        .closure-info {
+    .member-stats {
+        table {
+            margin-bottom: 0;
             font-size: 0.9rem;
-            
-            p {
-                margin: 0.25rem 0;
-            }
-        }
-
-        .variant-breakdown,
-        .member-stats {
-            strong {
-                display: block;
-                margin-bottom: 0.5rem;
-                color: #495057;
-            }
-        }
-
-        .member-stats {
-            table {
-                margin-bottom: 0;
-                font-size: 0.85rem;
-            }
         }
     }
 }

@@ -1,6 +1,7 @@
 import type { BarOfferItem } from '$lib/bar/BarModel';
 import { parseStorageRef } from '$lib/bar/refs';
 import { formatPbError } from '$lib/db.server';
+import { createSlug } from '$lib/strings';
 import { validate, getFieldErrors } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
@@ -34,15 +35,6 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     };
 };
 
-// Helper function to normalize variant names for database storage
-function normalizeVariant(variant: string): string {
-    return variant
-        .toLowerCase()
-        .normalize('NFD') // Decompose diacritics
-        .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-        .replace(/[^a-z0-9]/g, ''); // Remove non-alphanumeric
-}
-
 export const actions: Actions = {
     create: async ({ request, params, locals }) => {
         if (!locals.pb) {
@@ -57,7 +49,7 @@ export const actions: Actions = {
         const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref.key}"`);
 
         const formData = await request.formData();
-        
+
         // Build pricing object from variant fields with normalized keys
         // Also build variant labels mapping to preserve original display names
         // Also build variant volumes mapping to store ML values
@@ -69,10 +61,10 @@ export const actions: Actions = {
             const variantName = formData.get(`variant_name_${index}`)?.toString()?.trim();
             const variantPrice = formData.get(`variant_price_${index}`)?.toString()?.trim();
             const variantVolume = formData.get(`variant_volume_${index}`)?.toString()?.trim();
-            
+
             if (variantName && variantPrice) {
                 // Normalize variant name for database compatibility
-                const normalizedName = normalizeVariant(variantName);
+                const normalizedName = createSlug(variantName);
                 pricing[normalizedName] = parseFloat(variantPrice);
                 // Store original label for display
                 variantLabels[normalizedName] = variantName;
@@ -86,7 +78,7 @@ export const actions: Actions = {
             }
             index++;
         }
-        
+
         const data = {
             bar: bar.id,
             key: formData.get('key')?.toString() || '',
@@ -147,10 +139,10 @@ export const actions: Actions = {
             const variantName = formData.get(`variant_name_${index}`)?.toString()?.trim();
             const variantPrice = formData.get(`variant_price_${index}`)?.toString()?.trim();
             const variantVolume = formData.get(`variant_volume_${index}`)?.toString()?.trim();
-            
+
             if (variantName && variantPrice) {
                 // Normalize variant name for database compatibility
-                const normalizedName = normalizeVariant(variantName);
+                const normalizedName = createSlug(variantName);
                 pricing[normalizedName] = parseFloat(variantPrice);
                 // Store original label for display
                 variantLabels[normalizedName] = variantName;

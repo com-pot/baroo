@@ -98,7 +98,14 @@
                 "scan_error": "Chyba! Skenování se nepodařilo spustit: {error}.",
                 "nfc_tag_col": "NFC Štítek",
                 "user_id_col": "ID Uživatele",
-                "user_name_col": "Jméno Uživatele"
+                "user_name_col": "Jméno Uživatele",
+                "mapping_import": "Import mapování",
+                "import_drawer_title": "Importovat mapování členů",
+                "import_data_label": "Data mapování (odděleno tabulátory: seq, nickName, serialId):",
+                "import_button": "Importovat mapování",
+                "import_success": "Úspěšně importováno {count} mapování",
+                "import_error": "Import selhal: {error}",
+                "invalid_import_format": "Neplatný formát. Každý řádek by měl obsahovat hodnoty oddělené tabulátory: seq, nickName, serialId"
             },
             "offer": {
                 "breadcrumb": "Položky",

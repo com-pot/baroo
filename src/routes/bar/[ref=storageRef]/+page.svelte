@@ -18,6 +18,7 @@
     }: {
         data: PageData;
     } = $props();
+    let debug = $state('')
 
     let status = $state<{ level: "✅" | "ℹ️" | "⚠️" | "❌"; text: string }>();
     let mode = $state<"order" | "summary">("order");
@@ -406,6 +407,9 @@
             eventStreamMessage = message;
         });
 
+        const url = new URL(window.location)
+        debug = url.searchParams.get('debug')
+
         return booted?.destroy;
     });
 </script>
@@ -472,6 +476,7 @@
                     <span class="text">{status.text}</span>
                 </div>
             {/if}
+            {#if debug === 'stream'}
             <div class="card info-card">
                 <div class="card-header">
                     <span class="icon">📡</span>
@@ -486,6 +491,7 @@
                     {/if}
                 </div>
             </div>
+            {/if}
 
             <div class="info-card nfc-scanner" data-boot-feature="nfc" data-boot-status="idle">
                 <div class="info-header">

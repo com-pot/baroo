@@ -3,6 +3,7 @@
     import * as m from "$lib/paraglide/messages.js";
     import { TagMapper } from "$lib/bar/tags";
     import { onMount } from "svelte";
+    import Drawer from "$lib/components/Drawer.svelte";
 
     import type { PageData } from "./$types";
     import { stringifyStorageRef } from "$lib/bar/refs";
@@ -10,6 +11,8 @@
     const { data }: { data: PageData } = $props();
 
     const mapper = new TagMapper(data.ref);
+    let isImportDrawerOpen = $state(false);
+    let importData = $state('');
 
     function persistUser(e: SubmitEvent) {
         const form = e.target as HTMLFormElement;
@@ -97,6 +100,37 @@
             });
     }
 
+    async function handleImport(e: SubmitEvent) {
+        e.preventDefault();
+        const form = e.target as HTMLFormElement;
+        const formData = new FormData(form);
+        const csvData = formData.get('importData') as string;
+
+        if (!csvData?.trim()) {
+            alert(m["baroo.backstage.mapper.invalid_import_format"]());
+            return;
+        }
+
+        try {
+            const result = await mapper.bulkImport(csvData);
+
+            if (result.errors.length > 0) {
+                console.warn('Import errors:', result.errors);
+                alert(m["baroo.backstage.mapper.import_error"]({ error: result.errors.join('; ') }));
+            }
+
+            if (result.success > 0) {
+                document.getElementById("status-message")!.innerText = m["baroo.backstage.mapper.import_success"]({ count: String(result.success) });
+                renderMappings();
+                importData = '';
+                isImportDrawerOpen = false;
+            }
+
+        } catch (error) {
+            alert(m["baroo.backstage.mapper.import_error"]({ error: String(error) }));
+        }
+    }
+
     onMount(() => {
         mapper.load()
             .then(() => {
@@ -120,6 +154,7 @@
         <h1>{m["baroo.backstage.mapper.title"]({ barName: data.bar?.name || data.ref.key })}</h1>
         <div class="actions">
             <button class="btn btn-sm btn-primary" onclick={() => startMapper()}>{m["baroo.backstage.mapper.start_mapper"]()}</button>
+            <button class="btn btn-sm btn-secondary" onclick={() => isImportDrawerOpen = true}>{m["baroo.backstage.mapper.mapping_import"]()}</button>
         </div>
     </header>
 
@@ -161,3 +196,32 @@
         <tbody id="mappings"></tbody>
     </table>
 </main>
+
+{#if isImportDrawerOpen}
+<Drawer bind:isOpen={isImportDrawerOpen}>
+    {#snippet heading()}
+        {m["baroo.backstage.mapper.import_drawer_title"]()}
+    {/snippet}
+
+    <form onsubmit={handleImport}>
+        <div class="form-group">
+            <label for="importData" class="form-label">
+                {m["baroo.backstage.mapper.import_data_label"]()}
+            </label>
+            <textarea
+                id="importData"
+                name="importData"
+                bind:value={importData}
+                class="form-control"
+                rows="10"
+                required>
+            </textarea>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {m["baroo.backstage.mapper.import_button"]()}
+            </button>
+        </div>
+    </form>
+</Drawer>
+{/if}

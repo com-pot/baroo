@@ -98,7 +98,14 @@
                 "scan_error": "Error! Scan failed to start: {error}.",
                 "nfc_tag_col": "NFC Tag",
                 "user_id_col": "User ID",
-                "user_name_col": "User Name"
+                "user_name_col": "User Name",
+                "mapping_import": "Mapping import",
+                "import_drawer_title": "Import member mappings",
+                "import_data_label": "Mapping data (tab-separated: seq, nickName, serialId):",
+                "import_button": "Import mappings",
+                "import_success": "Successfully imported {count} mappings",
+                "import_error": "Import failed: {error}",
+                "invalid_import_format": "Invalid format. Each line should contain tab-separated values: seq, nickName, serialId"
             },
             "offer": {
                 "breadcrumb": "Items",

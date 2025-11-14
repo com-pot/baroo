@@ -14,6 +14,7 @@ project.inlang/project_id
 
 # DB
 data/pb_data
+data/_*
 
 # Env
 .env

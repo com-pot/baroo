@@ -27,6 +27,59 @@ export class TagMapper {
     async get(serialId: TagMapping['serialId']) {
         return this.mappings.find(m => m.serialId === serialId)
     }
+
+    public async bulkImport(csvData: string): Promise<{ success: number, errors: string[] }> {
+        const errors: string[] = [];
+        let success = 0;
+
+        const lines = csvData.trim().split('\n').filter(line => line.trim());
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            try {
+                const mapping = this.parseImportLine(line);
+                if (mapping) {
+                    // Convert ImportMapping to TagMapping (seq becomes userId for now)
+                    const tagMapping: TagMapping = {
+                        serialId: mapping.serialId,
+                        userId: mapping.seq, // Using seq as userId as per requirements
+                        nickName: mapping.nickName
+                    };
+
+                    await this.put(tagMapping);
+                    success++;
+                } else {
+                    errors.push(`Line ${i + 1}: Invalid format`);
+                }
+            } catch (error) {
+                errors.push(`Line ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        }
+
+        return { success, errors };
+    }
+
+    private parseImportLine(line: string): ImportMapping | null {
+        const parts = line.split('\t');
+        if (parts.length !== 3) {
+            return null;
+        }
+
+        const [seq, nickName, serialId] = parts.map(p => p.trim());
+
+        if (!seq || !nickName || !serialId) {
+            return null;
+        }
+
+        return {
+            seq,
+            userId: seq, // seq is used as userId
+            nickName,
+            serialId
+        };
+    }
 }
 
 export type TagMapping = {
@@ -34,6 +87,13 @@ export type TagMapping = {
     userId: BarMember["id"],
     nickName: BarMember["nickName"],
     extra?: Record<string, unknown>,
+}
+
+export type ImportMapping = {
+    seq: string,
+    userId: BarMember["id"],
+    nickName: BarMember["nickName"],
+    serialId: string,
 }
 export function isValidMapping(data: unknown): data is TagMapping {
     if (typeof data !== 'object' || data === null) return false

@@ -3,6 +3,7 @@
     import type { PageData, ActionData } from './$types';
     import { enhance } from '$app/forms';
     import { stringifyStorageRef } from '$lib/bar/refs';
+    import Drawer from '$lib/components/Drawer.svelte';
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -139,9 +140,8 @@
             </section>
 
             {#if showCreateForm || editingItem}
-                <aside class="card">
-                <div class="card-body">
-                    <h3>{editingItem ? m["baroo.backstage.offer.edit_item"]() : m["baroo.backstage.offer.create_item"]()}</h3>
+            <Drawer>
+                <h3>{editingItem ? m["baroo.backstage.offer.edit_item"]() : m["baroo.backstage.offer.create_item"]()}</h3>
                     <form
                         method="POST"
                         action={editingItem ? '?/update' : '?/create'}
@@ -270,8 +270,7 @@
                             </button>
                         </div>
                     </form>
-                </div>
-            </aside>
+            </Drawer>
             {/if}
         </div>
     {/if}

@@ -44,7 +44,6 @@
     }
 
     function formatDate(dateStr: Date|string) {
-        console.log(dateStr)
         const date = new Date(dateStr);
         return date.toLocaleString('cs-CZ', {
             year: 'numeric',

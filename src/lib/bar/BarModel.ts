@@ -24,6 +24,6 @@ export interface MemberBalance {
 
 export interface BarOrderItem {
     key: BarOfferItem["key"];
-    variant: 'x' | '1';
+    variant: string;
     createdAt: Date;
 }

@@ -24,16 +24,21 @@ export class TagMapper {
         await this.ctrl.load()
     }
 
-    async get(tag: TagMapping['tag']) {
-        return this.mappings.find(m => m.tag === tag)
+    async get(serialId: TagMapping['serialId']) {
+        return this.mappings.find(m => m.serialId === serialId)
     }
 }
 
-export type TagMapping = {tag: string, userId: BarMember["id"], nickName: BarMember["nickName"]}
+export type TagMapping = {
+    serialId: string,
+    userId: BarMember["id"],
+    nickName: BarMember["nickName"],
+    extra?: Record<string, unknown>,
+}
 export function isValidMapping(data: unknown): data is TagMapping {
     if (typeof data !== 'object' || data === null) return false
     const d = data as Record<string, unknown>
-    return typeof d.tag === 'string' && d.tag.length > 0
+    return typeof d.serialId === 'string' && d.serialId.length > 0
         && typeof d.userId === 'string' && d.userId.length > 0
         && typeof d.nickName === 'string' && d.nickName.length > 0
 }
@@ -53,11 +58,11 @@ const typeCtrls: Record<StorageRef["key"], (ref: StorageRef) => MapperStorage> =
             async load() {
                 const stored = localStorage.getItem(key)
                 mappings = ((stored ? JSON.parse(stored) : []) as TagMapping[])
-                    .filter(m => m.tag && m.userId && m.nickName)
+                    .filter(m => isValidMapping(m))
             },
             async put(mapping) {
                 mappings = [
-                    ...mappings.filter(m => m.tag !== mapping.tag),
+                    ...mappings.filter(m => m.serialId !== mapping.serialId),
                     mapping,
                 ]
                 localStorage.setItem(key, JSON.stringify(mappings))

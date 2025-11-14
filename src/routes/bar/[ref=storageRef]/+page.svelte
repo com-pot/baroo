@@ -10,7 +10,8 @@
     import { onMount } from "svelte";
     import { runBoot } from "$lib/boot";
     import type { BarOrderItem, MemberBalance } from "$lib/bar/BarModel";
-    import { TagMapper } from "$lib/bar/tags";
+    import { TagMapper, type TagMapping } from "$lib/bar/tags";
+    import { stringifyStorageRef } from "$lib/bar/refs";
 
     const {
         data,
@@ -21,6 +22,7 @@
     let status = $state<{ level: "✅" | "ℹ️" | "⚠️" | "❌"; text: string }>();
     let mode = $state<"order" | "summary">("order");
     let userIdInput = $state("");
+    let isLoadingSummary = $state(false);
 
     let bar = $derived.by(() => {
         if (data.bar) {
@@ -81,6 +83,11 @@
                 (item) => item.key !== key,
             );
         },
+
+        hasItemsInOrder(key: OrderData['items'][number]['key']): boolean {
+            const items = this.currentOrder?.items || []
+            return items.some((item) => item.key === key)
+        },
         async confirmOrder() {
             if (!this.workingCopy) {
                 setStatus("❌", m["baroo.bar.status.no_working_copy"]());
@@ -133,21 +140,59 @@
             this.reset();
         },
 
-        async showSummary(id: string, label?: string) {
-            const value = localStorage.getItem(`balance[${id}]`);
-            const balance = value
-                ? JSON.parse(value)
-                : {
-                      id,
-                      items: [],
-                      _label: label || id,
-                  };
+        async showSummary(entry: TagMapping, label?: string) {
+            console.log('showSummary', entry)
+            isLoadingSummary = true;
+            try {
+                let balance;
 
-            // Always update the label with the current nickname
-            balance._label = label || id;
-            balanceCtrl.workingCopy = balance;
+                if (data.ref.type === 'local') {
+                    const value = localStorage.getItem(`balance[${entry.userId}]`) || 'null';
+                    balance = JSON.parse(value);
+                } else if (data.ref.type === 'db') {
+                    try {
+                        const response = await fetch(`/api/bars/${data.ref.key}/member/${entry.userId}/timeline`);
+                        if (!response.ok) {
+                            setStatus("❌", "Nepodařilo se načíst data ze serveru");
+                            return
+                        }
 
-            summaryDialog!.showModal();
+                        const timeline = await response.json();
+                        const orderItems = timeline
+                            .filter((entry: any) => entry.type === 'order')
+                            .map((entry: any) => ({
+                                key: entry.data.key,
+                                variant: entry.data.variant,
+                                createdAt: new Date(entry.date),
+                            }));
+
+                        balance = {
+                            id: entry.userId,
+                            items: orderItems,
+                            _label: label || entry.userId,
+                        };
+                    } catch (error) {
+                        console.error('Failed to fetch member timeline:', error);
+                        setStatus("⚠️", "Nepodařilo se načíst data ze serveru");
+                    }
+                }
+
+                if (!balance) {
+                    balance = {
+                        id,
+                        items: [],
+                        _label: label || id,
+                    };
+                }
+
+                // Always update the label with the current nickname
+                balance._label = label || id;
+                balanceCtrl.workingCopy = balance;
+
+                summaryDialog!.showModal();
+            } finally {
+                isLoadingSummary = false;
+            }
         },
 
         reset() {
@@ -200,21 +245,35 @@
             itemCounts[item.key].valueCounts[item.variant].count++;
         }
 
-        return Object.values(itemCounts).map((item) => ({
-            item: item.name,
-            amount: Object.entries(item.valueCounts)
-                .map(
-                    ([value, data]) =>
-                        `${data.count}×${value}` +
-                        (data.price ? ` (${data.price} Kč)` : ""),
-                )
-                .join(", "),
-            price: Object.values(item.valueCounts).reduce(
-                (sum, vc) => sum + vc.count * vc.price,
-                0,
-            ),
-        }));
+        return Object.values(itemCounts)
+                .map((item) => ({
+                    item: item.name,
+                    amount: Object.entries(item.valueCounts)
+                        .map(
+                            ([value, data]) =>
+                                `${data.count}×${value}` +
+                                (data.price ? ` (${data.price} Kč)` : ""),
+                        )
+                        .join(", "),
+                    price: Object.values(item.valueCounts).reduce(
+                        (sum, vc) => sum + vc.count * vc.price,
+                        0,
+                    ),
+                }));
     });
+    const summaryTotalPrice = $derived.by(() => {
+        let total = 0
+        for (let row of summaryRows) {
+            total += row.price
+        }
+        return total
+    })
+    const priceFormatter = new Intl.NumberFormat('cs', {
+        style: 'currency',
+        currency: "czk",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+    })
 
     function setStatus(
         level: NonNullable<typeof status>["level"],
@@ -228,8 +287,8 @@
         const form = e.target as HTMLFormElement;
         const data = Object.fromEntries(new FormData(form).entries());
 
-        // Try to get member from serialNumber first (NFC scan), then from userId (manual entry)
-        let member = await mapper.get(data.serialNumber as string);
+        // Try to get member from serialId first (NFC scan), then from userId (manual entry)
+        let member = await mapper.get(data.serialId as string);
         if (!member && data.userId) {
             member = mapper.mappings
                 .find((m) => m.userId === String(data.userId));
@@ -244,7 +303,7 @@
         const displayName = member?.nickName || String(data.userId);
 
         if (data.action === "summary") {
-            balanceCtrl.showSummary(String(data.userId), displayName);
+            balanceCtrl.showSummary(member, displayName);
             return;
         }
 
@@ -252,7 +311,9 @@
     }
 
     let eventStreamMessage = $state("");
-    const eventStreamSource = source("/bar/scanner-event-stream", {
+    const eventStreamSource = source("/bar/scanner-event-stream?" + new URLSearchParams([
+        ['ref', stringifyStorageRef(data.ref)],
+    ]), {
         close({ connect }) {
             eventStreamMessage = 'connection:closed-by-server'
             connect()
@@ -291,8 +352,7 @@
                     ndef.scan()
                         .then(() => {
                             ndef.onreadingerror = () => {
-                                statusEl.innerText =
-                                    "Cannot read data from the NFC tag.";
+                                statusEl.innerText = "Cannot read data from the NFC tag.";
                             };
                             ndef.onreading = async (event) => {
                                 if (balanceCtrl.workingCopy) {
@@ -300,17 +360,15 @@
                                     return;
                                 }
 
-                                const member = await mapper.get(
-                                    event.serialNumber,
-                                );
+                                const member = await mapper.get(event.serialNumber);
                                 if (!member) {
-                                    statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialNumber: event.serialNumber });
+                                    statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialId: event.serialNumber });
                                     return;
                                 }
 
                                 try {
                                     (document.querySelector(
-                                        "#serialNumber",
+                                        "#serialId",
                                     ) as HTMLInputElement)!.value =
                                         event.serialNumber;
                                     (document.querySelector(
@@ -321,13 +379,13 @@
                                         .namedItem("selectBadgeForm")!
                                         .dispatchEvent(new Event("submit"));
                                     statusEl.innerText = m["baroo.bar.status.tag_recognized"]({
-                                        serialNumber: event.serialNumber,
+                                        serialId: event.serialNumber,
                                         nickName: member.nickName,
                                         userId: member.userId
                                     });
                                 } catch (error) {
                                     statusEl.innerText = m["baroo.bar.status.error_processing"]({
-                                        serialNumber: event.serialNumber,
+                                        serialId: event.serialNumber,
                                         error: error instanceof Error ? error.message : String(error)
                                     });
                                 }
@@ -397,12 +455,17 @@
                     />
                     <button type="submit" class="btn btn-primary" aria-label={m["generic.action.open"]()}>⏎</button>
                 </div>
+                {#if isLoadingSummary}
+                    <div class="progress mt-2" style="height: 4px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                    </div>
+                {/if}
             </div>
 
-            <input type="hidden" name="serialNumber" id="serialNumber" />
+            <input type="hidden" name="serialId" id="serialId" />
         </form>
 
-        <div class="info-sections">
+        <div class="info-sections" data-boot>
             {#if status?.text}
                 <div class="form-status" data-level={status.level}>
                     <span class="level">{status.level}</span>
@@ -456,40 +519,36 @@
         <h3>{m["baroo.bar.order.items"]()}</h3>
         <div class="offer">
             {#each data.offerItems as item (item.key)}
-                {@const variants = Object.keys(item.pricing) as ("x" | "1")[]}
+                {@const variants = Object.keys(item.pricing)}
                 <div class="item" data-key={item.key}>
+                    <span class="item-name">{item.name}</span>
+                    <div class="variants">
+                        {#each variants as variant (variant)}
+                            {@const displayLabel = item.variantLabels?.[variant] || variant}
+                            <button
+                                data-value={variant}
+                                onclick={() => balanceCtrl.addToOrder({ key: item.key, variant })}
+                            >
+                                <span class="amount"
+                                    >{currentOrderCounts[
+                                        `${item.key}-${variant}`
+                                    ] || 0}</span
+                                >
+                                <span role="separator">×</span>
+                                <kbd>{displayLabel}</kbd>
+                            </button>
+                        {/each}
+                    </div>
                     <div class="actions">
                         <button
                             data-action="removeFromOrder"
+                            class:inactive={!balanceCtrl.hasItemsInOrder(item.key)}
                             aria-label={m["baroo.bar.order.cancel"]()}
                             onclick={() =>
                                 balanceCtrl.removeFromOrder(item.key)}
                             >❌</button
                         >
                     </div>
-                    <span>{item.name}</span>
-                    {#each variants as variant (variant)}
-                        {@const displayLabel = item.variantLabels?.[variant] || variant}
-                        <button
-                            data-value={variant}
-                            onclick={() =>
-                                balanceCtrl.addToOrder({
-                                    key: item.key,
-                                    variant,
-                                })}
-                        >
-                            <kbd>{displayLabel}</kbd>
-                            <span role="separator">×</span>
-                            <span class="amount"
-                                >{currentOrderCounts[
-                                    `${item.key}-${variant}`
-                                ] || 0}</span
-                            >
-                        </button>
-                    {/each}
-                    {#each new Array(Math.max(0, 2 - variants.length)) as _}
-                        <span class="spacer"></span>
-                    {/each}
                 </div>
             {/each}
         </div>
@@ -533,14 +592,20 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {#each summaryRows as item (item.item)}
+                    {#each summaryRows as item, i (i)}
                         <tr>
                             <td data-name="item">{item.item}</td>
                             <td data-name="amount">{item.amount}</td>
-                            <td data-name="price">{item.price}</td>
+                            <td data-name="price">{priceFormatter.format(item.price)}</td>
                         </tr>
                     {/each}
                 </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="2"></td>
+                        <td data-name="price">{priceFormatter.format(summaryTotalPrice)}</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>

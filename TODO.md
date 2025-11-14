@@ -17,3 +17,4 @@ Here we put off tasks that ought to be addressed later in time.
 
 1. For now, we assume every offer item is measured in liters. We want to also allow for grams, pieces, etc..
 2. Make primary currency a parameter of the bar instead of a global setting / bunch of hardcoded strings
+3. Manual item order

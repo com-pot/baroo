@@ -9,7 +9,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
     }
 
     const ref = parseStorageRef(params.ref);
-    
+
     if (ref.type === 'local') {
         // For local bars, we don't persist to database
         return json({ success: true, message: 'Local bar - no persistence' });
@@ -37,7 +37,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 
         // Get the bar
         const bar = await locals.pb.collection('bars')
-            .getFirstListItem(`slug="${ref.key}"`);
+            .getFirstListItem§(`slug="${ref.key}"`);
 
         // Get or create the customer by seq number
         let customer;
@@ -59,12 +59,12 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
         // Create order items in the database
         const createdItems = [];
         for (const item of items) {
-            console.log('Creating order item:', { 
-                customer: customer.id, 
-                key: item.key, 
-                variant: item.variant 
+            console.log('Creating order item:', {
+                customer: customer.id,
+                key: item.key,
+                variant: item.variant
             });
-            
+
             try {
                 const orderItem = await locals.pb.collection<BarOrderItem>('bar_order_items')
                     .create({
@@ -83,8 +83,8 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
             }
         }
 
-        return json({ 
-            success: true, 
+        return json({
+            success: true,
             items: createdItems,
             message: `Created ${createdItems.length} order items`
         });

@@ -1,10 +1,13 @@
 import { produce } from 'sveltekit-sse'
 import { NFC } from 'nfc-pcsc';
+import type { RequestHandler } from './$types';
 
-const listeners: ((message: string) => void)[] = []
+let totalConnects = 0
+const listeners: ScannerListener[] = []
 const emitMessage = (message: string) => {
     for (const listener of listeners) {
-        listener(message)
+        console.log("emit", listener, message)
+        listener.emit(message)
     }
 }
 const nfc = new NFC();
@@ -21,23 +24,46 @@ nfc.on('reader', reader => {
         console.error(`Error(${reader.reader.name}):`, err);
     });
 });
-export function POST() {
-    return produce(function start({ emit, lock }) {
-        const listener = (message: string) => emit('message', message)
-        listeners.push(listener)
-        emit('message', 'initializing-nfc')
+export const POST: RequestHandler = ({ request, url }) => {
+    const listener = new ScannerListener(++totalConnects, url.searchParams.get('ref') || "")
+    listeners.push(listener)
 
-        function close(reason: unknown) {
-            if (reason instanceof Error && reason.message.startsWith('Client disconnected')) {
-                // do nothing
-            } else {
-                console.log("close sse", reason)
-            }
+    const unregisterListener = () => {
+        const i = listeners.indexOf(listener)
+        if (i === -1) {
+            console.error("Could not unregister client", listener)
+            return
         }
+        listeners.splice(i, 1)
+    }
+
+    return produce(function start({ emit, lock }) {
+        listener.emit = (message: string) => emit('message', message)
+        emit('message', listener.format('baroo-scanner-hello', {
+            type: 'baroo-scanner-hello',
+            activeListeners: listeners.length,
+        }))
     }, {
         ping: 10_000,
         stop() {
-            console.log("Client disconnected")
-        }
+            console.log("Client disconnected", listener)
+            unregisterListener()
+        },
     })
+}
+
+class ScannerListener {
+
+    public emit: (message: string) => void = () => {};
+
+    constructor(
+        private id: number,
+        private ref: string,
+    ) {
+
+    }
+
+    public format(type: string, data: Record<string, unknown> = {}): string {
+        return JSON.stringify({ type, ...data, id: this.id, ref: this.ref })
+    }
 }

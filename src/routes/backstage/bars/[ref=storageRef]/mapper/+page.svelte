@@ -23,8 +23,11 @@
 
         renderMappings();
         form.reset();
-        document.getElementById("status-message")!.innerText =
-            m["baroo.backstage.mapper.mapped"]({ tag: String(data.tag), userId: String(data.userId), nickName: String(data.nickName) });
+        document.getElementById("status-message")!.innerText =m["baroo.backstage.mapper.mapped"]({
+            serialId: String(data.serialId),
+            userId: String(data.userId),
+            nickName: String(data.nickName),
+        });
 
         return false;
     }
@@ -37,7 +40,7 @@
             const tr = document.createElement("tr");
 
             const tdTag = document.createElement("td");
-            tdTag.innerText = mapping.tag;
+            tdTag.innerText = mapping.serialId;
             tr.appendChild(tdTag);
 
             const tdUserId = document.createElement("td");
@@ -58,7 +61,7 @@
     }
 
     function initializeScanner() {
-        const tagInput = document.getElementById("tag") as HTMLInputElement;
+        const tagInput = document.getElementById("serialId") as HTMLInputElement;
         const userId = document.getElementById("userId") as HTMLInputElement;
         const nickName = document.getElementById("nickName") as HTMLInputElement;
 
@@ -80,7 +83,7 @@
                 };
                 ndef.onreading = async (event: any) => {
                     tagInput.value = event.serialNumber;
-                    const member = await mapper.get(event.serialNumber);
+                    const member = await mapper.get(tagInput.value);
                     if (member) {
                         userId.value = member.userId;
                         nickName.value = member.nickName;
@@ -127,8 +130,8 @@
     <form onsubmit={(event) => persistUser(event)} autocomplete="off">
         <fieldset class="grid-layout">
             <div class="input-pair">
-                <label for="tag" class="form-label">{m["baroo.backstage.mapper.nfc_tag"]()}</label>
-                <input type="text" id="tag" name="tag" class="form-control" required readonly />
+                <label for="serialId" class="form-label">{m["baroo.backstage.mapper.nfc_tag"]()}</label>
+                <input type="text" id="serialId" name="serialId" class="form-control" required readonly />
             </div>
 
             <div class="input-pair">
@@ -150,9 +153,9 @@
     <table class="table">
         <thead>
             <tr>
-                <th data-name="tag">{m["baroo.backstage.mapper.nfc_tag_col"]()}</th>
+                <th data-name="serialId">{m["baroo.backstage.mapper.nfc_tag_col"]()}</th>
                 <th data-name="userId">{m["baroo.backstage.mapper.user_id_col"]()}</th>
-                <th data-name=" ">{m["baroo.backstage.mapper.user_name_col"]()}</th>
+                <th data-name="memberName">{m["baroo.backstage.mapper.user_name_col"]()}</th>
             </tr>
         </thead>
         <tbody id="mappings"></tbody>

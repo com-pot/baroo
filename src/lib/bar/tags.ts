@@ -160,3 +160,8 @@ const typeCtrls: Record<StorageRef["key"], (ref: StorageRef) => MapperStorage> =
         }
     },
 }
+
+export function normalizeTag(serialId: string): string {
+    return serialId.trim()
+        .replaceAll(/\:/g, '')
+}

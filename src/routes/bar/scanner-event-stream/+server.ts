@@ -3,6 +3,7 @@ import { NFC } from 'nfc-pcsc';
 import type { RequestHandler } from './$types';
 
 let totalConnects = 0
+let totalevents = 0
 const listeners: ScannerListener[] = []
 const emitMessage = (message: string) => {
     for (const listener of listeners) {
@@ -16,8 +17,13 @@ nfc.on('reader', reader => {
     emitMessage(`reader-detected:${reader.reader.name}`)
 
     reader.on('card', card => {
+        const eventId = ++totalevents
+        console.log(`Card detected ${eventId}`, card);
         emitMessage(`card:${card.uid}`)
-        console.log(`Card detected`, card);
+
+        setTimeout(() => {
+            emitMessage(`card-removed:${card.uid}`)
+        }, 50)
     });
     reader.on('error', err => {
         emitMessage(`reader-error:${err.message}`)

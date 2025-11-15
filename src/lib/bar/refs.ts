@@ -15,3 +15,4 @@ export function stringifyStorageRef(ref: StorageRef): string {
 
     return ref.key;
 }
+

@@ -21,14 +21,19 @@ export async function getMemberOrders(
         orderCount: number,
     }[] = [];
 
+    const barOrderItems = await pb.collection<BarOrderItem & Record<string, unknown>>('bar_order_items')
+        .getFullList({
+            filter: `customer.bar.slug = "${bar.slug}"`,
+        })
+
+    console.log('first order item', barOrderItems[0])
+
     for (let member of members) {
-        const orderItems = await pb.collection<BarOrderItem>('bar_order_items').getFullList({
-            filter: `customer.id = "${member.id}"`,
-        });
+        const customerOrderItems = barOrderItems.filter(oi => oi.customer?.id === member.id);
 
         memberStats.push({
             member,
-            orderCount: orderItems.length,
+            orderCount: customerOrderItems.length,
         });
     }
 

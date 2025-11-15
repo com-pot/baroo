@@ -8,9 +8,9 @@
 
     import type { PageData } from "./$types";
     import { onMount } from "svelte";
-    import { runBoot } from "$lib/boot";
+    import { Boot, runBoot } from "$lib/boot";
     import type { BarOrderItem, MemberBalance } from "$lib/bar/BarModel";
-    import { TagMapper, type TagMapping } from "$lib/bar/tags";
+    import { normalizeTag, TagMapper, type TagMapping } from "$lib/bar/tags";
     import { stringifyStorageRef } from "$lib/bar/refs";
 
     const {
@@ -47,7 +47,7 @@
         currentOrder: null as null | OrderData,
 
         async startOrder(id: string, label?: string) {
-            const value = localStorage.getItem(`balance[${id}]`);
+            const value = null //localStorage.getItem(`balance[${id}]`);
             /** @type {MemberBalance} */
             const balance = value
                 ? JSON.parse(value)
@@ -107,16 +107,16 @@
             this.workingCopy.items.push(...newItems);
 
             // Save to localStorage
-            localStorage.setItem(
-                `balance[${this.workingCopy.id}]`,
-                JSON.stringify(this.workingCopy),
-            );
+            // localStorage.setItem(
+            //     `balance[${this.workingCopy.id}]`,
+            //     JSON.stringify(this.workingCopy),
+            // );
 
             // Save to database if not local
             if (data.ref.type !== 'local') {
                 try {
                     const formData = new FormData();
-                    formData.append('userId', this.workingCopy.id);
+                    formData.append('serialId', this.workingCopy.id);
                     formData.append('items', JSON.stringify(this.currentOrder.items));
 
                     const response = await fetch('?/createOrder', {
@@ -290,25 +290,21 @@
 
         // Try to get member from serialId first (NFC scan), then from userId (manual entry)
         let member = await mapper.get(data.serialId as string);
-        if (!member && data.userId) {
-            member = mapper.mappings
-                .find((m) => m.userId === String(data.userId));
-        }
-
+        console.log("member", member)
         // Block action if user is not mapped
-        if (!member && data.userId) {
+        if (!member) {
             setStatus("⚠️", m["baroo.bar.status.user_not_mapped"]({ userId: String(data.userId) }));
             return; // Don't proceed with opening order/summary
         }
 
-        const displayName = member?.nickName || String(data.userId);
+        const displayName = member?.nickName || "???";
 
         if (data.action === "summary") {
             balanceCtrl.showSummary(member, displayName);
             return;
         }
 
-        balanceCtrl.startOrder(String(data.userId), displayName);
+        balanceCtrl.startOrder(String(data.serialId), displayName);
     }
 
     let eventStreamMessage = $state("");
@@ -330,87 +326,122 @@
     }
     const eventStream = eventStreamSource.select("message");
 
+    async function submitTagId(serialId: string, statusEl?: HTMLElement) {
+        const serial = normalizeTag(serialId);
+        const member = await mapper.get(serial);
+        if (!member) {
+            if (statusEl) {
+                statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialId: serialId });
+            }
+            return;
+        }
+
+        try {
+            (document.querySelector(
+                "#serialId",
+            ) as HTMLInputElement)!.value =
+                serial;
+            document.forms
+                .namedItem("selectBadgeForm")!
+                .dispatchEvent(new Event("submit"));
+            if (statusEl) {
+                statusEl.innerText = m["baroo.bar.status.tag_recognized"]({
+                    serialId: serial,
+                    nickName: member.nickName,
+                    userId: member.userId
+                })
+            }
+        } catch (error) {
+            if(statusEl) {
+                statusEl.innerText = m["baroo.bar.status.error_processing"]({
+                    serialId: serial,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            }
+        }
+    }
+
+    const boot = new Boot([
+        {
+            name: "tag-mapper",
+            init: () => mapper.load(),
+        },
+        {
+            name: "nfc",
+            init: async (featureEl) => {
+                if (!featureEl) featureEl = document.createElement("div");
+                let speak = (message: string) => {}
+
+                try {
+                    const synth = window.speechSynthesis
+                    const voices =synth.getVoices()
+                    const voice = voices.find(voice => voice.default) || voices[0]
+                    if (voice) {
+                        speak = (message: string) => {
+                            const utterThis = new SpeechSynthesisUtterance(message)
+                            utterThis.voice = voice
+                            synth.speak(utterThis)
+                        }
+                    }
+                } catch (e) {
+                    console.error(e)
+                }
+
+                const statusEl: HTMLElement =
+                    featureEl.querySelector(".status") ||
+                    (() => {
+                        const p = document.createElement("p");
+                        p.classList.add("status");
+                        featureEl.appendChild(p);
+                        return p;
+                    })();
+
+                const ndef = new NDEFReader();
+                ndef.scan()
+                    .then(() => {
+                        ndef.onreadingerror = () => {
+                            statusEl.innerText = "Cannot read data from the NFC tag.";
+                        };
+                        ndef.onreading = async (event) =>{
+                            if (balanceCtrl.workingCopy) {
+                                statusEl.innerText = m["baroo.bar.status.processing"]({ userId: balanceCtrl.workingCopy.id });
+                                return;
+                            }
+                            submitTagId(event.serialNumber)
+                        };
+                    })
+                    .catch((error) => {
+                        alert(`Error! Scan failed to start: ${error}.`);
+                    });
+            },
+        },
+    ])
+
+
     onMount(() => {
-        const booted = runBoot([
-            {
-                name: "tag-mapper",
-                init: () => mapper.load(),
-            },
-            {
-                name: "nfc",
-                init: async (featureEl) => {
-                    if (!featureEl) featureEl = document.createElement("div");
-                    const statusEl: HTMLElement =
-                        featureEl.querySelector(".status") ||
-                        (() => {
-                            const p = document.createElement("p");
-                            p.classList.add("status");
-                            featureEl.appendChild(p);
-                            return p;
-                        })();
-
-                    const ndef = new NDEFReader();
-                    ndef.scan()
-                        .then(() => {
-                            ndef.onreadingerror = () => {
-                                statusEl.innerText = "Cannot read data from the NFC tag.";
-                            };
-                            ndef.onreading = async (event) => {
-                                if (balanceCtrl.workingCopy) {
-                                    statusEl.innerText = m["baroo.bar.status.processing"]({ userId: balanceCtrl.workingCopy.id });
-                                    return;
-                                }
-
-                                const member = await mapper.get(event.serialNumber);
-                                if (!member) {
-                                    statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialId: event.serialNumber });
-                                    return;
-                                }
-
-                                try {
-                                    (document.querySelector(
-                                        "#serialId",
-                                    ) as HTMLInputElement)!.value =
-                                        event.serialNumber;
-                                    (document.querySelector(
-                                        "#userId",
-                                    ) as HTMLInputElement)!.value =
-                                        member.userId;
-                                    document.forms
-                                        .namedItem("selectBadgeForm")!
-                                        .dispatchEvent(new Event("submit"));
-                                    statusEl.innerText = m["baroo.bar.status.tag_recognized"]({
-                                        serialId: event.serialNumber,
-                                        nickName: member.nickName,
-                                        userId: member.userId
-                                    });
-                                } catch (error) {
-                                    statusEl.innerText = m["baroo.bar.status.error_processing"]({
-                                        serialId: event.serialNumber,
-                                        error: error instanceof Error ? error.message : String(error)
-                                    });
-                                }
-                            };
-                        })
-                        .catch((error) => {
-                            alert(`Error! Scan failed to start: ${error}.`);
-                        });
-                },
-            },
-        ]);
-
         eventStream.subscribe((message) => {
             console.log("stream message:", message);
             if (message === "heartbeat") {
                 return;
             }
+
             eventStreamMessage = message;
+            if (message.startsWith('card:')) {
+                const cardId = normalizeTag(message.substring('card:'.length))
+                submitTagId(cardId)
+
+            }
         });
 
         const url = new URL(window.location)
-        debug = url.searchParams.get('debug')
+        debug = url.searchParams.get('debug') || ''
 
-        return booted?.destroy;
+        const debugFire = url.searchParams.get('debugFire')
+        if (debugFire) {
+            submitTagId(debugFire)
+        }
+
+        return boot.destroy;
     });
 </script>
 
@@ -420,9 +451,15 @@
             {m["baroo.page_front.title"]({ barName: bar?.name || bar?.slug || "" })}
         </h1>
     </div>
+    <div class="card" data-boot-init>
+            <div class="card-body">
+                <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>Boot</button>
+            </div>
+        </div>
 
     <div class="main-content">
         <form name="selectBadgeForm" class="card card-body" data-boot onsubmit={submitSelectForm}>
+            <p class="instr-text">Vyber akci</p>
             <div class="form-section">
                 <div class="btn-group">
                     <label class="btn btn-baroo">
@@ -446,11 +483,20 @@
                 </div>
             </div>
 
+            {#if isLoadingSummary}
+                <div class="progress mt-2" style="height: 12px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                </div>
+            {/if}
+
+            {#if debug?.includes('input')}
+            <p>a zadej NFC serial id</p>
+
             <div class="form-section">
                 <div class="input-group input-group-lg">
                     <input
-                        name="userId"
-                        id="userId"
+                        name="serialId"
+                        id="serialId"
                         class="form-control"
                         required
                         aria-label={m["baroo.bar.userRef"]()}
@@ -459,14 +505,12 @@
                     />
                     <button type="submit" class="btn btn-primary" aria-label={m["generic.action.open"]()}>⏎</button>
                 </div>
-                {#if isLoadingSummary}
-                    <div class="progress mt-2" style="height: 4px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
-                    </div>
-                {/if}
             </div>
+            {:else}
+            <p class="instr-text">a přilož svojí visačku na zadní stranu tabletu, viz obrázek ➡️</p>
 
             <input type="hidden" name="serialId" id="serialId" />
+            {/if}
         </form>
 
         <div class="info-sections" data-boot>
@@ -519,15 +563,21 @@
         onclick={() => orderDialog!.close()}>✖</button
     >
     <div class="card">
-        <h2>
-            {m["baroo.bar.order.title_new"]({ userName: balanceCtrl.workingCopy?._label || "" })}
-        </h2>
-        <h3>{m["baroo.bar.order.items"]()}</h3>
-        <div class="offer">
+        <div class="card-header">
+            <h2>
+                {m["baroo.bar.order.title_new"]({ userName: balanceCtrl.workingCopy?._label || "" })}
+            </h2>
+        </div>
+        <div class="card-body offer">
             {#each data.offerItems as item (item.key)}
                 {@const variants = Object.keys(item.pricing)}
                 <div class="item" data-key={item.key}>
                     <span class="item-name">{item.name}</span>
+                    {#if item.preview_1x1}
+                        <div class="frame preview" title={JSON.stringify(item)}>
+                            <img src={`/storage/api/files/bar_offer_items/${item.id}/${item.preview_1x1}`} alt="" />
+                        </div>
+                    {/if}
                     <div class="variants">
                         {#each variants as variant (variant)}
                             {@const displayLabel = item.variantLabels?.[variant] || variant}
@@ -558,7 +608,7 @@
                 </div>
             {/each}
         </div>
-        <div class="controls">
+        <div class="card-footer controls">
             <button
                 class="btn btn-primary"
                 data-action="confirm"
@@ -617,3 +667,9 @@
     </div>
 </dialog>
 {/if}
+
+<style lang="scss">
+.instr-text {
+    font-size: 2rem;
+}
+</style>

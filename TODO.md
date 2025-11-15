@@ -5,8 +5,8 @@ Here we put off tasks that ought to be addressed later in time.
 
 ### Base functionality
 
-1. Show summary based on actual orders - db/local
-2. Import members from .csv structure
+1. ~~Show summary based on actual orders - db/local~~
+2. ~~Import members from .csv structure~~
 
 ### Data structure
 

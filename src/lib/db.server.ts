@@ -3,6 +3,7 @@ import { error } from '@sveltejs/kit';
 import Pocketbase, { ClientResponseError } from 'pocketbase';
 
 export async function createDb(auth: { token: string }): Promise<Pocketbase> {
+    // přidej veřejnou url
     try {
         const pb = new Pocketbase(env.PB_BASE_URL)
         pb.authStore.save(auth.token);
@@ -19,7 +20,11 @@ export async function createDb(auth: { token: string }): Promise<Pocketbase> {
         }
         throw e
     }
+}
 
+export function useStorage() {
+    return {
+    }
 }
 
 export const FIXME_DEBUGGING_CREATE_DB_FROM_ENV = () => createDb({ token: env.PB_AUTH_TOKEN! });

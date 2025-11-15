@@ -1,16 +1,18 @@
 import { loadBarData } from "$lib/bar/storage.server";
-import { FIXME_DEBUGGING_CREATE_DB_FROM_ENV } from "$lib/db.server";
+import { FIXME_DEBUGGING_CREATE_DB_FROM_ENV, useStorage } from "$lib/db.server";
 import type { PageServerLoad, Actions } from "./$types";
 import { fail } from "@sveltejs/kit";
-import type { BarOrderItem } from "$lib/bar/BarModel";
+import type { Bar, BarOrderItem } from "$lib/bar/BarModel";
 import { createSlug } from "$lib/strings";
 
 export const load: PageServerLoad = async ({ params }) => {
     const db = await FIXME_DEBUGGING_CREATE_DB_FROM_ENV()
+    const storage = useStorage()
     const data = await loadBarData(db, params['ref'])
 
     return {
         ...data,
+        storage,
     };
 }
 
@@ -19,11 +21,11 @@ export const actions: Actions = {
         const pb = locals.pb || await FIXME_DEBUGGING_CREATE_DB_FROM_ENV();
 
         const formData = await request.formData();
-        const userId = formData.get('userId')?.toString();
+        const serialId = formData.get('serialId')?.toString();
         const itemsJson = formData.get('items')?.toString();
 
-        if (!userId || !itemsJson) {
-            return fail(400, { error: 'Missing userId or items' });
+        if (!serialId || !itemsJson) {
+            return fail(400, { error: 'Missing serialId or items' });
         }
 
         let items;
@@ -36,38 +38,20 @@ export const actions: Actions = {
         if (!Array.isArray(items) || items.length === 0) {
             return fail(400, { error: 'Items must be a non-empty array' });
         }
+        console.log('[createOrder] Starting order creation for serialId:', serialId, 'items:', items);
 
         try {
-            console.log('[createOrder] Starting order creation for userId:', userId, 'items:', items);
-
-            // Get the bar
-            const bar = await pb.collection('bars')
+            const bar = await pb.collection<Bar>('bars')
                 .getFirstListItem(`slug="${params.ref}"`);
 
-            console.log('[createOrder] Found bar:', bar.id, bar.slug);
+            const mapping = await pb.collection('bar_member_mappings')
+                .getFirstListItem(`member.bar="${bar.id}" && serialId="${serialId}"`);
+            console.log('[createOrder] Found member mapping:', mapping);
 
             // Get or create the customer
-            let customer;
-            try {
-                customer = await pb.collection('bar_members')
-                    .getFirstListItem(`bar.id = "${bar.id}" && seq = ${userId}`);
-                console.log('[createOrder] Found existing customer:', customer.id);
-            } catch (findErr) {
-                console.log('[createOrder] Customer not found, creating new one');
-                try {
-                    customer = await pb.collection('bar_members')
-                        .create({
-                            bar: bar.id,
-                            seq: parseInt(userId),
-                            nickName: `User ${userId}`,
-                        });
-                    console.log('[createOrder] Created new customer:', customer.id);
-                } catch (createErr: any) {
-                    console.error('[createOrder] Failed to create customer:', createErr);
-                    console.error('[createOrder] Error details:', createErr.response?.data);
-                    return fail(500, { error: `Failed to create customer: ${createErr.message}`, details: createErr.response?.data });
-                }
-            }
+            const customer = await pb.collection('bar_members')
+                .getFirstListItem(`bar.id = "${bar.id}" && id = "${mapping.member}"`);
+            console.log('[createOrder] Found customer:', customer);
 
             // Create order items
             const createdItems = [];
@@ -87,7 +71,7 @@ export const actions: Actions = {
                             variant: normalizedVariant,
                         });
                     createdItems.push(orderItem);
-                    console.log('[createOrder] Created order item');
+                    console.log('[createOrder] Created order item', orderItem);
                 } catch (itemErr: any) {
                     console.error('[createOrder] Failed to create order item:', itemErr);
                     console.error('[createOrder] Item error details:', itemErr.response?.data);

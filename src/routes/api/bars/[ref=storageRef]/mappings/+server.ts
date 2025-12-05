@@ -23,16 +23,21 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         const mappings = await locals.pb.collection('bar_member_mappings').getFullList({
             filter: `member.bar="${bar.id}"`,
             expand: 'member',
-            sort: 'created'
+            sort: 'member.seq',
         });
 
         const result = mappings
             .map((mapping): TagMapping => ({
-                tag: mapping.serialId,
-                userId: mapping.expand?.member?.id || '',
-                nickName: mapping.expand?.member?.nickName || ''
+                serialId: mapping.serialId,
+                userId: String(mapping.expand?.member?.id || ''),
+                nickName: mapping.expand?.member?.nickName || '',
+                extra: {
+                    seq: String(mapping.expand?.member?.seq || ''),
+                    greeting: mapping.expand?.member?.greeting,
+                    avatar_1x1: String(mapping.expand?.member?.avatar_1x1 || ''),
+                },
             }))
-            .filter((mapping) => isValidMapping(mapping));
+            .filter((mapping) => isValidMapping(mapping))
 
         return json(result);
     } catch (err: any) {
@@ -54,14 +59,14 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
         throw error(500, 'PocketBase not initialized');
     }
 
-    const validationResult = validate<{ tag: string; userId: string; nickName: string }>('barMemberMapping', await request.json());
+    const validationResult = validate<TagMapping>('barMemberMapping', await request.json());
 
     if (!validationResult.valid) {
         const errorMessages = validationResult.errors?.map(e => `${e.field}: ${e.message}`).join(', ');
         throw error(400, `Validation failed: ${errorMessages}`);
     }
 
-    const { tag, userId, nickName } = validationResult.data;
+    const { serialId, userId, nickName } = validationResult.data;
 
     try {
         const bar = await locals.pb
@@ -94,27 +99,28 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
         try {
             const existing = await locals.pb
                 .collection('bar_member_mappings')
-                .getFirstListItem(`serialId="${tag}"`);
+                .getFirstListItem(`serialId="${serialId}"`);
 
-            const updated = await locals.pb.collection('bar_member_mappings').update(existing.id, {
-                member: member.id,
-                serialId: tag
-            });
+            const updated = await locals.pb.collection('bar_member_mappings')
+                .update(existing.id, {
+                    member: member.id,
+                    serialId,
+                })
 
             return json({
-                tag,
+                serialId,
                 userId: member.id,
                 nickName: member.nickName
-            });
+            } satisfies TagMapping);
         } catch (err: any) {
             if (err.status === 404) {
                 await locals.pb.collection('bar_member_mappings').create({
-                    serialId: tag,
+                    serialId,
                     member: member.id
                 });
 
                 return json({
-                    tag,
+                    serialId,
                     userId: member.id,
                     nickName: member.nickName
                 });

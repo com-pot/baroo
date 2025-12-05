@@ -28,8 +28,12 @@
         "vite-plugin-devtools-json": "^1.0.0"
     },
     "dependencies": {
+        "@sveltejs/adapter-node": "^5.4.0",
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
-        "pocketbase": "^0.26.3"
+        "html-to-image": "^1.11.13",
+        "nfc-pcsc": "^0.8.1",
+        "pocketbase": "^0.26.3",
+        "sveltekit-sse": "^0.14.3"
     }
 }

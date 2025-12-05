@@ -18,6 +18,7 @@ export async function loadBarData(pb: Db, ref: string|StorageRef) {
     ] = await Promise.all([
         pb.collection<BarOfferItem>('bar_offer_items').getFullList({
             filter: `bar.slug="${ref.key}"`,
+            sort: 'seq',
         }),
         pb.collection<BarMember>('bar_members').getFullList({
             filter: `bar.slug="${ref.key}"`,

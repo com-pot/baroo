@@ -28,6 +28,21 @@
         "minimum": 0
       },
       "description": "Pricing variants for the item (e.g., {'x': 50, '1': 100})"
+    },
+    "variantLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Display labels for variant keys (e.g., {'male': 'Malé', 'stredni': 'Střední'})"
+    },
+    "variantVolumes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Volume in milliliters (ML) for each variant (e.g., {'male': 300, 'stredni': 500})"
     }
   },
   "required": ["bar", "key", "name"],

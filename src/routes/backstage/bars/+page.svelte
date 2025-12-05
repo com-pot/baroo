@@ -1,22 +1,23 @@
 <script lang="ts">
+    import * as m from '$lib/paraglide/messages.js';
     import type { PageData } from './$types';
 
     let { data }: { data: PageData } = $props();
 </script>
 
 <nav class="breadcrumbs">
-    <a href="/backstage/bars">Bars</a>
+    <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a>
 </nav>
 
 <main class="backstage-content bars-page">
     <header class="page-header">
-        <h2>Bars Management</h2>
-        <a href="/backstage/bars/new" class="btn btn-primary">Create New Bar</a>
+        <h2>{m["baroo.backstage.bars.list_title"]()}</h2>
+        <a href="/backstage/bars/new" class="btn btn-primary">{m["baroo.backstage.bars.create_new"]()}</a>
     </header>
 
     {#if data.bars.length === 0}
         <div class="empty-state">
-            <p>No bars found. Create your first bar to get started.</p>
+            <p>{m["baroo.backstage.bars.no_bars"]()}</p>
         </div>
     {:else}
         <div class="items-grid">
@@ -28,7 +29,7 @@
                     </div>
                     <div class="card-footer">
                         <div class="actions">
-                            <a href="/backstage/bars/{bar.slug}" class="btn btn-secondary">Detail</a>
+                            <a href="/backstage/bars/{bar.slug}" class="btn btn-secondary">{m["baroo.backstage.bars.detail"]()}</a>
                         </div>
                     </div>
                 </article>

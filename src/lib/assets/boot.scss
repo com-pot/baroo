@@ -74,9 +74,24 @@
 [data-boot] {
     transition: opacity 0.3s ease-in-out;
 }
-
-body:not([data-boot-status="ready"]) [data-boot] {
+[data-boot-init] {
+    transition: opacity 0.3s ease-in-out;
     opacity: 0;
+}
+
+
+body:not([data-boot-status="ready"]) {
+    [data-boot] {
+        opacity: 0;
+    }
+    [data-boot-init] {
+        opacity: 1;
+    }
+}
+body[data-boot-status="ready"] {
+    [data-boot-init] {
+        pointer-events: none;
+    }
 }
 
 [data-boot-feature]:not([data-boot-status="ready"]) {

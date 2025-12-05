@@ -1,3 +1,26 @@
+export class Boot {
+
+    public bootResult: ReturnType<typeof runBoot> | null = null;
+
+    constructor(
+        public readonly features: BootFeature[],
+    ) {
+
+    }
+
+    public run() {
+        if (this.bootResult) {
+            return this.bootResult
+        }
+
+        return this.bootResult = runBoot(this.features)
+    }
+
+    destroy() {
+        this.bootResult?.destroy()
+    }
+}
+
 export function runBoot(features: BootFeature[]) {
     let bootEl = document.querySelector(".boot")
     if (!bootEl) {

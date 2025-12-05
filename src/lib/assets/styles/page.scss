@@ -47,18 +47,17 @@
 }
 
 .card {
-    >:is(header, .card-header:has(.actions)) {
-        display: flex;
-
-        .actions {
-            margin-inline-start: auto;
-        }
-    }
-
     .card-header {
         > :is(h1, h2, h3, h4, h5, h6) {
             margin: 0;
         }
+    }
+}
+.card >:is(header, .card-header:has(.actions)), .action-header {
+    display: flex;
+
+    .actions {
+        margin-inline-start: auto;
     }
 }
 

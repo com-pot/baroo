@@ -19,15 +19,18 @@ export function computeCountsByVariant(pricing: BarOfferItem["pricing"], orderIt
     return variantCounts;
 }
 
-const variantToVolume: Record<string, number> = {
-    'x': 0.3,
-    '1': 0.5,
-}
-
-export function computeTotalVolume(variantCounts: Record<string, number>) {
+export function computeTotalVolume(
+    variantCounts: Record<string, number>,
+    variantVolumes?: Record<string, number>
+) {
     let totalVolume = 0;
+
     for (const [variant, count] of Object.entries(variantCounts)) {
-        totalVolume += (variantToVolume[variant] || 0) * count;
+        const volumeInLiters = variantVolumes?.[variant]
+            ? variantVolumes[variant] / 1000
+            : 0;
+
+        totalVolume += volumeInLiters * count;
     }
 
     return totalVolume;

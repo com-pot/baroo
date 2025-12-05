@@ -1,6 +1,12 @@
 {
     "$schema": "https://inlang.com/schema/inlang-message-format",
     "generic": {
-        "action.open": "Otevřít"
+        "action": {
+            "open": "Otevřít",
+            "copy": "kopírovat"
+        },
+        "list": {
+            "no_items": "Žádné položky k zobrazení."
+        }
     }
 }

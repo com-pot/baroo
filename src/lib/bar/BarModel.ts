@@ -1,17 +1,24 @@
 export type Bar = {
+    id: string;
     slug: string;
     name: string;
 }
 
 export type BarOfferItem = {
+    id: string,
     key: string;
     name: string;
-    pricing: Record<string, number>
+    pricing: Record<string, number>;
+    variantLabels?: Record<string, string>; // Maps normalized keys to display labels
+    variantVolumes?: Record<string, number>; // Maps variant keys to volume in milliliters (ML)
+    preview_1x1: string | null; // Path to 1x1 preview image
 }
 
 export type BarMember = {
-    userId: string;
+    id: string;
     nickName: string;
+    seq: number;
+    avatar_1x1: string | null;
 }
 
 export interface MemberBalance {
@@ -21,6 +28,6 @@ export interface MemberBalance {
 
 export interface BarOrderItem {
     key: BarOfferItem["key"];
-    variant: 'x' | '1';
-    createdAt: Date;
+    variant: string;
+    created: Date;
 }

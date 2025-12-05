@@ -1,6 +1,7 @@
 import type { BarOfferItem } from '$lib/bar/BarModel';
 import { parseStorageRef } from '$lib/bar/refs';
 import { formatPbError } from '$lib/db.server';
+import { createSlug } from '$lib/strings';
 import { validate, getFieldErrors } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
@@ -52,9 +53,7 @@ export const actions: Actions = {
             bar: bar.id,
             key: formData.get('key')?.toString() || '',
             name: formData.get('name')?.toString() || '',
-            pricing: formData.get('pricing')?.toString()
-                ? JSON.parse(formData.get('pricing')!.toString())
-                : {}
+            ...parseOfferData(formData),
         };
 
         const validationResult = validate<BarOfferItem>('barOfferItem', data);
@@ -101,9 +100,7 @@ export const actions: Actions = {
             bar: bar.id,
             key: formData.get('key')?.toString() || '',
             name: formData.get('name')?.toString() || '',
-            pricing: formData.get('pricing')?.toString()
-                ? JSON.parse(formData.get('pricing')!.toString())
-                : {}
+            ...parseOfferData(formData),
         };
 
         const validationResult = validate<BarOfferItem>('barOfferItem', data);
@@ -147,3 +144,36 @@ export const actions: Actions = {
         }
     }
 };
+
+function parseOfferData(formData: FormData) {
+    // Build pricing object from variant fields with normalized keys
+    // Also build variant labels mapping to preserve original display names
+    // Also build variant volumes mapping to store ML values
+    const pricing: Record<string, number> = {};
+    const variantLabels: Record<string, string> = {};
+    const variantVolumes: Record<string, number> = {};
+    let index = 0;
+    while (formData.has(`variant_name_${index}`)) {
+        const variantName = formData.get(`variant_name_${index}`)?.toString()?.trim();
+        const variantPrice = formData.get(`variant_price_${index}`)?.toString()?.trim();
+        const variantVolume = formData.get(`variant_volume_${index}`)?.toString()?.trim();
+
+        if (variantName && variantPrice) {
+            // Normalize variant name for database compatibility
+            const normalizedName = createSlug(variantName);
+            pricing[normalizedName] = parseFloat(variantPrice);
+            // Store original label for display
+            variantLabels[normalizedName] = variantName;
+            // Store volume in ML if provided (check for non-empty string and valid number)
+            if (variantVolume && variantVolume !== '') {
+                const volumeNum = parseFloat(variantVolume);
+                if (!isNaN(volumeNum) && volumeNum > 0) {
+                    variantVolumes[normalizedName] = volumeNum;
+                }
+            }
+        }
+        index++;
+    }
+
+    return { pricing, variantLabels, variantVolumes };
+}

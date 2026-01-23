@@ -1,14 +1,8 @@
-export function lizard() {
-    const audio = new Audio('/assets/eggs/lizard-button-sound.mp3');
-    audio.playbackRate = Math.random() * 0.4 + 0.8;
-    audio.play();
-}
-
 export class BrainrotSoundPad {
 
     public readonly files: {src: string}[] = $state([]);
 
-    constructor(files: {src: string}[]) {
+    constructor(public readonly icon: string, files: {src: string}[]) {
         this.files = files;
     }
 
@@ -134,6 +128,33 @@ export class CpsCounter {
         }
     }
 }
+
+type TotalCounterStorage = {
+    get: () => Promise<number>,
+    set: (value: number) => Promise<unknown>,
+}
+export class TotalCounter {
+    public constructor(private storage: TotalCounterStorage) {
+
+    }
+
+    public value = $state(0);
+
+    public trigger(n: number = 1) {
+        this.value += n;
+    }
+
+    public async load() {
+        this.value = await this.storage.get();
+    }
+    public async commit() {
+        const result = await this.storage.set(this.value);
+        if (typeof result === 'number') {
+            this.value = result;
+        }
+    }
+}
+
 type CpsConfig = {
     windowSizeMs: number,
     totalTime: number

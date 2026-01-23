@@ -1,7 +1,8 @@
 import { source } from "sveltekit-sse";
 
 export class ScannerEventStream {
-    public lastMessage = $state("")
+    public messages = $state([] as string[])
+    public lastMessage = $derived.by(() => this.messages[0] || "")
 
     public streamSource: ReturnType<typeof source>
     public stream: ReturnType<ReturnType<typeof source>["select"]>
@@ -11,7 +12,7 @@ export class ScannerEventStream {
             ['ref', ref],
         ]), {
             close: ({ status, connect }) => {
-                this.lastMessage = 'connection:closed-by-server'
+                this.addMessage('connection:closed-by-server')
                 if (status >= 400) {
                     return
                 }
@@ -23,17 +24,27 @@ export class ScannerEventStream {
     }
 
     public init() {
-        this.stream.subscribe((message) => {
+        return this.stream.subscribe((message) => {
             if (message === "heartbeat") {
                 return;
             }
 
+            this.addMessage(message);
             this.lastMessage = message;
-            this.opts.onMessage?.(message);
         });
+    }
+
+    addMessage(message: typeof this["lastMessage"]) {
+        this.messages.unshift(message);
+        const maxSize = this.opts.historySize || 20;
+        if (this.messages.length > maxSize) {
+            this.messages.splice(maxSize);
+        }
+        this.opts.onMessage?.(message);
     }
 }
 
 type ScannerEventStreamOptions = {
     onMessage?: (message: string) => void;
+    historySize?: number;
 }

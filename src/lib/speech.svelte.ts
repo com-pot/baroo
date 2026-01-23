@@ -1,9 +1,20 @@
 export class Narrator {
 
     public voices = $state([] as SpeechSynthesisVoice[]);
+    private filter: {
+        exclude: {
+            langs: Set<string>;
+            voices: Set<string>;
+        },
+    }
 
-    constructor() {
-
+    constructor(opts?: NarratorOptions) {
+        this.filter = {
+            exclude: {
+                langs: new Set(opts?.exclude?.langs || []),
+                voices: new Set(opts?.exclude?.voices || []),
+            },
+        }
     }
 
     public init() {
@@ -15,7 +26,12 @@ export class Narrator {
         const updateVoices = () => {
             const synth = window.speechSynthesis;
             const voices = synth.getVoices();
-            this.voices = voices;
+            this.voices = voices
+                .filter(voice => {
+                    if (this.filter.exclude.langs.has(voice.lang)) return false
+                    if (this.filter.exclude.voices.has(`${voice.lang}:${voice.name}`)) return false
+                    return true
+                });
         }
 
         window.speechSynthesis.onvoiceschanged = () => {
@@ -32,19 +48,28 @@ export class Narrator {
         }
 
         const utterance = new SpeechSynthesisUtterance(text);
-        if (voiceName) {
-            const voice = this.voices.find(v => v.name === voiceName);
-            if (voice) {
-                utterance.voice = voice;
-            }
-        } else {
+        if (!voiceName) {
             const i = Math.floor(Math.random() * this.voices.length)
-            const voice = this.voices[i];
-            if (voice) {
-                utterance.voice = voice;
-            }
+            voiceName = this.voices[i]?.name;
+        }
+
+        const voice = this.voices.find(v => v.name === voiceName);
+        if (voice) {
+            utterance.voice = voice;
         }
 
         window.speechSynthesis.speak(utterance);
+
+        return {
+            voice,
+            utterance,
+        }
+    }
+}
+
+type NarratorOptions = {
+    exclude?: {
+        langs?: string[];
+        voices?: string[];
     }
 }

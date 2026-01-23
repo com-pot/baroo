@@ -3,7 +3,6 @@
     import "$lib/assets/bar.scss";
     import "$lib/assets/boot.scss";
     import * as m from "$lib/paraglide/messages.js";
-    import { source } from "sveltekit-sse";
     import { browser } from "$app/environment";
 
     import type { PageData } from "./$types";
@@ -12,9 +11,11 @@
     import type { BarMember, BarOrderItem, MemberBalance } from "$lib/bar/BarModel";
     import { normalizeTag, TagMapper, type TagMapping } from "$lib/bar/tags";
     import { stringifyStorageRef } from "$lib/bar/refs";
-    import { lizard, StreakCounter, CpsCounter, DecayCounter, BrainrotSoundPad } from "./eggs.svelte";
+    import { StreakCounter, CpsCounter, DecayCounter, BrainrotSoundPad, TotalCounter } from "./eggs.svelte";
     import { Narrator } from "$lib/speech.svelte";
     import { ScannerEventStream } from "./scannerEventStream.svelte";
+    import MessageStream from "./MessageStream.svelte";
+    import Gzt from "./Gzt.svelte";
 
     const {
         data,
@@ -322,6 +323,7 @@
     }
 
     const scannerEventStream = new ScannerEventStream(stringifyStorageRef(data.ref), {
+        historySize: 5,
         onMessage(message) {
             if (message.startsWith('card:')) {
                 const cardId = normalizeTag(message.substring('card:'.length))
@@ -337,14 +339,13 @@
         }
     })
 
-    function copy(id: string) {
-        navigator.clipboard.writeText(id)
-    }
 
-
-    async function submitTagId(serialId: string, statusEl?: HTMLElement) {
+    async function submitTagId(serialId: string, statusEl?: HTMLElement | null) {
         const serial = normalizeTag(serialId);
         const member = await mapper.get(serial);
+        if (!statusEl) statusEl = document.getElementById('submitStatus')
+
+        console.debug('submitTagId', { serialId, serial, member })
         if (!member) {
             if (statusEl) {
                 statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialId: serialId });
@@ -368,6 +369,7 @@
                 })
             }
         } catch (error) {
+            console.error(error)
             if(statusEl) {
                 statusEl.innerText = m["baroo.bar.status.error_processing"]({
                     serialId: serial,
@@ -377,6 +379,7 @@
         }
     }
 
+    let narrator: Narrator
     const boot = new Boot([
         {
             name: "tag-mapper",
@@ -418,25 +421,84 @@
         {
             name: "narrator",
             init: async () => {
+                narrator = new Narrator({
+                    exclude: {
+                        langs: [
+                            "da-DK",
+                            "ca-ES",
+                            "zh-CN",
+                            "yue-HK",
+                            "tr-TR",
+                            "th-TH",
+                            "ru-RU",
+                            "ko-KR",
+                            "ja-JP",
+                            "he-IL",
+                            "ms-MY",
+                            "kn-IN",
+                            "pt-BR",
+                            "pt-PT",
+                            "sv-SE",
+                            "sl-SI",
+                            "uk-UA"
+                        ],
+                    },
+                })
                 narrator.init()
 
                 const globalThis = (window as unknown as Record<string, unknown>);
                 globalThis.speak = (text: string) => {
-                    narrator.speak(text)
+                    const result = narrator.speak(text)
+                    console.log(result)
                 }
                 console.debug("Narrator initialized as the speak(\"\") function")
+                return narrator
             },
         },
     ])
 
-    const soundpad = new BrainrotSoundPad([
+    // const soundpad = new BrainrotSoundPad('🫧', [
+    //     { src: "/assets/eggs/lizard-button-sound.mp3" },
+    //     { src: "/assets/eggs/pop/bubble-pop-04-323580.mp3" },
+    //     { src: "/assets/eggs/pop/bubble-pop-06-351337.mp3" },
+    //     { src: "/assets/eggs/pop/bubble-pop-07-351339.mp3" },
+    //     { src: "/assets/eggs/pop/pop-402323.mp3" },
+    // ])
+    const soundpad = new BrainrotSoundPad('🫧', [
         { src: "/assets/eggs/pop/bubble-pop-02-293341.mp3" },
         { src: "/assets/eggs/pop/bubble-pop-04-323580.mp3" },
         { src: "/assets/eggs/pop/bubble-pop-06-351337.mp3" },
         { src: "/assets/eggs/pop/bubble-pop-07-351339.mp3" },
         { src: "/assets/eggs/pop/pop-402323.mp3" },
     ])
-    const narrator = new Narrator()
+
+    const shutUpDecay = new DecayCounter()
+    const totalCounter = new TotalCounter({
+        get: () => fetch("/api/counters/lizard").then((res) => res.json()).then(data => data.count),
+        set: (value) => {
+            return fetch("/api/counters/lizard", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", },
+                body: JSON.stringify({ delta: value }),
+            })
+                .then((res) => res.json())
+                .then((data) => data.count)
+        },
+    })
+    const streak = new StreakCounter({
+        onExpire(num) {
+            totalCounter.trigger(num)
+            if (debug.includes('noCounter')) {
+                return
+            }
+            totalCounter.commit()
+        }
+    })
+    const cps = new CpsCounter({
+        windowSizeMs: 250,
+        totalTime: 5_000,
+    })
+    onMount(() => cps.activate())
 
     onMount(() => {
         scannerEventStream.init()
@@ -444,50 +506,12 @@
         const url = new URL(window.location.toString())
         debug = url.searchParams.get('debug') || ''
 
-        const debugFire = url.searchParams.get('debugFire')
-        if (debugFire) {
-            submitTagId(debugFire)
-        }
-        const destroyCps = cps.activate()
-
-        fetch("/api/counters/lizard")
-            .then((res) => res.json())
-            .then((data => {
-                totalCounter = data.count || 0
-            }))
+        totalCounter.load()
 
         return () => {
             boot.destroy()
-            destroyCps();
         };
     });
-
-    const lizardStreak = new StreakCounter({
-        onExpire(num) {
-            totalCounter += num;
-            if (debug.includes('noCounter')) {
-                return
-            }
-
-            fetch("/api/counters/lizard", {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ delta: num }),
-            })
-                .then((res) => res.json())
-                .then((data) => {
-                    totalCounter = data.count
-                })
-        }
-    })
-    const cps = new CpsCounter({
-        windowSizeMs: 250,
-        totalTime: 5_000,
-    })
-    const shutUpDecay = new DecayCounter()
-    let totalCounter = $state(0)
 </script>
 
 <main class="boot-stack">
@@ -554,6 +578,7 @@
 
             <input type="hidden" name="serialId" id="serialId" />
             {/if}
+            <p id="submitStatus"></p>
         </form>
 
         <div class="info-sections" data-boot>
@@ -563,55 +588,17 @@
                     <span class="text">{status.text}</span>
                 </div>
             {/if}
-            {#if debug === 'stream'}
-            <div class="card info-card">
-                <div class="card-header">
-                    <span class="icon">📡</span>
-                    <span class="title">{m["baroo.bar.stream"]()}</span>
-                </div>
-                <div class="card-body">
-                    <span class="message">{scannerEventStream.lastMessage || '—'}</span>
-                    {#if cardId}
-                        <button class="copy-btn" onclick={() => copy(cardId || '')}>
-                            {m["generic.action.copy"]()}
-                        </button>
-                    {/if}
-                </div>
-            </div>
-            {/if}
 
-            <div class="lizard-grid">
-                <button class="btn-lizard" onclick={() => {
-                    if (!shutUpDecay.value) {
-                        lizard()
-                        // soundpad.trigger();
-                    }
-                    lizardStreak.trigger();
-                    cps.trigger();
-                }}>
-                    <span>{shutUpDecay.value ? '🤫' : '🦎'}</span>
-                </button>
-
-                <div class="counter -decay"
-                    data-count={lizardStreak.count}
-                    style="--decay-remaining: {lizardStreak.remainingPct.toFixed(2)};"
-                >{lizardStreak.count}</div>
-
-                <div class="counter -total">
-                    {totalCounter.toString().padStart(5, '0')}
-                </div>
-
-                <div class="counter -cps" style={`--phase-rate: ${cps.currentKey / cps.windows.length};`}>
-                    {cps.value}
-                </div>
-            </div>
-            <button class="btn-shut-up"
-                onclick={() => shutUpDecay.trigger()}
-                style={`--decay-remaining: ${shutUpDecay.remainingPct.toFixed(2)};`}
-            >
-                Drž hubu!
-            </button>
+            <Gzt
+                sound={soundpad}
+                shutUp={shutUpDecay}
+                total={totalCounter}
+                streak={streak}
+                cps={cps}
+            />
         </div>
+
+        {#if debug?.includes('stream')}<MessageStream stream={scannerEventStream} />{/if}
     </div>
 </main>
 
@@ -766,41 +753,7 @@
 .instr-text {
     font-size: 2rem;
 }
-.btn-lizard {
-    display: grid;
-    place-content: center;
 
-
-    font-size: 4rem;
-    outline: 4px solid green;
-    border-radius: 50rem;
-    align-self: center;
-    aspect-ratio: 1;
-
-
-    transition: all 0.1s ease-out;
-
-    &:active {
-        outline: 4px solid green;
-        outline-offset: -4px;
-        scale: 0.9;
-    }
-}
-.btn-shut-up {
-    padding: 1rem;
-    margin: 2rem;
-    border-radius: 50rem;
-    font-weight: bold;
-
-    background: unset;
-    background-image: linear-gradient(
-        to right,
-        transparent 0%,
-        rgb(0, 179, 255) calc(var(--decay-remaining) * 100%) ,
-        transparent calc(var(--decay-remaining) * 100% + 1px),
-        transparent 100% ,
-    );
-}
 
 .btn-xl {
     font-size: 4rem;
@@ -808,70 +761,10 @@
     height: 10ch;
 }
 
-.counter {
-    --size: 4rem;
-    margin: 0 auto;
-
-    border-radius: 50rem;
-    width: var(--size);
-    height: var(--size);
-    display: grid;
-    place-content: center;
-    font-size: 2rem;
-    font-weight: bold;
-
-    box-shadow: lightgray 0px 0px 2px 2px;
-
-    // opacity: calc(var(--decay-remaining));
-    transition: opacity 0.1s linear;
-
-    &.-decay {
-        background-image: conic-gradient(from 0deg at center, orange calc(var(--decay-remaining) * 360deg - 1deg), transparent calc(var(--decay-remaining) * 360deg));
-    }
-    &.-cps {
-        background-image: conic-gradient(
-            from calc(var(--phase-rate) * 360deg) at center,
-            transparent 0deg,
-            orange 60deg,
-            transparent 10deg
-        );
-    }
-
-    &.-total {
-        width: calc(var(--size) * 1.75);
-    }
-}
-
-.lizard-grid {
-    padding-block-start: 4rem;
-    display: inline-grid;
-    margin: 0 auto;
-    place-items: center;
-
-    >* {
-        grid-area: 1 / 1;
-    }
-    button {
-        --size: 8rem;
-        width: var(--size);
-        height: var(--size);
-        margin-block-start: 2rem;
-    }
-    .counter {
-        place-self: start center;
-    }
-    .counter:nth-of-type(1) {
-        margin-block-start: -0.5rem;
-        margin-inline-start: -0.5rem;
-    }
-    .counter:nth-of-type(2) {
-        margin-block-start: -3.5rem;
-        margin-inline-start: 4rem;
-    }
-    .counter:nth-of-type(3) {
-        margin-block-start: -0.5rem;
-        margin-inline-start: 11rem;
-    }
-
+:global(.message-stream) {
+    position: fixed;
+    inset-block-end: 0.25rem;
+    inset-inline-start: 0.25rem;
+    width: min(30ch, 90vw);
 }
 </style>

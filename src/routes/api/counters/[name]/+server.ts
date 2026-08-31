@@ -1,10 +1,6 @@
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-    if (!locals.pb) {
-        return new Response('PocketBase not initialized', { status: 500 });
-    }
-
     const name = params.name?.toString();
 
     if (!name) {
@@ -33,10 +29,6 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 }
 
 export const PUT: RequestHandler = async ({ request, params, locals }) => {
-    if (!locals.pb) {
-        return new Response('PocketBase not initialized', { status: 500 });
-    }
-
     const name = params.name?.toString();
 
     if (!name) {
@@ -60,15 +52,19 @@ export const PUT: RequestHandler = async ({ request, params, locals }) => {
             .collection('counters')
             .update(counterRecord.id, { value: newCount });
 
+        // The audit event needs a signed-in manager; the counter itself is public.
+        // An anonymous kiosk should still be able to tick it, so this is best-effort.
         await locals.pb.collection('events')
             .create({
                 type: 'counter-increase',
                 target: `counter:${name}`,
+                occurredAt: new Date().toISOString(),
                 data: {
                     delta,
                     newCount,
                 },
             })
+            .catch(() => {})
 
         return new Response(JSON.stringify({
             name: updatedRecord.name,

@@ -3,7 +3,6 @@
     import type { PageData, ActionData } from './$types';
     import { enhance } from '$app/forms';
     import { onMount } from 'svelte';
-    import { stringifyStorageRef } from '$lib/bar/refs';
     import type { MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
     import Drawer from '$lib/components/Drawer.svelte';
     import TimelineMemberHistory from './TimelineMemberHistory.svelte';
@@ -67,7 +66,7 @@
         const formData = new FormData();
         formData.append('memberId', memberId);
 
-        const response = await fetch(`/api/bars/${stringifyStorageRef(data.ref)}/member/${memberId}/timeline`, {
+        const response = await fetch(`/api/bars/${data.ref}/member/${memberId}/timeline`, {
             method: 'GET',
             headers: {
                 'Accept': 'application/json'
@@ -95,17 +94,11 @@
     });
 </script>
 
-<nav class="breadcrumbs">
-    <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a> /
-    <a href="/backstage/bars/{data.ref.key}">{data.bar?.name}</a> /
-    {m["baroo.backstage.summaries.breadcrumb"]()}
-</nav>
-
 <main class="backstage-content" data-page="bar.summaries">
     <header class="page-header">
         <h1>{m["baroo.backstage.summaries.title"]()}</h1>
         <div class="actions">
-            <a href="/backstage/bars/{data.ref.key}" class="btn btn-secondary">{m["baroo.backstage.summaries.back_to_dashboard"]()}</a>
+            <a href="/backstage/bars/{data.ref}/mapper" class="btn btn-outline-secondary">{m["baroo.backstage.bar.member_mapping"]()}</a>
         </div>
     </header>
 

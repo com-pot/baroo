@@ -7,6 +7,10 @@
         },
         "list": {
             "no_items": "No items to display."
+        },
+        "measure": {
+            "volume": "l",
+            "count": "pcs"
         }
     }
 }

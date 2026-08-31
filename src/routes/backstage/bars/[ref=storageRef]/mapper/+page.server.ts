@@ -1,10 +1,11 @@
 import { loadBarData } from "$lib/bar/storage.server";
-import { FIXME_DEBUGGING_CREATE_DB_FROM_ENV } from "$lib/db.server";
 import type { PageServerLoad } from "./$types";
 
-export const load: PageServerLoad = async ({ params }) => {
-    const db = await FIXME_DEBUGGING_CREATE_DB_FROM_ENV()
-    const data = await loadBarData(db, params['ref'])
+export const load: PageServerLoad = async ({ params, locals, parent }) => {
+    // The bar comes from the section layout; only the rest is fetched here.
+    const { bar } = await parent();
+
+    const data = await loadBarData(locals.pb, params['ref'], bar ?? undefined)
 
     return {
         ...data,

@@ -4,8 +4,10 @@
     import { enhance } from '$app/forms';
     import { onMount } from 'svelte';
     import Drawer from "$lib/components/Drawer.svelte"
-    import { computeCountsByVariant, computeTotalVolume } from '$lib/bar/barAggregation';
-    import { stringifyStorageRef } from '$lib/bar/refs';
+    import { computeCountsByVariant, computeTotalQuantity } from '$lib/bar/barAggregation';
+    import { servingLabel, servingPreset } from '$lib/bar/servings';
+    import { formatQuantity, measureLabel } from '$lib/bar/quantity';
+    import { quantityLeft } from '$lib/bar/stats/barOfferItems';
     import ClosureDetails from './ClosureDetails.svelte';
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -15,14 +17,21 @@
     const offerItemUsage = $derived.by(() => {
         return (data.stats?.offerItems || [])
             .map((offerItemStats) => {
-                const variantCounts = computeCountsByVariant(offerItemStats.data.pricing, offerItemStats.orderItems);
-                const totalVolume = computeTotalVolume(variantCounts, offerItemStats.data.variantVolumes)
+                const variantCounts = computeCountsByVariant(offerItemStats.data, offerItemStats.orderItems);
+                const totalQuantity = computeTotalQuantity(offerItemStats.data, variantCounts)
+                const measure = servingPreset(offerItemStats.data).measure;
 
                 return {
                     ...offerItemStats,
                     key: offerItemStats.data.key,
                     variantCounts,
-                    totalVolume,
+                    totalQuantity,
+                    measure,
+                    // Keyed off the event existing, not off a truthy quantity — a package
+                    // that turned out to be empty is a legitimate zero.
+                    quantityLeft: offerItemStats.lastUnsealAt
+                        ? quantityLeft(offerItemStats.unsealQuantity, totalQuantity)
+                        : null,
                 };
             })
     })
@@ -32,29 +41,12 @@
     });
 </script>
 
-<nav class="breadcrumbs">
-	<a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a> / {data.ref.key === 'new' ? m["baroo.backstage.bars.new_bar"]() : data.bar?.name}
-</nav>
-
 <main class="backstage-content" data-page="bar.dashboard">
     <header class="page-header">
-        <h1>{data.ref.key === 'new' ? m["baroo.backstage.bar.create_title"]() : m["baroo.backstage.bar.dashboard_title"]({ barName: data.bar?.name || '' })}</h1>
-        {#if data.ref.key !== 'new'}
-            <div class="actions">
-                <a
-                    href={`/bar/${stringifyStorageRef(data.ref)}`}
-                    target="_blank"
-                >{m["baroo.backstage.bar.kiosek"]()}</a>
-            </div>
-        {/if}
+        <h1>{data.ref === 'new' ? m["baroo.backstage.bar.create_title"]() : m["baroo.backstage.bar.dashboard_title"]({ barName: data.bar?.name || '' })}</h1>
     </header>
 
-    {#if data.ref.type === 'local'}
-        <div class="card card-body info-message">
-            <p><strong>{m["baroo.backstage.bar.local_info"]()}</strong></p>
-            <p>{m["baroo.backstage.bar.local_info_details"]()}</p>
-        </div>
-    {:else if data.ref.key === 'new'}
+    {#if data.ref === 'new'}
         <div class="card card-body info-message">
             <p><strong>{m["baroo.backstage.bar.create_info"]()}</strong></p>
         </div>
@@ -117,8 +109,6 @@
                                     aria-expanded="false"
                                 >{m["baroo.backstage.bar.manage"]()}</button>
                                 <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="/backstage/bars/{data.ref.key}/offer">{m["baroo.backstage.bar.offer_items"]()}</a></li>
-                                    <li role="separator" class="dropdown-divider"></li>
                                     <li>
                                         <form method="POST" use:enhance>
                                             <button
@@ -194,20 +184,6 @@
                 <div class="card">
                     <div class="card-header">
                         <h2>{m["baroo.backstage.bar.members"]()}</h2>
-                        <div class="actions">
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-secondary dropdown-toggle"
-                                    type="button"
-                                    data-bs-toggle="dropdown"
-                                    aria-expanded="false"
-                                    aria-label={m["baroo.backstage.bar.manage"]()}
-                                ></button>
-                                <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="/backstage/bars/{data.ref.key}/mapper">{m["baroo.backstage.bar.member_mapping"]()}</a></li>
-                                    <li><a class="dropdown-item" href="/backstage/bars/{data.ref.key}/summaries">{m["baroo.backstage.bar.member_summaries"]()}</a></li>
-                                </ul>
-                            </div>
-                        </div>
                     </div>
                     <div class="card-body">
                         <p>{m["baroo.backstage.bar.most_orders"]()}</p>
@@ -228,7 +204,7 @@
             <!-- Offer Items Section -->
             <section class="offer-items-section">
                 <header>
-                    <h2>{m["baroo.backstage.bar.offer_items_keg_usage"]()}</h2>
+                    <h2>{m["baroo.backstage.bar.offer_items_usage"]()}</h2>
                 </header>
 
                 {#if data.stats?.offerItems && data.stats.offerItems.length > 0}
@@ -245,15 +221,26 @@
                                                 data-bs-toggle="dropdown"
                                                 aria-expanded="false"
                                             >
-                                                {m['baroo.backstage.bar.package_sequenced']({ sequenceNumber: offerItem.uncorkCount })}
+                                                {m['baroo.backstage.bar.package_sequenced']({ sequenceNumber: offerItem.unsealCount })}
                                             </button>
                                             <ul class="dropdown-menu">
                                                 <li>
-                                                    <form method="POST" action="?/createEvent" use:enhance>
-                                                        <input type="hidden" name="eventType" value="keg-uncork" />
+                                                    <form method="POST" action="?/createEvent" use:enhance class="unseal-form">
+                                                        <input type="hidden" name="eventType" value="unseal" />
                                                         <input type="hidden" name="offerItemKey" value={offerItem.data.key} />
+                                                        <input
+                                                            type="number"
+                                                            name="quantity"
+                                                            class="form-control form-control-sm"
+                                                            min={offerItem.measure === 'count' ? 1 : 0.1}
+                                                            step={offerItem.measure === 'count' ? 1 : 0.1}
+                                                            required
+                                                            placeholder={m["baroo.backstage.bar.unseal_quantity"]({
+                                                                measure: measureLabel(offerItem.measure),
+                                                            })}
+                                                        />
                                                         <button type="submit" class="dropdown-item">
-                                                            {m["baroo.backstage.bar.uncork"]()}
+                                                            {m["baroo.backstage.bar.unseal"]()}
                                                         </button>
                                                     </form>
                                                 </li>
@@ -283,7 +270,9 @@
                                     <div class="items-grid -tight">
                                         {#each Object.entries(offerItem.variantCounts) as [variant, count]}
                                             <div class="tile">
-                                                <span class="label">{`${variant}`}</span>
+                                                <span class="label">{variant === '_other_'
+                                                    ? m["baroo.backstage.bar.other_variants"]()
+                                                    : servingLabel(offerItem.data, variant)}</span>
                                                 <span role="separator">×</span>
 
                                                 <span class="value">{count}</span>
@@ -291,7 +280,16 @@
                                         {/each}
                                     </div>
                                     <div class="alert alert-success">
-                                        <strong>{m["baroo.backstage.bar.total_volume"]()}</strong> {offerItem.totalVolume.toFixed(1)}L
+                                        <strong>{m["baroo.backstage.bar.total_quantity"]()}</strong>
+                                        {formatQuantity(offerItem.measure, offerItem.totalQuantity)}
+                                        {#if offerItem.quantityLeft !== null}
+                                            <span class="quantity-left">
+                                                {m["baroo.backstage.bar.quantity_left"]({
+                                                    left: formatQuantity(offerItem.measure, offerItem.quantityLeft),
+                                                    total: formatQuantity(offerItem.measure, offerItem.unsealQuantity),
+                                                })}
+                                            </span>
+                                        {/if}
                                     </div>
                                 </div>
                             </div>
@@ -299,7 +297,7 @@
                     </div>
                 {:else}
                     <div class="empty-state">
-                        <p>{m["baroo.backstage.bar.no_items"]()} <a href="/backstage/bars/{data.ref.key}/offer">{m["baroo.backstage.bar.add_items_link"]()}</a> {m["baroo.backstage.bar.to_get_started"]()}</p>
+                        <p>{m["baroo.backstage.bar.no_items"]()} <a href="/backstage/bars/{data.ref}/offer">{m["baroo.backstage.bar.add_items_link"]()}</a> {m["baroo.backstage.bar.to_get_started"]()}</p>
                     </div>
                 {/if}
             </section>
@@ -326,7 +324,12 @@
         margin-block-end: 0;
     }
 
-    .last-uncork-info {
+    .quantity-left {
+        display: block;
+        opacity: 0.75;
+    }
+
+    .last-unseal-info {
         padding: 0.75rem;
         background: #e8f4f8;
         border-radius: 4px;
@@ -341,6 +344,17 @@
         time {
             color: #495057;
         }
+    }
+}
+
+.unseal-form {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-inline: 0.5rem;
+
+    input[name="quantity"] {
+        inline-size: 6rem;
     }
 }
 

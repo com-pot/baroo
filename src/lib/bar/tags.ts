@@ -1,27 +1,72 @@
 import type { BarMember } from "./BarModel"
-import type { StorageRef } from "./storage.server"
 
+export type TagMapping = {
+    serialId: string,
+    userId: BarMember["id"],
+    nickName: BarMember["nickName"],
+    extra?: Record<string, unknown>,
+}
+
+export type ImportMapping = {
+    seq: string,
+    userId: BarMember["id"],
+    nickName: BarMember["nickName"],
+    serialId: string,
+}
+
+/**
+ * Server-backed tag mapping, used by the backstage mapper where there is always a
+ * connection. The kiosk does not use this — it reads mappings from its offline
+ * snapshot and queues new ones as `tag-mapping` ops through `OfflineBar.process`.
+ */
 export class TagMapper {
+    private cache: TagMapping[] = []
+
+    constructor(private readonly barSlug: string) { }
+
     public get mappings(): Readonly<TagMapping[]> {
-        return this.ctrl.getMappings()
-    }
-
-    private ctrl: MapperStorage
-
-    constructor(private readonly ref: StorageRef) {
-        this.ctrl = typeCtrls[this.ref.type](ref)
+        return this.cache
     }
 
     public isValid(data: unknown): data is TagMapping {
         return isValidMapping(data)
     }
 
-    public async put(item: TagMapping) {
-        await this.ctrl.put(item);
+    public async load() {
+        const response = await fetch(`/api/bars/${this.barSlug}/mappings`);
+        if (!response.ok) {
+            throw new Error(`Failed to load mappings: ${response.status} ${response.statusText}`);
+        }
+        this.cache = await response.json();
     }
 
-    public async load() {
-        await this.ctrl.load()
+    public async put(item: TagMapping) {
+        const response = await fetch(`/api/bars/${this.barSlug}/mappings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to save mapping: ${response.status} ${response.statusText}`);
+        }
+
+        const saved: TagMapping = await response.json();
+        this.cache = [...this.cache.filter(m => m.serialId !== saved.serialId), saved];
+
+        return saved;
+    }
+
+    /** Unmaps a card. The member it pointed at is left alone. */
+    public async remove(serialId: TagMapping['serialId']) {
+        const response = await fetch(
+            `/api/bars/${this.barSlug}/mappings?serialId=${encodeURIComponent(serialId)}`,
+            { method: 'DELETE' },
+        );
+        if (!response.ok) {
+            throw new Error(`Failed to remove mapping: ${response.status} ${response.statusText}`);
+        }
+
+        this.cache = this.cache.filter(m => m.serialId !== serialId);
     }
 
     async get(serialId: TagMapping['serialId']) {
@@ -39,7 +84,7 @@ export class TagMapper {
             if (!line) continue;
 
             try {
-                const mapping = this.parseImportLine(line);
+                const mapping = parseImportLine(line);
                 if (mapping) {
                     // Convert ImportMapping to TagMapping (seq becomes userId for now)
                     const tagMapping: TagMapping = {
@@ -60,105 +105,35 @@ export class TagMapper {
 
         return { success, errors };
     }
+}
 
-    private parseImportLine(line: string): ImportMapping | null {
-        const parts = line.split('\t');
-        if (parts.length !== 3) {
-            return null;
-        }
-
-        const [seq, nickName, serialId] = parts.map(p => p.trim());
-
-        if (!seq || !nickName || !serialId) {
-            return null;
-        }
-
-        return {
-            seq,
-            userId: seq, // seq is used as userId
-            nickName,
-            serialId
-        };
+/** Parses one tab-separated `seq\tnickName\tserialId` import line. */
+export function parseImportLine(line: string): ImportMapping | null {
+    const parts = line.split('\t');
+    if (parts.length !== 3) {
+        return null;
     }
+
+    const [seq, nickName, serialId] = parts.map(p => p.trim());
+
+    if (!seq || !nickName || !serialId) {
+        return null;
+    }
+
+    return {
+        seq,
+        userId: seq, // seq is used as userId
+        nickName,
+        serialId
+    };
 }
 
-export type TagMapping = {
-    serialId: string,
-    userId: BarMember["id"],
-    nickName: BarMember["nickName"],
-    extra?: Record<string, unknown>,
-}
-
-export type ImportMapping = {
-    seq: string,
-    userId: BarMember["id"],
-    nickName: BarMember["nickName"],
-    serialId: string,
-}
 export function isValidMapping(data: unknown): data is TagMapping {
     if (typeof data !== 'object' || data === null) return false
     const d = data as Record<string, unknown>
     return typeof d.serialId === 'string' && d.serialId.length > 0
         && typeof d.userId === 'string' && d.userId.length > 0
         && typeof d.nickName === 'string' && d.nickName.length > 0
-}
-
-interface MapperStorage {
-    put(mapping: TagMapping): Promise<void>;
-    load(): Promise<void>;
-
-    getMappings(): Readonly<TagMapping[]>;
-
-}
-const typeCtrls: Record<StorageRef["key"], (ref: StorageRef) => MapperStorage> = {
-    local: ((ref) => {
-        const key = `mappings.${ref.key}`
-        let mappings = [] as TagMapping[]
-        return ({
-            async load() {
-                const stored = localStorage.getItem(key)
-                mappings = ((stored ? JSON.parse(stored) : []) as TagMapping[])
-                    .filter(m => isValidMapping(m))
-            },
-            async put(mapping) {
-                mappings = [
-                    ...mappings.filter(m => m.serialId !== mapping.serialId),
-                    mapping,
-                ]
-                localStorage.setItem(key, JSON.stringify(mappings))
-            },
-            getMappings() {
-                return mappings
-            },
-        })
-    }),
-    db: (ref) => {
-        let mappings = [] as TagMapping[]
-
-        return {
-            getMappings: () => mappings,
-
-            async load() {
-                try {
-                    const response = await fetch(`/api/bars/${ref.key}/mappings`);
-                    if (!response.ok) {
-                        throw new Error(`Failed to load mappings: ${response.status} ${response.statusText}`);
-                    }
-                    mappings = await response.json();
-                } catch (error) {
-                    console.error('Failed to load mappings from API:', error);
-                    mappings = [];
-                }
-            },
-            async put(mapping) {
-                await fetch(`/api/bars/${ref.key}/mappings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(mapping)
-                });
-            }
-        }
-    },
 }
 
 export function normalizeTag(serialId: string): string {

@@ -1,0 +1,113 @@
+/**
+ * Chrome for the barman's tools drawer.
+ *
+ * Global rather than scoped: the drawer is assembled from widget components, and
+ * Svelte's scoping would stop the parent's rules at each component boundary — these
+ * rules have to reach the forms the widgets render.
+ */
+.staff-drawer {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    h3 {
+        font-size: 1rem;
+        margin-block: 0 0.5rem;
+    }
+
+    /*
+     * A label for a stack, not a title: the drawer's own heading is the h3 above it, so
+     * this stays quieter than the accordion titles it introduces.
+     */
+    .staff-section > h2 {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #6c757d;
+        margin-block: 0 0.5rem;
+    }
+
+    section + section {
+        margin-block-start: 1.25rem;
+    }
+
+    .meta {
+        opacity: 0.7;
+        font-size: 0.9rem;
+    }
+
+    .actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-block-end: 0.75rem;
+    }
+
+    .inline-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 0.75rem;
+
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.9rem;
+            // Pair up in the drawer's ~550px instead of stacking one per row.
+            flex: 1 1 14rem;
+        }
+    }
+
+    .op-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+
+        li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid rgb(0 0 0 / 0.1);
+            border-radius: 0.5rem;
+
+            &.failed {
+                border-color: #d9534f;
+            }
+        }
+
+        .op-body {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            // Keeps a long op description from squeezing out the Void button.
+            min-width: 0;
+        }
+
+        .detail,
+        .meta {
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+
+        .detail {
+            word-break: break-word;
+        }
+
+        .error {
+            font-size: 0.85rem;
+            color: #d9534f;
+        }
+    }
+}

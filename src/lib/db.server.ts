@@ -2,10 +2,18 @@ import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
 import Pocketbase, { ClientResponseError } from 'pocketbase';
 
-export async function createDb(auth: { token: string }): Promise<Pocketbase> {
-    // přidej veřejnou url
+export type Db = Pocketbase;
+
+export function createAnonymousDb(): Db {
+    const pb = new Pocketbase(env.PB_BASE_URL);
+    pb.autoCancellation(false);
+
+    return pb;
+}
+
+export async function createDb(auth: { token: string }): Promise<Db> {
     try {
-        const pb = new Pocketbase(env.PB_BASE_URL)
+        const pb = createAnonymousDb()
         pb.authStore.save(auth.token);
         await pb.collection('users').authRefresh({
             expand: 'roles',
@@ -22,14 +30,12 @@ export async function createDb(auth: { token: string }): Promise<Pocketbase> {
     }
 }
 
-export function useStorage() {
-    return {
-    }
+export function readRoles(record: unknown): string[] {
+    const expand = (record as { expand?: { roles?: { name?: string }[] } } | null)?.expand;
+    return (expand?.roles || []).map(role => role.name).filter((n): n is string => !!n);
 }
 
-export const FIXME_DEBUGGING_CREATE_DB_FROM_ENV = () => createDb({ token: env.PB_AUTH_TOKEN! });
-
-export function formatPbError(err: unknown): null | {} {
+export function formatPbError(err: unknown): null | { errors: Record<string, string> } {
     if (err instanceof ClientResponseError && err.status === 400 && err.data?.data) {
         const pbErrors: Record<string, string> = {};
         for (const field of Object.keys(err.data.data)) {
@@ -41,5 +47,3 @@ export function formatPbError(err: unknown): null | {} {
 
     return null
 }
-
-export type Db = Pocketbase;

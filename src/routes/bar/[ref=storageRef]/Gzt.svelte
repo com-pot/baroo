@@ -1,32 +1,78 @@
 <script lang="ts">
-    import type { BrainrotSoundPad, CpsCounter, DecayCounter, StreakCounter, TotalCounter } from "./eggs.svelte";
+    import { onMount } from "svelte";
+    import {
+        BrainrotSoundPad,
+        CpsCounter,
+        DecayCounter,
+        StreakCounter,
+        TotalCounter,
+    } from "./eggs.svelte";
 
-    // Gzt as Gen-Z toy. This captures attention and makes the number go up
-    const {
-        sound,
-        shutUp,
-        total,
-        streak,
-        cps,
-    }: {
-        sound: BrainrotSoundPad;
-        shutUp?: DecayCounter;
-        total: TotalCounter;
-        streak: StreakCounter;
-        cps: CpsCounter;
-    } = $props();
+    /**
+     * Gzt as Gen-Z toy. This captures attention and makes the number go up.
+     *
+     * The counters live here rather than on the kiosk page: nothing outside this
+     * component reads them, and the page has no business holding a soundpad. The kiosk
+     * only decides whether the toy exists at all — see `config.genZToy`.
+     */
+    const { debug = "" }: { debug?: string } = $props();
+
+    const sound = new BrainrotSoundPad("🫧", [
+        { src: "/assets/eggs/pop/bubble-pop-02-293341.mp3" },
+        { src: "/assets/eggs/pop/bubble-pop-04-323580.mp3" },
+        { src: "/assets/eggs/pop/bubble-pop-06-351337.mp3" },
+        { src: "/assets/eggs/pop/bubble-pop-07-351339.mp3" },
+        { src: "/assets/eggs/pop/pop-402323.mp3" },
+    ]);
+
+    const shutUp = new DecayCounter();
+
+    // The lizard counter lives on the server. Offline it simply does not tick — swallow
+    // the failures rather than letting them surface as unhandled rejections.
+    const total = new TotalCounter({
+        get: () => fetch("/api/counters/lizard").then((res) => res.json()).then((data) => data.count),
+        set: (value) => {
+            return fetch("/api/counters/lizard", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ delta: value }),
+            })
+                .then((res) => res.json())
+                .then((data) => data.count);
+        },
+    });
+
+    const streak = new StreakCounter({
+        onExpire(num) {
+            total.trigger(num);
+            if (debug.includes("noCounter")) {
+                return;
+            }
+            total.commit().catch(() => {});
+        },
+    });
+
+    const cps = new CpsCounter({
+        windowSizeMs: 250,
+        totalTime: 5_000,
+    });
+
+    onMount(() => cps.activate());
+    onMount(() => {
+        total.load().catch(() => {});
+    });
 </script>
 
 <div class="lizard-grid">
     <button
         class="btn-lizard"
         onclick={() => {
-            if (!shutUp?.value) sound.trigger();
+            if (!shutUp.value) sound.trigger();
             streak.trigger();
             cps.trigger();
         }}
     >
-        <span>{shutUp?.value ? "🤫" : sound.icon}</span>
+        <span>{shutUp.value ? "🤫" : sound.icon}</span>
     </button>
 
     <div
@@ -48,15 +94,17 @@
         {cps.value}
     </div>
 </div>
-{#if shutUp}
-    <button
-        class="btn-shut-up"
-        onclick={() => shutUp.trigger()}
-        style={`--decay-remaining: ${shutUp.remainingPct.toFixed(2)};`}
-    >
-        Drž hubu!
-    </button>
-{/if}
+<button
+    class="btn-shut-up"
+    onclick={() => shutUp.trigger()}
+    style={`--decay-remaining: ${shutUp.remainingPct.toFixed(2)};`}
+>
+    Drž hubu!
+</button>
+
+{#each sound.files as file (file.src)}
+    <audio src={file.src} preload="auto"></audio>
+{/each}
 
 <style lang="scss">
     .counter {

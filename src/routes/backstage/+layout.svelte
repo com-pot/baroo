@@ -20,10 +20,16 @@
                 <li>
                     <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a>
                 </li>
+                <li>
+                    <a href="/backstage/devices">{m["baroo.devices.breadcrumb"]()}</a>
+                </li>
             </ul>
         </nav>
         <div class="user-info">
             <span>{data.user.name || data.user.email}</span>
+            <form method="POST" action="/logout">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">{m["baroo.login.logout"]()}</button>
+            </form>
         </div>
     </header>
 

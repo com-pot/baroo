@@ -7,11 +7,11 @@
 
     import type { PageData } from "./$types";
     import { onMount } from "svelte";
-    import { Boot, runBoot } from "$lib/boot";
-    import type { BarMember, BarOrderItem, MemberBalance } from "$lib/bar/BarModel";
-    import { normalizeTag, TagMapper, type TagMapping } from "$lib/bar/tags";
-    import { stringifyStorageRef } from "$lib/bar/refs";
-    import { StreakCounter, CpsCounter, DecayCounter, BrainrotSoundPad, TotalCounter } from "./eggs.svelte";
+    import { Boot } from "$lib/boot";
+    import { greetingFor } from "$lib/pos/device";
+    import { normalizeTag, type TagMapping } from "$lib/bar/tags";
+    import { computeTotalPrice } from "$lib/bar/stats/memberSummaries";
+    import { servingLabel, servingsOf } from "$lib/bar/servings";
     import { Narrator } from "$lib/speech.svelte";
     import { ScannerEventStream } from "./scannerEventStream.svelte";
     import MessageStream from "./MessageStream.svelte";
@@ -22,58 +22,39 @@
     }: {
         data: PageData;
     } = $props();
+
+    const store = $derived(data.bar);
+
     let debug = $state('')
 
     let status = $state<{ level: "✅" | "ℹ️" | "⚠️" | "❌"; text: string }>();
     let mode = $state<"order" | "summary">("order");
     let userIdInput = $state("");
-    let isLoadingSummary = $state(false);
 
-    let bar = $derived.by(() => {
-        if (data.bar) {
-            return data.bar;
-        }
-        if (data.ref.type === "local") {
-            return { slug: data.ref.key, name: "Local Bar " + data.ref.key };
-        }
-        return null;
-    });
+    let bar = $derived(store.snapshot?.bar ?? null);
+    let offerItems = $derived(store.offerItems);
+    let narrationEnabled = $derived(!!store.config.greetingTemplate.trim());
 
     let orderDialog = $state<HTMLDialogElement>();
     let summaryDialog = $state<HTMLDialogElement>();
 
-    const mapper = new TagMapper(data.ref);
-    interface OrderData {
-        items: Pick<BarOrderItem, "key" | "variant">[];
-    }
+    type OrderItem = { key: string; variant: string };
+
     const balanceCtrl = $state({
         activeMapping: null as null | TagMapping,
-        workingCopy: null as null | (MemberBalance & { _label: string }),
-        currentOrder: null as null | OrderData,
+        /** Who the open dialog is about, plus the items it should display. */
+        workingCopy: null as null | { id: string; label: string; items: OrderItem[] },
+        currentOrder: null as null | { items: OrderItem[] },
 
-        async startOrder(id: string, label?: string) {
-            const value = null //localStorage.getItem(`balance[${id}]`);
-            /** @type {MemberBalance} */
-            const balance = value
-                ? JSON.parse(value)
-                : {
-                      id,
-                      items: [],
-                      _label: label || id,
-                  };
-
-            // Always update the label with the current nickname
-            balance._label = label || id;
-
-            this.workingCopy = balance;
-            this.currentOrder = {
-                items: [],
-            };
+        startOrder(mapping: TagMapping, label: string) {
+            this.activeMapping = mapping;
+            this.workingCopy = { id: mapping.serialId, label, items: [] };
+            this.currentOrder = { items: [] };
 
             orderDialog!.showModal();
         },
 
-        addToOrder(item: OrderData["items"][number]) {
+        addToOrder(item: OrderItem) {
             if (!this.currentOrder) {
                 setStatus("⚠️", m["baroo.bar.status.no_order"]());
                 return;
@@ -81,144 +62,83 @@
             this.currentOrder.items.push(item);
         },
 
-        removeFromOrder(key: OrderData["items"][number]["key"]) {
+        removeFromOrder(key: OrderItem["key"]) {
             if (!this.currentOrder) {
                 setStatus("⚠️", m["baroo.bar.status.no_order"]());
                 return;
-            }            this.currentOrder.items = this.currentOrder.items.filter(
+            }
+            this.currentOrder.items = this.currentOrder.items.filter(
                 (item) => item.key !== key,
             );
         },
 
-        hasItemsInOrder(key: OrderData['items'][number]['key']): boolean {
-            const items = this.currentOrder?.items || []
-            return items.some((item) => item.key === key)
+        hasItemsInOrder(key: OrderItem["key"]): boolean {
+            return (this.currentOrder?.items || []).some((item) => item.key === key)
         },
+
+        /**
+         * Orders go into the local outbox, never straight to a server — underground
+         * there isn't one. The barman's console pushes them once there is signal again.
+         */
         async confirmOrder() {
-            if (!this.workingCopy) {
+            if (!this.workingCopy || !this.currentOrder) {
                 setStatus("❌", m["baroo.bar.status.no_working_copy"]());
                 return;
             }
-            if (!this.currentOrder) {
-                setStatus("❌", m["baroo.bar.status.no_order"]());
+
+            if (!this.currentOrder.items.length) {
+                this.reset();
                 return;
             }
 
-            const newItems = this.currentOrder.items.map((item) => ({
-                ...item,
-                created: new Date(),
-            }));
+            await store.process("order", {
+                serialId: this.workingCopy.id,
+                // Carried alongside the card so a badge-number order — where there is no
+                // card to resolve — still lands on the right tab.
+                memberId: this.activeMapping?.userId,
+                memberLabel: this.workingCopy.label,
+                items: [...this.currentOrder.items],
+            });
 
-            this.workingCopy.items.push(...newItems);
-
-            // Save to localStorage
-            // localStorage.setItem(
-            //     `balance[${this.workingCopy.id}]`,
-            //     JSON.stringify(this.workingCopy),
-            // );
-
-            // Save to database if not local
-            if (data.ref.type !== 'local') {
-                try {
-                    const formData = new FormData();
-                    formData.append('serialId', this.workingCopy.id);
-                    formData.append('items', JSON.stringify(this.currentOrder.items));
-
-                    const response = await fetch('?/createOrder', {
-                        method: 'POST',
-                        body: formData,
-                    });
-
-                    const result = await response.json();
-
-                    if (result.type === 'success') {
-                        setStatus("✅", "Objednávka úspěšně uložena");
-                    } else {
-                        console.error('Failed to save order:', result);
-                        setStatus("⚠️", "Objednávka uložena lokálně, ale nepodařilo se uložit do databáze");
-                    }
-                } catch (error) {
-                    console.error('Error saving order:', error);
-                    setStatus("⚠️", "Objednávka uložena lokálně, ale nepodařilo se uložit do databáze");
-                }
-            }
-
+            setStatus("✅", m["baroo.offline.pending"]({ count: String(store.pending.length) }));
             this.reset();
         },
 
-        async showSummary(entry: TagMapping, label?: string) {
-            console.log('showSummary', entry)
-            isLoadingSummary = true;
-            try {
-                let balance;
+        /** Summary is the unsettled tab, computed from snapshot + outbox. */
+        showSummary(mapping: TagMapping, label: string) {
+            this.activeMapping = mapping;
 
-                if (data.ref.type === 'local') {
-                    const value = localStorage.getItem(`balance[${entry.userId}]`) || 'null';
-                    balance = JSON.parse(value);
-                } else if (data.ref.type === 'db') {
-                    try {
-                        const response = await fetch(`/api/bars/${data.ref.key}/member/${entry.userId}/timeline`);
-                        if (!response.ok) {
-                            setStatus("❌", "Nepodařilo se načíst data ze serveru");
-                            return
-                        }
+            const timeline = store.timeline(mapping.userId);
+            const lastSettlement = timeline.find((entry) => entry.type === 'settlement');
 
-                        const timeline = await response.json();
-                        const orderItems = timeline
-                            .filter((entry: any) => entry.type === 'order')
-                            .map((entry: any) => ({
-                                key: entry.data.key,
-                                variant: entry.data.variant,
-                                createdAt: new Date(entry.date),
-                            }));
+            const items = timeline
+                .filter((entry) => entry.type === 'order')
+                .filter((entry) => !lastSettlement || entry.date > lastSettlement.date)
+                .map((entry) => entry.data as OrderItem);
 
-                        balance = {
-                            id: entry.userId,
-                            items: orderItems,
-                            _label: label || entry.userId,
-                        };
-                    } catch (error) {
-                        console.error('Failed to fetch member timeline:', error);
-                        setStatus("⚠️", "Nepodařilo se načíst data ze serveru");
-                    }
-                }
+            this.workingCopy = { id: mapping.serialId, label, items };
 
-                if (!balance) {
-                    balance = {
-                        id: entry.userId,
-                        items: [],
-                        _label: label || entry.userId,
-                    };
-                }
-
-                // Always update the label with the current nickname
-                balance._label = label || entry.userId;
-                balanceCtrl.workingCopy = balance;
-
-                summaryDialog!.showModal();
-            } finally {
-                isLoadingSummary = false;
-            }
+            summaryDialog!.showModal();
         },
 
         reset() {
             this.workingCopy = null;
             this.currentOrder = null;
+            this.activeMapping = null;
             userIdInput = "";
             mode = "order"
         },
     });
+
     const currentOrderCounts = $derived.by(() => {
-        /** @type {Record<string, number>} */
         const counts: Record<string, number> = {};
-        if (balanceCtrl.currentOrder) {
-            for (const item of balanceCtrl.currentOrder.items) {
-                const key = `${item.key}-${item.variant}`;
-                counts[key] = (counts[key] || 0) + 1;
-            }
+        for (const item of balanceCtrl.currentOrder?.items || []) {
+            const key = `${item.key}-${item.variant}`;
+            counts[key] = (counts[key] || 0) + 1;
         }
         return counts;
     });
+
     const summaryRows = $derived.by(() => {
         const itemCounts: Record<
             string,
@@ -230,24 +150,20 @@
                 >;
             }
         > = {};
+
         for (const item of balanceCtrl.workingCopy?.items || []) {
-            const offerItem = data.offerItems.find(
-                (o) => o.key === item.key,
-            );
+            const offerItem = offerItems.find((o) => o.key === item.key);
             if (!offerItem) {
                 console.warn("Unknown offer item in balance:", item);
                 continue
             }
 
             if (!itemCounts[item.key]) {
-                itemCounts[item.key] = {
-                    name: offerItem?.name || item.key,
-                    valueCounts: {},
-                };
+                itemCounts[item.key] = { name: offerItem.name, valueCounts: {} };
             }
             if (!itemCounts[item.key].valueCounts[item.variant]) {
                 itemCounts[item.key].valueCounts[item.variant] = {
-                    value: item.variant,
+                    value: servingLabel(offerItem, item.variant),
                     price: offerItem.pricing?.[item.variant] || 0,
                     count: 0,
                 };
@@ -255,14 +171,13 @@
             itemCounts[item.key].valueCounts[item.variant].count++;
         }
 
-
         return Object.values(itemCounts)
                 .map((item) => ({
                     item: item.name,
-                    amount: Object.entries(item.valueCounts)
+                    amount: Object.values(item.valueCounts)
                         .map(
-                            ([value, data]) =>
-                                `${data.count}×${value}` +
+                            (data) =>
+                                `${data.count}×${data.value}` +
                                 (data.price ? ` (${data.price} Kč)` : ""),
                         )
                         .join(", "),
@@ -272,13 +187,11 @@
                     ),
                 }));
     });
-    const summaryTotalPrice = $derived.by(() => {
-        let total = 0
-        for (let row of summaryRows) {
-            total += row.price
-        }
-        return total
-    })
+
+    const summaryTotalPrice = $derived(
+        computeTotalPrice(balanceCtrl.workingCopy?.items || [], store.barOffer),
+    );
+
     const priceFormatter = new Intl.NumberFormat('cs', {
         style: 'currency',
         currency: "czk",
@@ -293,71 +206,97 @@
         status = { level, text };
     }
 
-    async function submitSelectForm(e: SubmitEvent) {
+    /**
+     * What the barman typed, or what the reader picked up.
+     *
+     * Cards are long hex; the number printed on a badge is a handful of digits, so a
+     * bare short number is read as a badge. The card lookup still runs first, in case a
+     * reader ever hands us an all-numeric serial.
+     */
+    const BADGE_NUMBER = /^\d{1,5}$/;
+
+    function resolveEntry(raw: string): TagMapping | null {
+        const serialId = normalizeTag(raw);
+
+        const byCard = store.findMapping(serialId);
+        if (byCard) return byCard;
+
+        if (!BADGE_NUMBER.test(serialId)) return null;
+
+        const member = store.findMemberBySeq(Number(serialId));
+        if (!member) return null;
+
+        // Members enrolled without a card still drink — the order names them by id.
+        return (
+            store.findMappingByMember(member.id) ?? {
+                serialId: "",
+                userId: member.id,
+                nickName: member.nickName,
+                extra: {
+                    avatar_1x1: member.avatar_1x1 ?? "",
+                    greeting: member.greeting,
+                },
+            }
+        );
+    }
+
+    function submitSelectForm(e: SubmitEvent) {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
-        const data = Object.fromEntries(new FormData(form).entries());
+        const formData = Object.fromEntries(new FormData(form).entries());
 
-        const mapping = balanceCtrl.activeMapping = await mapper.get(data.serialId as string) || null;
+        const raw = String(formData.serialId || "");
+        const serialId = normalizeTag(raw);
+        const mapping = resolveEntry(raw);
+
         if (!mapping) {
-            narrator.speak("Cožeto? Neznám!")
-            setStatus("⚠️", m["baroo.bar.status.user_not_mapped"]({ userId: String(data.userId) }));
+            if (narrationEnabled) narrator?.speak("Cožeto? Neznám!")
+
+            // A mistyped badge number is not a card — putting it on the staff console's
+            // to-do list would only give them a phantom to chase.
+            if (BADGE_NUMBER.test(serialId)) {
+                setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: serialId }));
+                return;
+            }
+
+            store.noteUnknownTag(serialId);
+            setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId }));
             return;
         }
 
-        let displayName = mapping.nickName || "???";
-        const greeting = mapping.extra?.greeting
+        const displayName = mapping.nickName || "???";
 
-        if (typeof greeting === "string" && greeting) {
-            narrator.speak(greeting);
-        } else {
-            narrator.speak(`Ave ${displayName}`);
-        }
+        // `null` when this device has no greeting template — narration is off entirely.
+        const greeting = greetingFor(store.config, {
+            nickName: displayName,
+            greeting: typeof mapping.extra?.greeting === "string" ? mapping.extra.greeting : undefined,
+        });
+        if (greeting) narrator?.speak(greeting);
 
-        if (data.action === "summary") {
+        if (formData.action === "summary") {
             balanceCtrl.showSummary(mapping, displayName);
             return;
         }
 
-        balanceCtrl.startOrder(String(data.serialId), displayName);
+        balanceCtrl.startOrder(mapping, displayName);
     }
 
-    const scannerEventStream = new ScannerEventStream(stringifyStorageRef(data.ref), {
-        historySize: 5,
-        onMessage(message) {
-            if (message.startsWith('card:')) {
-                const cardId = normalizeTag(message.substring('card:'.length))
-                submitTagId(cardId)
-                return
-            }
-        },
-    })
-
-    const cardId = $derived.by(() => {
-        if (scannerEventStream.lastMessage?.startsWith('card:')) {
-            return scannerEventStream.lastMessage.substring('card:'.length)
-        }
-    })
-
-
-    async function submitTagId(serialId: string, statusEl?: HTMLElement | null) {
+    function submitTagId(serialId: string, statusEl?: HTMLElement | null) {
         const serial = normalizeTag(serialId);
-        const member = await mapper.get(serial);
+        const member = store.findMapping(serial);
         if (!statusEl) statusEl = document.getElementById('submitStatus')
 
         console.debug('submitTagId', { serialId, serial, member })
         if (!member) {
+            store.noteUnknownTag(serial);
             if (statusEl) {
-                statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialId: serialId });
+                statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialId });
             }
             return;
         }
 
         try {
-            (document.querySelector(
-                "#serialId",
-            ) as HTMLInputElement)!.value =
-                serial;
+            (document.querySelector("#serialId") as HTMLInputElement)!.value = serial;
             document.forms
                 .namedItem("selectBadgeForm")!
                 .dispatchEvent(new Event("submit"));
@@ -370,7 +309,7 @@
             }
         } catch (error) {
             console.error(error)
-            if(statusEl) {
+            if (statusEl) {
                 statusEl.innerText = m["baroo.bar.status.error_processing"]({
                     serialId: serial,
                     error: error instanceof Error ? error.message : String(error)
@@ -379,14 +318,36 @@
         }
     }
 
-    let narrator: Narrator
+    /**
+     * The PC/SC reader lives on a server, which the venue does not have. Kept for bars
+     * that do run one — but it must never hold up boot, so it is not a boot feature.
+     */
+    const scannerEventStream = new ScannerEventStream(data.ref, {
+        historySize: 5,
+        onMessage(message) {
+            if (message.startsWith('card:')) {
+                submitTagId(normalizeTag(message.substring('card:'.length)))
+            }
+        },
+    });
+
+    let narrator = $state<Narrator | undefined>();
+
     const boot = new Boot([
         {
-            name: "tag-mapper",
-            init: () => mapper.load(),
+            name: "bar-data",
+            init: async () => {
+                if (!store.snapshot) {
+                    throw new Error("No offline data for this bar — connect and prime the device.");
+                }
+                return `${store.offerItems.length} items, ${store.mappings.length} tags`;
+            },
         },
         {
             name: "nfc",
+            // No Web NFC means no reader to bring up. The kiosk falls back to the manual
+            // id input, which is a working till, not a broken one.
+            isEnabled: () => typeof NDEFReader !== "undefined",
             init: async (featureEl) => {
                 if (!featureEl) featureEl = document.createElement("div");
 
@@ -400,28 +361,27 @@
                     })();
 
                 const ndef = new NDEFReader();
-                ndef.scan()
-                    .then(() => {
-                        ndef.onreadingerror = () => {
-                            statusEl.innerText = "Cannot read data from the NFC tag.";
-                        };
-                        ndef.onreading = async (event) =>{
-                            if (balanceCtrl.workingCopy) {
-                                statusEl.innerText = m["baroo.bar.status.processing"]({ userId: balanceCtrl.workingCopy.id });
-                                return;
-                            }
-                            submitTagId(event.serialNumber)
-                        };
-                    })
-                    .catch((error) => {
-                        alert(`Error! Scan failed to start: ${error}.`);
-                    });
+                await ndef.scan();
+
+                ndef.onreadingerror = () => {
+                    statusEl.innerText = "Cannot read data from the NFC tag.";
+                };
+                ndef.onreading = (event) => {
+                    if (balanceCtrl.workingCopy) {
+                        statusEl.innerText = m["baroo.bar.status.processing"]({ userId: balanceCtrl.workingCopy.id });
+                        return;
+                    }
+                    submitTagId(event.serialNumber)
+                };
             },
         },
         {
             name: "narrator",
+            // An empty greeting template means this kiosk stays silent, so there is no
+            // reason to start the voice engine — or to show a step for it.
+            isEnabled: () => narrationEnabled,
             init: async () => {
-                narrator = new Narrator({
+                const instance = new Narrator({
                     exclude: {
                         langs: [
                             "da-DK",
@@ -444,81 +404,48 @@
                         ],
                     },
                 })
-                narrator.init()
+                instance.init()
+                narrator = instance
 
                 const globalThis = (window as unknown as Record<string, unknown>);
                 globalThis.speak = (text: string) => {
-                    const result = narrator.speak(text)
+                    const result = instance.speak(text)
                     console.log(result)
                 }
                 console.debug("Narrator initialized as the speak(\"\") function")
-                return narrator
+                return instance
             },
         },
-    ])
-
-    // const soundpad = new BrainrotSoundPad('🫧', [
-    //     { src: "/assets/eggs/lizard-button-sound.mp3" },
-    //     { src: "/assets/eggs/pop/bubble-pop-04-323580.mp3" },
-    //     { src: "/assets/eggs/pop/bubble-pop-06-351337.mp3" },
-    //     { src: "/assets/eggs/pop/bubble-pop-07-351339.mp3" },
-    //     { src: "/assets/eggs/pop/pop-402323.mp3" },
-    // ])
-    const soundpad = new BrainrotSoundPad('🫧', [
-        { src: "/assets/eggs/pop/bubble-pop-02-293341.mp3" },
-        { src: "/assets/eggs/pop/bubble-pop-04-323580.mp3" },
-        { src: "/assets/eggs/pop/bubble-pop-06-351337.mp3" },
-        { src: "/assets/eggs/pop/bubble-pop-07-351339.mp3" },
-        { src: "/assets/eggs/pop/pop-402323.mp3" },
-    ])
-
-    const shutUpDecay = new DecayCounter()
-    const totalCounter = new TotalCounter({
-        get: () => fetch("/api/counters/lizard").then((res) => res.json()).then(data => data.count),
-        set: (value) => {
-            return fetch("/api/counters/lizard", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json", },
-                body: JSON.stringify({ delta: value }),
-            })
-                .then((res) => res.json())
-                .then((data) => data.count)
-        },
-    })
-    const streak = new StreakCounter({
-        onExpire(num) {
-            totalCounter.trigger(num)
-            if (debug.includes('noCounter')) {
-                return
-            }
-            totalCounter.commit()
-        }
-    })
-    const cps = new CpsCounter({
-        windowSizeMs: 250,
-        totalTime: 5_000,
-    })
-    onMount(() => cps.activate())
+    ], {
+        stepInitMinMs: 137,
+    });
 
     onMount(() => {
-        scannerEventStream.init()
+        let unsubscribeScanner: (() => void) | undefined;
+        try {
+            unsubscribeScanner = scannerEventStream.init();
+        } catch (err) {
+            console.debug("No scanner stream (expected with no server):", err);
+        }
 
         const url = new URL(window.location.toString())
         debug = url.searchParams.get('debug') || ''
 
-        totalCounter.load()
-
         return () => {
+            unsubscribeScanner?.();
             boot.destroy()
         };
     });
 </script>
 
-<main class="boot-stack">
+<main class="boot-stack" data-theme={store.config.theme}>
     <div class="page-header">
         <h1>
             {m["baroo.page_front.title"]({ barName: bar?.name || bar?.slug || "" })}
         </h1>
+        {#if store.deviceLabel}
+            <p class="device-name">{store.deviceLabel}</p>
+        {/if}
     </div>
     <div data-boot-init>
         <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>Tak to rozjedem</button>
@@ -526,7 +453,6 @@
 
     <div class="main-content">
         <form name="selectBadgeForm" class="card card-body" data-boot onsubmit={submitSelectForm}>
-            <p class="instr-text">Vyber akci</p>
             <div class="form-section">
                 <div class="btn-group">
                     <label class="btn btn-baroo">
@@ -550,15 +476,7 @@
                 </div>
             </div>
 
-            {#if isLoadingSummary}
-                <div class="progress mt-2" style="height: 12px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
-                </div>
-            {/if}
-
-            {#if debug?.includes('input')}
-            <p>a zadej NFC serial id</p>
-
+            {#if store.config.idInput}
             <div class="form-section">
                 <div class="input-group input-group-lg">
                     <input
@@ -568,14 +486,12 @@
                         required
                         aria-label={m["baroo.bar.userRef"]()}
                         bind:value={userIdInput}
-                        placeholder="Zadejte ID..."
+                        placeholder={m["baroo.bar.pos.id_input_placeholder"]()}
                     />
                     <button type="submit" class="btn btn-primary" aria-label={m["generic.action.open"]()}>⏎</button>
                 </div>
             </div>
             {:else}
-            <p class="instr-text">a přilož svojí visačku na zadní stranu tabletu, viz obrázek ➡️</p>
-
             <input type="hidden" name="serialId" id="serialId" />
             {/if}
             <p id="submitStatus"></p>
@@ -589,13 +505,9 @@
                 </div>
             {/if}
 
-            <Gzt
-                sound={soundpad}
-                shutUp={shutUpDecay}
-                total={totalCounter}
-                streak={streak}
-                cps={cps}
-            />
+            {#if store.config.genZToy}
+                <Gzt {debug} />
+            {/if}
         </div>
 
         {#if debug?.includes('stream')}<MessageStream stream={scannerEventStream} />{/if}
@@ -625,12 +537,12 @@
                 alt=""
             />
             <h2>
-                {m["baroo.bar.order.title_new"]({ userName: balanceCtrl.workingCopy?._label || "" })}
+                {m["baroo.bar.order.title_new"]({ userName: balanceCtrl.workingCopy?.label || "" })}
             </h2>
         </div>
         <div class="card-body offer">
-            {#each data.offerItems as item (item.key)}
-                {@const variants = Object.keys(item.pricing)}
+            {#each offerItems as item (item.key)}
+                {@const servings = servingsOf(item).filter((serving) => item.pricing?.[serving.key] != null)}
                 <div class="item" data-key={item.key}>
                     <span class="item-name">{item.name}</span>
                     {#if item.preview_1x1}
@@ -639,19 +551,18 @@
                         </div>
                     {/if}
                     <div class="variants">
-                        {#each variants as variant (variant)}
-                            {@const displayLabel = item.variantLabels?.[variant] || variant}
+                        {#each servings as serving (serving.key)}
                             <button
-                                data-value={variant}
-                                onclick={() => balanceCtrl.addToOrder({ key: item.key, variant })}
+                                data-value={serving.key}
+                                onclick={() => balanceCtrl.addToOrder({ key: item.key, variant: serving.key })}
                             >
                                 <span class="amount"
                                     >{currentOrderCounts[
-                                        `${item.key}-${variant}`
+                                        `${item.key}-${serving.key}`
                                     ] || 0}</span
                                 >
                                 <span role="separator">×</span>
-                                <kbd>{displayLabel}</kbd>
+                                <kbd>{serving.label}</kbd>
                             </button>
                         {/each}
                     </div>
@@ -703,7 +614,7 @@
                 alt=""
             />
             <h2>
-                {m["baroo.bar.order.title_summary"]({ userName: balanceCtrl.workingCopy?._label || "" })}
+                {m["baroo.bar.order.title_summary"]({ userName: balanceCtrl.workingCopy?.label || "" })}
             </h2>
         </div>
         <div class="summary">
@@ -734,9 +645,6 @@
         </div>
     </div>
 </dialog>
-{#each soundpad.files as file (file.src)}
-    <audio src={file.src} preload="auto"></audio>
-{/each}
 {/if}
 
 <style lang="scss">

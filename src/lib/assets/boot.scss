@@ -19,10 +19,6 @@
         visibility: none;
     }
 
-    >button {
-        width: 100%;
-    }
-
     .caption {
         flex: 1;
     }
@@ -32,7 +28,7 @@
         margin: 0;
         padding: 0;
 
-        :is(.status, .caption, code) {
+        :is(.status, .caption, code, button) {
             display: inline-block;
             padding: 0.5em;
             background-color: #ddd;
@@ -47,6 +43,39 @@
             gap: 0rem 0.5rem;
             align-items: center;
             font-family: monospace;
+
+            // Rows unroll as they are queued up, before anything runs.
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+
+            &[data-boot-row="queued"] {
+                opacity: 0;
+                transform: translateY(-0.35rem);
+            }
+
+            // The step being worked on is the one you should be looking at.
+            &[data-boot-row="working"] :is(.status, .caption) {
+                background-color: #cfe2ff;
+            }
+
+            &[data-boot-row="ok"] .status {
+                background-color: #d1e7dd;
+            }
+
+            &[data-boot-row="error"] :is(.status, .caption) {
+                background-color: #f8d7da;
+            }
+
+            &.summary .caption {
+                flex: 1;
+                font-weight: bold;
+            }
+
+            // Dismissal rides in the summary row rather than adding one of its own.
+            .close {
+                border: 0;
+                font: inherit;
+                cursor: pointer;
+            }
 
             &:has(code) {
                 :is(.status, .caption) {

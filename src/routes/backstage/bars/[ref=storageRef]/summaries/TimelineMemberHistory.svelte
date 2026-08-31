@@ -3,6 +3,7 @@
     import type { MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
     import * as m from '$lib/paraglide/messages.js';
     import { getRenderer } from '$lib/rendering.svelte';
+    import { labelForServingKey } from '$lib/bar/servings';
 
     const renderer = getRenderer()
 
@@ -47,7 +48,7 @@
                         <div class="timeline-event order">
                             <strong>{m["baroo.backstage.summaries.ordered_event"]()}</strong>
                             <div class="order-detail">
-                                "{event.data.key}" ({event.data.variant})
+                                "{event.data.key}" ({labelForServingKey(event.data.variant)})
                             </div>
                             <time>{renderer.formatDate(event.date)}</time>
                         </div>

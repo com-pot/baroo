@@ -5,8 +5,11 @@
 @import url('/static/assets/fonts/NotJamMonoOldPeculiar/njmop.css');
 
 body {
+    // Matches the top of main's gradient, and the manifest's theme/background colour,
+    // so the browser chrome and the installed splash agree with what the app paints.
+    background-color: #fafafa;
+
     // font-family: var(--font-not-jam-old-style);
-    // background-color: hsl(120 42% 10% / 1);
     // color: hsl(120 82% 80% / 1);
 }
 

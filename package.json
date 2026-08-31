@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "dev": "vite dev",
-        "build": "vite build",
+        "build": "vite build && cp package*.json build/ && cd build && npm ci --omit dev",
         "preview": "vite preview",
         "prepare": "svelte-kit sync || echo ''",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -32,6 +32,7 @@
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
         "html-to-image": "^1.11.13",
+        "idb": "^8.0.3",
         "nfc-pcsc": "^0.8.1",
         "pocketbase": "^0.26.3",
         "sveltekit-sse": "^0.14.3"

@@ -7,6 +7,10 @@
         },
         "list": {
             "no_items": "Žádné položky k zobrazení."
+        },
+        "measure": {
+            "volume": "l",
+            "count": "ks"
         }
     }
 }

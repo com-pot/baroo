@@ -1,60 +1,91 @@
 <script lang="ts">
     import "$lib/assets/boot.scss";
     import * as m from "$lib/paraglide/messages.js";
-    import { TagMapper } from "$lib/bar/tags";
+    import { TagMapper, type TagMapping } from "$lib/bar/tags";
     import { onMount } from "svelte";
     import Drawer from "$lib/components/Drawer.svelte";
 
     import type { PageData } from "./$types";
-    import { stringifyStorageRef } from "$lib/bar/refs";
 
     const { data }: { data: PageData } = $props();
 
     const mapper = new TagMapper(data.ref);
+
+    /** The mapper's cache, mirrored into a rune so the table redraws itself. */
+    let mappings = $state<TagMapping[]>([]);
+    let statusMessage = $state("");
     let isImportDrawerOpen = $state(false);
-    let importData = $state('');
+    let importData = $state("");
 
-    function persistUser(e: SubmitEvent) {
-        const form = e.target as HTMLFormElement;
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(form).entries());
-        if (!mapper.isValid(data)) {
-            alert(m["baroo.backstage.mapper.invalid_data"]());
-            return false;
+    let serialId = $state("");
+    let userId = $state("");
+    let nickName = $state("");
+    /** Until the scanner is started there is no reader to fill the field in for us. */
+    let serialReadOnly = $state(true);
+
+    const sync = () => (mappings = [...mapper.mappings]);
+
+    /**
+     * One row per person, not per card — a member may carry a spare, and seeing both
+     * under one name is the whole point of the page.
+     */
+    const members = $derived.by(() => {
+        const byUser = new Map<string, { userId: string; nickName: string; tags: TagMapping[] }>();
+
+        for (const mapping of mappings) {
+            const entry = byUser.get(mapping.userId) ?? {
+                userId: mapping.userId,
+                nickName: mapping.nickName,
+                tags: [],
+            };
+            entry.tags.push(mapping);
+            byUser.set(mapping.userId, entry);
         }
-        mapper.put(data);
 
-        renderMappings();
-        form.reset();
-        document.getElementById("status-message")!.innerText =m["baroo.backstage.mapper.mapped"]({
-            serialId: String(data.serialId),
-            userId: String(data.userId),
-            nickName: String(data.nickName),
+        return [...byUser.values()];
+    });
+
+    async function persistUser(e: SubmitEvent) {
+        e.preventDefault();
+        const entry = { serialId, userId, nickName };
+
+        if (!mapper.isValid(entry)) {
+            alert(m["baroo.backstage.mapper.invalid_data"]());
+            return;
+        }
+
+        await mapper.put(entry);
+        sync();
+
+        statusMessage = m["baroo.backstage.mapper.mapped"]({
+            serialId: entry.serialId,
+            userId: entry.userId,
+            nickName: entry.nickName,
         });
 
-        return false;
+        serialId = "";
+        userId = "";
+        nickName = "";
     }
 
-    function renderMappings() {
-        const tbody = document.getElementById("mappings")!;
-        tbody.innerHTML = "";
+    async function removeMapping(mapping: TagMapping) {
+        const confirmed = confirm(
+            m["baroo.backstage.mapper.remove_confirm"]({
+                serialId: mapping.serialId,
+                nickName: mapping.nickName,
+            }),
+        );
+        if (!confirmed) return;
 
-        for (const mapping of mapper.mappings) {
-            const tr = document.createElement("tr");
-
-            const tdTag = document.createElement("td");
-            tdTag.innerText = mapping.serialId;
-            tr.appendChild(tdTag);
-
-            const tdUserId = document.createElement("td");
-            tdUserId.innerText = mapping.userId;
-            tr.appendChild(tdUserId);
-
-            const tdNickName = document.createElement("td");
-            tdNickName.innerText = mapping.nickName;
-            tr.appendChild(tdNickName);
-
-            tbody.appendChild(tr);
+        try {
+            await mapper.remove(mapping.serialId);
+            sync();
+            statusMessage = m["baroo.backstage.mapper.removed"]({
+                serialId: mapping.serialId,
+                nickName: mapping.nickName,
+            });
+        } catch (error) {
+            alert(String(error));
         }
     }
 
@@ -64,14 +95,9 @@
     }
 
     function initializeScanner() {
-        const tagInput = document.getElementById("serialId") as HTMLInputElement;
-        const userId = document.getElementById("userId") as HTMLInputElement;
-        const nickName = document.getElementById("nickName") as HTMLInputElement;
-
         if (!("NDEFReader" in window)) {
-            tagInput.readOnly = false;
-            document.getElementById("status-message")!.innerText =
-                m["baroo.backstage.mapper.nfc_not_supported"]();
+            serialReadOnly = false;
+            statusMessage = m["baroo.backstage.mapper.nfc_not_supported"]();
             return;
         }
 
@@ -79,20 +105,17 @@
         ndef.scan()
             .then(() => {
                 ndef.onreadingerror = () => {
-
-                    console.log(
-                        m["baroo.backstage.mapper.read_error"](),
-                    );
+                    console.log(m["baroo.backstage.mapper.read_error"]());
                 };
                 ndef.onreading = async (event: any) => {
-                    tagInput.value = event.serialNumber;
-                    const member = await mapper.get(tagInput.value);
+                    serialId = event.serialNumber;
+                    const member = await mapper.get(serialId);
                     if (member) {
-                        userId.value = member.userId;
-                        nickName.value = member.nickName;
+                        userId = member.userId;
+                        nickName = member.nickName;
                     }
 
-                    userId.focus();
+                    document.getElementById("userId")?.focus();
                 };
             })
             .catch((error) => {
@@ -120,8 +143,8 @@
             }
 
             if (result.success > 0) {
-                document.getElementById("status-message")!.innerText = m["baroo.backstage.mapper.import_success"]({ count: String(result.success) });
-                renderMappings();
+                statusMessage = m["baroo.backstage.mapper.import_success"]({ count: String(result.success) });
+                sync();
                 importData = '';
                 isImportDrawerOpen = false;
             }
@@ -132,51 +155,43 @@
     }
 
     onMount(() => {
-        mapper.load()
-            .then(() => {
-                renderMappings();
-            })
+        mapper.load().then(sync);
     });
 </script>
 
 <svelte:head>
-    <title>{m["baroo.backstage.mapper.title"]({ barName: data.bar?.name || data.ref.key })}</title>
+    <title>{m["baroo.backstage.mapper.title"]({ barName: data.bar?.name || data.ref })}</title>
 </svelte:head>
-
-<nav class="breadcrumbs">
-    <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a> /
-    <a href="/backstage/bars/{stringifyStorageRef(data.ref)}">{data.bar?.name || stringifyStorageRef(data.ref)}</a> /
-    <span>{m["baroo.backstage.mapper.breadcrumb"]()}</span>
-</nav>
 
 <main class="backstage-content">
     <header class="page-header">
-        <h1>{m["baroo.backstage.mapper.title"]({ barName: data.bar?.name || data.ref.key })}</h1>
+        <h1>{m["baroo.backstage.mapper.title"]({ barName: data.bar?.name || data.ref })}</h1>
         <div class="actions">
             <button class="btn btn-sm btn-primary" onclick={() => startMapper()}>{m["baroo.backstage.mapper.start_mapper"]()}</button>
             <button class="btn btn-sm btn-secondary" onclick={() => isImportDrawerOpen = true}>{m["baroo.backstage.mapper.mapping_import"]()}</button>
+            <a class="btn btn-sm btn-outline-secondary" href="/backstage/bars/{data.ref}/summaries">{m["baroo.backstage.bar.member_summaries"]()}</a>
         </div>
     </header>
 
     <div id="status">
-        <p>{m["baroo.backstage.mapper.status"]()} <span id="status-message"></span></p>
+        <p>{m["baroo.backstage.mapper.status"]()} <span id="status-message">{statusMessage}</span></p>
     </div>
 
-    <form onsubmit={(event) => persistUser(event)} autocomplete="off">
+    <form onsubmit={persistUser} autocomplete="off">
         <fieldset class="grid-layout">
             <div class="input-pair">
                 <label for="serialId" class="form-label">{m["baroo.backstage.mapper.nfc_tag"]()}</label>
-                <input type="text" id="serialId" name="serialId" class="form-control" required readonly />
+                <input type="text" id="serialId" name="serialId" class="form-control" bind:value={serialId} required readonly={serialReadOnly} />
             </div>
 
             <div class="input-pair">
                 <label for="userId" class="form-label">{m["baroo.backstage.mapper.user_id"]()}</label>
-                <input type="text" id="userId" name="userId" class="form-control" required />
+                <input type="text" id="userId" name="userId" class="form-control" bind:value={userId} required />
             </div>
 
             <div class="input-pair">
                 <label for="nickName" class="form-label">{m["baroo.backstage.mapper.nickname"]()}</label>
-                <input type="text" id="nickName" name="nickName" class="form-control" required />
+                <input type="text" id="nickName" name="nickName" class="form-control" bind:value={nickName} required />
             </div>
 
             <div class="input-pair">
@@ -185,15 +200,43 @@
         </fieldset>
     </form>
 
-    <table class="table">
+    <table class="table mappings">
         <thead>
             <tr>
-                <th data-name="serialId">{m["baroo.backstage.mapper.nfc_tag_col"]()}</th>
-                <th data-name="userId">{m["baroo.backstage.mapper.user_id_col"]()}</th>
-                <th data-name="memberName">{m["baroo.backstage.mapper.user_name_col"]()}</th>
+                <th data-name="user">{m["baroo.backstage.mapper.user_col"]()}</th>
+                <th data-name="tags">{m["baroo.backstage.mapper.tags_col"]()}</th>
             </tr>
         </thead>
-        <tbody id="mappings"></tbody>
+        <tbody>
+            {#each members as member (member.userId)}
+                <tr>
+                    <td data-name="user">
+                        <span class="nick-name">{member.nickName}</span>
+                        <small class="user-id">{member.userId}</small>
+                    </td>
+                    <td data-name="tags">
+                        <div class="tags">
+                            {#each member.tags as tag (tag.serialId)}
+                                <span class="badge text-bg-secondary">
+                                    {tag.serialId}
+                                    <button
+                                        type="button"
+                                        class="btn-remove"
+                                        aria-label={m["baroo.backstage.mapper.remove_tag"]()}
+                                        title={m["baroo.backstage.mapper.remove_tag"]()}
+                                        onclick={() => removeMapping(tag)}
+                                    >✖️</button>
+                                </span>
+                            {/each}
+                        </div>
+                    </td>
+                </tr>
+            {:else}
+                <tr>
+                    <td colspan="2">{m["baroo.backstage.mapper.no_mappings"]()}</td>
+                </tr>
+            {/each}
+        </tbody>
     </table>
 </main>
 
@@ -225,3 +268,44 @@
     </form>
 </Drawer>
 {/if}
+
+<style lang="scss">
+    .mappings {
+        [data-name="user"] {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+        }
+
+        .nick-name {
+            font-weight: 600;
+        }
+
+        .user-id {
+            opacity: 0.6;
+            font-family: monospace;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-family: monospace;
+        }
+
+        .btn-remove {
+            background: none;
+            border: 0;
+            padding: 0;
+            line-height: 1;
+            font-size: 0.8em;
+            cursor: pointer;
+        }
+    }
+</style>

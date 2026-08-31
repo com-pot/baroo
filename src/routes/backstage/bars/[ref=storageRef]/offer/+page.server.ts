@@ -1,52 +1,26 @@
 import type { BarOfferItem } from '$lib/bar/BarModel';
-import { parseStorageRef } from '$lib/bar/refs';
 import { formatPbError } from '$lib/db.server';
-import { createSlug } from '$lib/strings';
+import { SERVING_PRESETS, DEFAULT_SERVING_PRESET, type ServingPresetKey } from '$lib/bar/servings';
 import { validate, getFieldErrors } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-    if (!locals.pb) {
-        throw new Error('PocketBase not initialized');
-    }
-
-    const ref = parseStorageRef(params.ref);
-
-    if (ref.type === 'local') {
-        return {
-            ref,
-            bar: { slug: ref.key, name: `Local Bar ${ref.key}` },
-            items: [],
-        };
-    }
-
-    const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref.key}"`);
-
-    const items = await locals.pb.collection('bar_offer_items').getFullList({
-        filter: `bar.slug = "${ref.key}"`,
+    // Only the items — the bar itself comes from the section layout. The actions below
+    // still fetch it themselves; actions have no `parent()`.
+    const items = await locals.pb.collection<BarOfferItem>('bar_offer_items').getFullList({
+        filter: `bar.slug = "${params.ref}"`,
         sort: 'name'
     });
 
-    return {
-        ref,
-        bar,
-        items,
-    };
+    return { items };
 };
 
 export const actions: Actions = {
     create: async ({ request, params, locals }) => {
-        if (!locals.pb) {
-            return fail(500, { error: 'PocketBase not initialized' });
-        }
+        const ref = params.ref;
 
-        const ref = parseStorageRef(params.ref);
-
-        if (ref.type === 'local') {
-            return fail(400, { error: 'Cannot manage items for local bars' });
-        }
-        const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref.key}"`);
+        const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref}"`);
 
         const formData = await request.formData();
         const data = {
@@ -78,16 +52,9 @@ export const actions: Actions = {
     },
 
     update: async ({ request, params, locals }) => {
-        if (!locals.pb) {
-            return fail(500, { error: 'PocketBase not initialized' });
-        }
+        const ref = params.ref;
 
-        const ref = parseStorageRef(params.ref);
-
-        if (ref.type === 'local') {
-            return fail(400, { error: 'Cannot manage items for local bars' });
-        }
-        const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref.key}"`);
+        const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref}"`);
 
         const formData = await request.formData();
         const itemId = formData.get('itemId')?.toString();
@@ -125,10 +92,6 @@ export const actions: Actions = {
     },
 
     delete: async ({ request, locals }) => {
-        if (!locals.pb) {
-            return fail(500, { error: 'PocketBase not initialized' });
-        }
-
         const formData = await request.formData();
         const itemId = formData.get('itemId')?.toString();
 
@@ -146,34 +109,22 @@ export const actions: Actions = {
 };
 
 function parseOfferData(formData: FormData) {
-    // Build pricing object from variant fields with normalized keys
-    // Also build variant labels mapping to preserve original display names
-    // Also build variant volumes mapping to store ML values
-    const pricing: Record<string, number> = {};
-    const variantLabels: Record<string, string> = {};
-    const variantVolumes: Record<string, number> = {};
-    let index = 0;
-    while (formData.has(`variant_name_${index}`)) {
-        const variantName = formData.get(`variant_name_${index}`)?.toString()?.trim();
-        const variantPrice = formData.get(`variant_price_${index}`)?.toString()?.trim();
-        const variantVolume = formData.get(`variant_volume_${index}`)?.toString()?.trim();
+    // The preset decides which servings exist; anything the form didn't offer can't be priced.
+    // An unrecognised preset falls back rather than failing here — AJV is the real gate.
+    const requested = formData.get('servingPreset')?.toString() ?? '';
+    const preset = SERVING_PRESETS[requested as ServingPresetKey]
+        ?? SERVING_PRESETS[DEFAULT_SERVING_PRESET];
 
-        if (variantName && variantPrice) {
-            // Normalize variant name for database compatibility
-            const normalizedName = createSlug(variantName);
-            pricing[normalizedName] = parseFloat(variantPrice);
-            // Store original label for display
-            variantLabels[normalizedName] = variantName;
-            // Store volume in ML if provided (check for non-empty string and valid number)
-            if (variantVolume && variantVolume !== '') {
-                const volumeNum = parseFloat(variantVolume);
-                if (!isNaN(volumeNum) && volumeNum > 0) {
-                    variantVolumes[normalizedName] = volumeNum;
-                }
-            }
+    const pricing: Record<string, number> = {};
+    for (const serving of preset.servings) {
+        const raw = formData.get(`price_${serving.key}`)?.toString()?.trim();
+        if (!raw) continue;
+
+        const price = Number(raw);
+        if (Number.isFinite(price) && price >= 0) {
+            pricing[serving.key] = price;
         }
-        index++;
     }
 
-    return { pricing, variantLabels, variantVolumes };
+    return { servingPreset: preset.key, pricing };
 }

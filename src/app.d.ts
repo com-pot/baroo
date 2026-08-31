@@ -10,7 +10,14 @@ declare global {
                 name?: string;
                 roles?: string[];
             };
-            pb?: import('pocketbase').default;
+            /**
+             * Always present. Anonymous unless the request carried a valid session
+             * cookie — check `locals.user` to know which.
+             */
+            pb: import('pocketbase').default;
+
+            /** Set only on device-authenticated routes, by `resolveDevice`. */
+            device?: import('$lib/pos/device').PosDevice;
 
             acl: {
                 hasRole: (role: string) => boolean;

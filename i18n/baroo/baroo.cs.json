@@ -181,7 +181,6 @@
             "pos": {
                 "title": "Pokladní zařízení",
                 "none": "Pro tento bar zatím není zaregistrováno žádné zařízení.",
-                "enroll_device": "Zaregistrovat zařízení",
                 "configure": "Nastavit",
                 "theme": "Motiv",
                 "gen_z_toy": "Gen-Z hračka",
@@ -193,7 +192,25 @@
                 "greeting_template_help": "{token} se nahradí přezdívkou. Prázdné = kiosek mlčí.",
                 "custom_greetings": "Vlastní pozdravy členů",
                 "custom_greetings_help": "Má-li člen vlastní pozdrav, použije se místo šablony.",
-                "narration_off": "Bez šablony kiosek nemluví, takže tohle nemá efekt."
+                "narration_off": "Bez šablony kiosek nemluví, takže tohle nemá efekt.",
+                "create_device": "Vytvořit zařízení",
+                "create_title": "Nové zařízení",
+                "create_submit": "Vytvořit a dát kód",
+                "config_legend": "Nastavení kiosku",
+                "pending": "Čeká na spárování",
+                "code_label": "Párovací kód",
+                "code_hint": "Na tabletu otevři {url} a zadej tenhle kód.",
+                "code_expires": "Platí do {time}",
+                "code_expired": "Kód propadl, dej si nový.",
+                "regenerate_code": "Nový kód",
+                "pair_again": "Spárovat znovu",
+                "discard": "Zahodit",
+                "discard_confirm": "Smazat zařízení {label}? Ještě se nespárovalo.",
+                "device_in_use": "Tohle zařízení už jede, mazat ho nejde — deaktivuj ho.",
+                "pairing_unavailable": "Párování není nastavené — chybí PB_SU_TOKEN.",
+                "missing_fields": "Vyplň název a typ zařízení.",
+                "pairing_token_expired": "Token pro párování vypršel. Vygeneruj nový v PocketBase (Collections → _superusers → Impersonate) a ulož ho do PB_SU_TOKEN.",
+                "pairing_token_expiring": "Token pro párování vyprší {date}. Nezapomeň vygenerovat nový — jinak přestanou i tablety obnovovat svoje tokeny."
             },
             "price_list": {
                 "breadcrumb": "Ceník",
@@ -213,21 +230,29 @@
             "error_missing": "Vyplň e-mail i heslo."
         },
         "enroll": {
-            "title": "Registrace zařízení",
-            "intro": "Přihlas se a vyber, kterému baru tento tablet slouží. Pak bude fungovat i bez sítě.",
+            "title": "Spárovat zařízení",
+            "intro": "Zadej čtyřmístný kód, který ti ukázal backstage.",
             "label": "Název zařízení",
             "label_placeholder": "Tablet u baru 1",
-            "bar": "Bar",
             "kind": "Typ zařízení",
             "kind_kiosk": "Kiosek pro hosty",
             "kind_staff": "Kiosek pro barmana",
-            "submit": "Zaregistrovat",
-            "submitting": "Registruji…",
+            "submit": "Spárovat",
+            "submitting": "Páruji…",
             "priming": "Stahuji data baru pro offline provoz…",
-            "done": "Zařízení zaregistrováno. Otevírám kiosek…",
-            "error": "Registrace selhala: {error}",
-            "current": "Toto zařízení už je zaregistrováno jako {label} ({kind}) pro {barName}.",
-            "reenroll": "Přeregistrovat"
+            "done": "Zařízení spárováno. Otevírám kiosek…",
+            "error": "Párování selhalo: {error}",
+            "current": "Tohle zařízení už je spárované jako {label} ({kind}) pro {barName}.",
+            "reenroll": "Spárovat znovu",
+            "code": "Párovací kód",
+            "errors": {
+                "bad_format": "Kód má čtyři číslice.",
+                "unknown_code": "Takový kód neznám. Zkontroluj ho, nebo si nech vygenerovat nový.",
+                "expired": "Kód už propadl. Nech si dát nový.",
+                "device_inactive": "Zařízení je deaktivované. Ať ho v backstage aktivují.",
+                "throttled": "Moc pokusů. Zkus to za {minutes} min.",
+                "unavailable": "Párování teď nejde. Zkus to znovu, nebo se ozvi správci."
+            }
         },
         "offline": {
             "online": "Online",

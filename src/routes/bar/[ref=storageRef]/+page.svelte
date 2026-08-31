@@ -439,19 +439,17 @@
 </script>
 
 <main class="boot-stack" data-theme={store.config.theme}>
-    <div class="page-header">
+    <div data-boot-init>
+        <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>Tak to rozjedem</button>
+    </div>
+
+    <div class="main-content">
         <h1>
             {m["baroo.page_front.title"]({ barName: bar?.name || bar?.slug || "" })}
         </h1>
         {#if store.deviceLabel}
             <p class="device-name">{store.deviceLabel}</p>
         {/if}
-    </div>
-    <div data-boot-init>
-        <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>Tak to rozjedem</button>
-    </div>
-
-    <div class="main-content">
         <form name="selectBadgeForm" class="card card-body" data-boot onsubmit={submitSelectForm}>
             <div class="form-section">
                 <div class="btn-group">

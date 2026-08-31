@@ -79,6 +79,23 @@ export function readPosConfig(raw: unknown): PosDeviceConfig {
     };
 }
 
+/**
+ * The config a device-settings form submits. Shared by backstage and enrolment so a
+ * tablet is configured the same way whichever page it was set up from.
+ */
+export function posConfigFromForm(formData: FormData): PosDeviceConfig {
+    const theme = formData.get('theme')?.toString() as PosTheme;
+
+    return {
+        theme: POS_THEMES.includes(theme) ? theme : DEFAULT_POS_CONFIG.theme,
+        // Unchecked boxes simply aren't submitted.
+        genZToy: formData.get('genZToy') === 'on',
+        idInput: formData.get('idInput') === 'on',
+        greetingTemplate: formData.get('greetingTemplate')?.toString().trim() ?? '',
+        customGreetings: formData.get('customGreetings') === 'on',
+    };
+}
+
 /** An enrolled tablet. `bar` is the id; `expand.bar` is present when expanded. */
 export type PosDevice = {
     id: string;
@@ -88,7 +105,9 @@ export type PosDevice = {
     active: boolean;
     lastSeen?: string;
     config?: Partial<PosDeviceConfig> | null;
-    expand?: { bar?: Bar };
+    /** The barman the tablet acts as — the one who issued its pairing code. */
+    enrolledBy?: string;
+    expand?: { bar?: Bar; enrolledBy?: { name?: string; email?: string } };
 };
 
 /** Names the tablet; the bearer token proves it may act. Both are required. */

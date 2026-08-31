@@ -176,7 +176,6 @@
             "pos": {
                 "title": "Point-of-sale devices",
                 "none": "No devices enrolled for this bar yet.",
-                "enroll_device": "Enroll device",
                 "configure": "Configure",
                 "theme": "Theme",
                 "gen_z_toy": "Gen-Z toy",
@@ -188,7 +187,25 @@
                 "greeting_template_help": "{token} is replaced with the nickname. Empty = the kiosk stays silent.",
                 "custom_greetings": "Custom member greetings",
                 "custom_greetings_help": "A member's own greeting replaces the template when they have one.",
-                "narration_off": "With no template the kiosk says nothing, so this has no effect."
+                "narration_off": "With no template the kiosk says nothing, so this has no effect.",
+                "create_device": "Create device",
+                "create_title": "New device",
+                "create_submit": "Create and get a code",
+                "config_legend": "Kiosk settings",
+                "pending": "Waiting to be paired",
+                "code_label": "Pairing code",
+                "code_hint": "On the tablet, open {url} and type this code.",
+                "code_expires": "Valid until {time}",
+                "code_expired": "Code expired — make a new one.",
+                "regenerate_code": "New code",
+                "pair_again": "Pair again",
+                "discard": "Discard",
+                "discard_confirm": "Delete device {label}? It was never paired.",
+                "device_in_use": "This device is live; deactivate it instead of deleting.",
+                "pairing_unavailable": "Pairing isn't set up — PB_SU_TOKEN is missing.",
+                "missing_fields": "Fill in the device name and type.",
+                "pairing_token_expired": "The pairing token has expired. Generate a new one in PocketBase (Collections → _superusers → Impersonate) and put it in PB_SU_TOKEN.",
+                "pairing_token_expiring": "The pairing token expires {date}. Generate a new one — once it lapses, tablets stop renewing their tokens too."
             },
             "price_list": {
                 "breadcrumb": "Price list",
@@ -213,21 +230,29 @@
             "error_missing": "Fill in both e-mail and password."
         },
         "enroll": {
-            "title": "Enrol this device",
-            "intro": "Sign in and pick which bar this tablet serves. It will keep working once you go offline.",
+            "title": "Pair this device",
+            "intro": "Type the four-digit code backstage showed you.",
             "label": "Device name",
             "label_placeholder": "Bar tablet 1",
-            "bar": "Bar",
             "kind": "Device type",
             "kind_kiosk": "Guest kiosk",
             "kind_staff": "Staff kiosk",
-            "submit": "Enrol device",
-            "submitting": "Enrolling…",
+            "submit": "Pair",
+            "submitting": "Pairing…",
             "priming": "Downloading bar data for offline use…",
-            "done": "Device enrolled. Opening the kiosk…",
-            "error": "Enrolment failed: {error}",
-            "current": "This device is already enrolled as {label} ({kind}) for {barName}.",
-            "reenroll": "Re-enrol"
+            "done": "Device paired. Opening the kiosk…",
+            "error": "Pairing failed: {error}",
+            "current": "This device is already paired as {label} ({kind}) for {barName}.",
+            "reenroll": "Pair again",
+            "code": "Pairing code",
+            "errors": {
+                "bad_format": "The code is four digits.",
+                "unknown_code": "No such code. Check it, or have a new one made.",
+                "expired": "That code has expired. Ask for a new one.",
+                "device_inactive": "This device is deactivated. Have it activated in backstage.",
+                "throttled": "Too many tries. Try again in {minutes} min.",
+                "unavailable": "Pairing isn't available right now. Try again, or tell an admin."
+            }
         },
         "offline": {
             "online": "Online",

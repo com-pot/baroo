@@ -8,14 +8,15 @@
     import { readDevice, writeDevice } from "$lib/offline/idb";
     import { pullSnapshot } from "$lib/offline/sync";
     import type { DeviceIdentity } from "$lib/offline/types";
-    import type { PageData, ActionData } from "./$types";
+    import type { ActionData } from "./$types";
 
-    let { data, form }: { data: PageData; form: ActionData } = $props();
+    let { form }: { form: ActionData } = $props();
 
     let existing = $state<DeviceIdentity | null>(null);
     let showForm = $state(false);
     let stage = $state<"idle" | "submitting" | "priming" | "done">("idle");
     let error = $state<string | null>(null);
+    let code = $state("");
 
     onMount(async () => {
         existing = await readDevice();
@@ -23,9 +24,9 @@
     });
 
     /**
-     * Enrolment isn't finished when the record exists — it's finished when the tablet
-     * has the data it needs to work offline. So we prime the snapshot before handing
-     * over to the kiosk.
+     * Pairing isn't finished when the tablet has an identity — it's finished when it has
+     * the data it needs to work offline. So we prime the snapshot before handing over to
+     * the kiosk.
      */
     async function completeEnrollment(identity: DeviceIdentity) {
         await writeDevice(identity);
@@ -52,6 +53,28 @@
 
     const kindLabel = (kind: string) =>
         kind === "staff" ? m["baroo.enroll.kind_staff"]() : m["baroo.enroll.kind_kiosk"]();
+
+    /** The server answers with a reason code; a tablet gets a sentence, never a stack. */
+    function claimError(form: ActionData): string | null {
+        if (!form || !("error" in form) || !form.error) return null;
+
+        switch (String(form.error)) {
+            case "bad-format":
+                return m["baroo.enroll.errors.bad_format"]();
+            case "unknown-code":
+                return m["baroo.enroll.errors.unknown_code"]();
+            case "expired":
+                return m["baroo.enroll.errors.expired"]();
+            case "device-inactive":
+                return m["baroo.enroll.errors.device_inactive"]();
+            case "throttled":
+                return m["baroo.enroll.errors.throttled"]({
+                    minutes: "retryAfterMinutes" in form ? Number(form.retryAfterMinutes) : 15,
+                });
+            default:
+                return m["baroo.enroll.errors.unavailable"]();
+        }
+    }
 </script>
 
 <svelte:head>
@@ -76,16 +99,13 @@
                     {m["baroo.enroll.reenroll"]()}
                 </button>
             </div>
-        {:else if !data.authenticated}
-            <p>{m["baroo.enroll.intro"]()}</p>
-            <a class="btn btn-primary" href={data.loginUrl}>{m["baroo.login.submit"]()}</a>
         {:else}
             <p>{m["baroo.enroll.intro"]()}</p>
 
             {#if error}
                 <p class="alert alert-danger" role="alert">{m["baroo.enroll.error"]({ error })}</p>
-            {:else if form && "error" in form && form.error}
-                <p class="alert alert-danger" role="alert">{m["baroo.enroll.error"]({ error: String(form.error) })}</p>
+            {:else if claimError(form)}
+                <p class="alert alert-danger" role="alert">{claimError(form)}</p>
             {/if}
 
             {#if stage === "priming"}
@@ -106,39 +126,30 @@
                     };
                 }}
             >
-                <div>
-                    <label class="form-label" for="label">{m["baroo.enroll.label"]()}</label>
+                <div class="input-pair">
+                    <label class="form-label" for="code">{m["baroo.enroll.code"]()}</label>
+                    <!-- svelte-ignore a11y_autofocus -- a kiosk being set up has nothing else to type into -->
                     <input
-                        class="form-control"
-                        id="label"
-                        name="label"
+                        class="form-control code-input"
+                        id="code"
+                        name="code"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        pattern="[0-9]*"
+                        maxlength="4"
+                        minlength="4"
                         required
-                        placeholder={m["baroo.enroll.label_placeholder"]()}
+                        autofocus
+                        bind:value={code}
+                        oninput={(event) => (code = event.currentTarget.value.replace(/\D/g, "").slice(0, 4))}
                     />
                 </div>
 
-                <div>
-                    <label class="form-label" for="bar">{m["baroo.enroll.bar"]()}</label>
-                    <select class="form-select" id="bar" name="bar" required>
-                        {#each data.bars as bar (bar.id)}
-                            <option value={bar.id} selected={bar.id === data.preselectBar}>{bar.name}</option>
-                        {/each}
-                    </select>
-                </div>
-
-                <fieldset>
-                    <legend class="form-label">{m["baroo.enroll.kind"]()}</legend>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="kind" id="kind-kiosk" value="kiosk" checked />
-                        <label class="form-check-label" for="kind-kiosk">{m["baroo.enroll.kind_kiosk"]()}</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="kind" id="kind-staff" value="staff" />
-                        <label class="form-check-label" for="kind-staff">{m["baroo.enroll.kind_staff"]()}</label>
-                    </div>
-                </fieldset>
-
-                <button class="btn btn-primary" type="submit" disabled={stage !== "idle"}>
+                <button
+                    class="btn btn-primary btn-lg"
+                    type="submit"
+                    disabled={stage !== "idle" || code.length !== 4}
+                >
                     {stage === "idle" ? m["baroo.enroll.submit"]() : m["baroo.enroll.submitting"]()}
                 </button>
             </form>
@@ -160,6 +171,15 @@
         .actions {
             display: flex;
             gap: 0.5rem;
+        }
+
+        .code-input {
+            font-size: 3rem;
+            height: auto;
+            text-align: center;
+            letter-spacing: 0.5em;
+            font-variant-numeric: tabular-nums;
+            padding-inline-start: 0.5em;
         }
     }
 </style>

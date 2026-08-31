@@ -1,70 +1,43 @@
 import { fail } from '@sveltejs/kit';
-import { ClientResponseError } from 'pocketbase';
-import type { Bar } from '$lib/bar/BarModel';
-import type { PosDeviceKind } from '$lib/pos/device';
-import type { PageServerLoad, Actions } from './$types';
-
-export const load: PageServerLoad = async ({ locals, url }) => {
-    if (!locals.user || !locals.acl.hasRole('bar-manager')) {
-        return { bars: [], authenticated: false, loginUrl: `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`, preselectBar: null };
-    }
-
-    const bars = await locals.pb.collection<Bar>('bars').getFullList({ sort: 'name' });
-
-    // Enrolling from a bar's PoS page preselects that bar — picking the wrong one from a
-    // growing list silently binds a tablet to the wrong data.
-    const requestedBar = url.searchParams.get('bar');
-    const preselectBar = bars.find(bar => bar.slug === requestedBar)?.id ?? null;
-
-    return { bars, authenticated: true, loginUrl: null, preselectBar };
-};
+import {
+    checkPairingAttempt,
+    claimEnrollmentCode,
+    clearPairingFailures,
+    recordPairingFailure,
+} from '$lib/pos/enrollment.server';
+import type { Actions } from './$types';
 
 export const actions: Actions = {
-    default: async ({ request, locals }) => {
-        if (!locals.user || !locals.acl.hasRole('bar-manager')) {
-            return fail(403, { error: 'unauthorized' });
+    /**
+     * Trades a pairing code for this tablet's identity. Deliberately open to anyone: the
+     * code *is* the credential, which is why it is single-use, short-lived and throttled.
+     */
+    default: async ({ request, getClientAddress }) => {
+        const ip = getClientAddress();
+
+        const throttle = checkPairingAttempt(ip);
+        if (!throttle.ok) {
+            return fail(429, { error: 'throttled', retryAfterMinutes: throttle.retryAfterMinutes });
         }
 
         const formData = await request.formData();
-        const barId = formData.get('bar')?.toString();
-        const label = formData.get('label')?.toString()?.trim();
-        const kind = formData.get('kind')?.toString() as PosDeviceKind;
+        const code = formData.get('code')?.toString().trim() ?? '';
 
-        if (!barId || !label || (kind !== 'kiosk' && kind !== 'staff')) {
-            return fail(400, { error: 'missing-fields' });
+        // Load-bearing: an empty code must never reach the lookup, or it would match
+        // every device whose code has already been cleared.
+        if (!/^\d{4}$/.test(code)) {
+            return fail(400, { error: 'bad-format' });
         }
 
-        try {
-            const bar = await locals.pb.collection<Bar>('bars').getOne(barId);
+        const claim = await claimEnrollmentCode(code);
 
-            const device = await locals.pb.collection('pos_devices').create({
-                label,
-                bar: bar.id,
-                kind,
-                active: true,
-                enrolledBy: locals.user.id,
-                lastSeen: new Date().toISOString(),
-            });
-
-            // The tablet acts as the barman who enrolled it. This is the one place the
-            // token leaves the server; from here it lives in the tablet's IndexedDB and
-            // is refreshed on every device-authenticated response.
-            return {
-                enrolled: {
-                    deviceId: device.id,
-                    token: locals.pb.authStore.token,
-                    label,
-                    kind,
-                    barSlug: bar.slug,
-                    barName: bar.name,
-                    enrolledAt: new Date().toISOString(),
-                },
-            };
-        } catch (err) {
-            if (err instanceof ClientResponseError) {
-                return fail(400, { error: err.message });
-            }
-            throw err;
+        if (!claim.ok) {
+            recordPairingFailure(ip);
+            return fail(claim.reason === 'unavailable' ? 503 : 400, { error: claim.reason });
         }
+
+        clearPairingFailures(ip);
+
+        return { enrolled: claim.identity };
     },
 };

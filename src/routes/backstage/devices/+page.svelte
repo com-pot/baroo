@@ -62,8 +62,14 @@
                                 ? m["baroo.enroll.kind_staff"]()
                                 : m["baroo.enroll.kind_kiosk"]()}
                         </td>
-                        <td>{formatSeen(device.lastSeen)}</td>
-                        <td>{(device as any).expand?.enrolledBy?.name || (device as any).expand?.enrolledBy?.email || "—"}</td>
+                        <td>
+                            {#if device.lastSeen}
+                                {formatSeen(device.lastSeen)}
+                            {:else}
+                                <em>{m["baroo.backstage.pos.pending"]()}</em>
+                            {/if}
+                        </td>
+                        <td>{device.expand?.enrolledBy?.name || device.expand?.enrolledBy?.email || "—"}</td>
                         <td>
                             <form method="POST" action="?/setActive" use:enhance>
                                 <input type="hidden" name="deviceId" value={device.id} />

@@ -2,12 +2,14 @@
     import * as m from '$lib/paraglide/messages.js';
     import type { PageData, ActionData } from './$types';
     import { enhance } from '$app/forms';
+    import type { SubmitFunction } from '@sveltejs/kit';
     import { onMount } from 'svelte';
     import type { MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
     import Drawer from '$lib/components/Drawer.svelte';
     import TimelineMemberHistory from './TimelineMemberHistory.svelte';
     import { aggregateMemberOrders } from '$lib/bar/stats/memberOrderOverview';
     import ProfileBadge from './ProfileBadge.svelte';
+    import type { MemberImportIssue } from '$lib/bar/memberImport';
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -82,6 +84,71 @@
         import("bootstrap/dist/js/bootstrap.bundle.min.js");
     });
 
+    let isImportOpen = $state(false);
+    let importText = $state('');
+    let importPending = $state(false);
+    /**
+     * The rejected rows of the last submit, kept out of `form` on purpose: an import that
+     * fails must not put an error into the member drawer that shares this page's `form`.
+     */
+    let importIssues = $state<MemberImportIssue[] | null>(null);
+    let importPartial = $state<{ created: number; renamed: number } | null>(null);
+    let importResult = $state<{ created: number; renamed: number; unchanged: number } | null>(null);
+
+    function openImport() {
+        importIssues = null;
+        importPartial = null;
+        importResult = null;
+        isImportOpen = true;
+    }
+
+    /** Back from the error report to the paste that produced it, still in the textarea. */
+    function resumeEditing() {
+        importIssues = null;
+        importPartial = null;
+    }
+
+    const submitImport: SubmitFunction = () => {
+        importPending = true;
+
+        return async ({ result, update }) => {
+            importPending = false;
+
+            if (result.type === 'failure') {
+                const data = result.data as { issues?: MemberImportIssue[]; created?: number; renamed?: number } | undefined;
+                importIssues = data?.issues ?? [];
+                importPartial = data?.created || data?.renamed
+                    ? { created: data.created ?? 0, renamed: data.renamed ?? 0 }
+                    : null;
+                return;
+            }
+
+            if (result.type === 'success') {
+                const data = result.data as { created: number; renamed: number; unchanged: number };
+                importResult = { created: data.created, renamed: data.renamed, unchanged: data.unchanged };
+                importIssues = null;
+                importPartial = null;
+                importText = '';
+                isImportOpen = false;
+            }
+
+            // Reloads the member list from the server, which is what makes the new names show.
+            await update({ reset: false });
+        };
+    };
+
+    /** Reasons come back as codes so the page, not the action, owns the wording. */
+    function issueText(reason: MemberImportIssue['reason']): string {
+        switch (reason.code) {
+            case 'format': return m["baroo.backstage.summaries.import.reason_format"]();
+            case 'invalid_seq': return m["baroo.backstage.summaries.import.reason_invalid_seq"]({ value: reason.value });
+            case 'duplicate_seq': return m["baroo.backstage.summaries.import.reason_duplicate_seq"]({ seq: String(reason.seq) });
+            case 'duplicate_name': return m["baroo.backstage.summaries.import.reason_duplicate_name"]({ nickName: reason.nickName });
+            case 'name_taken': return m["baroo.backstage.summaries.import.reason_name_taken"]({ nickName: reason.nickName, seq: String(reason.seq) });
+            case 'write_failed': return m["baroo.backstage.summaries.import.reason_write_failed"]({ message: reason.message });
+        }
+    }
+
     $effect(() => {
         if (form?.success && form.action === 'settleMember') {
             if (selectedMember) {
@@ -98,9 +165,20 @@
     <header class="page-header">
         <h1>{m["baroo.backstage.summaries.title"]()}</h1>
         <div class="actions">
+            <button type="button" class="btn btn-primary" onclick={openImport}>{m["baroo.backstage.summaries.import.action"]()}</button>
             <a href="/backstage/bars/{data.ref}/mapper" class="btn btn-outline-secondary">{m["baroo.backstage.bar.member_mapping"]()}</a>
         </div>
     </header>
+
+    {#if importResult}
+        <div class="alert alert-success">
+            {m["baroo.backstage.summaries.import.result"]({
+                created: String(importResult.created),
+                renamed: String(importResult.renamed),
+                unchanged: String(importResult.unchanged),
+            })}
+        </div>
+    {/if}
 
     {#if data.summaries.length === 0}
         <div class="empty-state">
@@ -151,6 +229,69 @@
         </div>
     {/if}
 </main>
+
+{#if isImportOpen}
+    <Drawer bind:isOpen={isImportOpen}>
+        {#snippet heading()}{m["baroo.backstage.summaries.import.drawer_title"]()}{/snippet}
+        {#snippet children()}
+            <form method="POST" action="?/importMembers" use:enhance={submitImport} class="member-import">
+                {#if importIssues}
+                    <div class="alert alert-danger">
+                        {#if importIssues.length === 0}
+                            <p>{m["baroo.backstage.summaries.import.nothing"]()}</p>
+                        {:else}
+                            <strong>{m["baroo.backstage.summaries.import.errors_title"]({ count: String(importIssues.length) })}</strong>
+                            <p>{m["baroo.backstage.summaries.import.errors_intro"]()}</p>
+                        {/if}
+                        {#if importPartial}
+                            <p>{m["baroo.backstage.summaries.import.partial"]({
+                                created: String(importPartial.created),
+                                renamed: String(importPartial.renamed),
+                            })}</p>
+                        {/if}
+                    </div>
+
+                    <ul class="issues">
+                        {#each importIssues as issue (issue.lineNo)}
+                            <li>
+                                <span class="line-no">{issue.lineNo}</span>
+                                <code>{issue.raw}</code>
+                                <span class="reason">{issueText(issue.reason)}</span>
+                            </li>
+                        {/each}
+                    </ul>
+
+                    <!-- The paste never left `importText`, so going back lands on it unchanged. -->
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline-secondary" onclick={resumeEditing}>
+                            {m["baroo.backstage.summaries.import.back"]()}
+                        </button>
+                    </div>
+                {:else}
+                    <label class="form-label" for="members">{m["baroo.backstage.summaries.import.data_label"]()}</label>
+                    <textarea
+                        id="members"
+                        name="members"
+                        class="form-control"
+                        rows="5"
+                        spellcheck="false"
+                        bind:value={importText}
+                        required
+                    ></textarea>
+                    <p class="form-text">{m["baroo.backstage.summaries.import.data_hint"]()}</p>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" disabled={importPending}>
+                            {importPending
+                                ? m["baroo.backstage.summaries.import.submitting"]()
+                                : m["baroo.backstage.summaries.import.submit"]()}
+                        </button>
+                    </div>
+                {/if}
+            </form>
+        {/snippet}
+    </Drawer>
+{/if}
 
 {#if selectedMember}
     <Drawer bind:isOpen={() => selectedMember !== null, (value) => value || closeDrawer()}>
@@ -276,6 +417,49 @@
         h3 {
             font-size: 1.125rem;
             margin-bottom: 1rem;
+        }
+    }
+
+    .member-import {
+        .form-actions {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .issues {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+
+            li {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 0.25rem 0.5rem;
+                padding: 0.5rem 0.75rem;
+                border-left: 3px solid #dc3545;
+                background: #f8f9fa;
+            }
+
+            .line-no {
+                font-variant-numeric: tabular-nums;
+                color: #6c757d;
+            }
+
+            code {
+                /* A pasted row can be wide; it must not push the drawer sideways. */
+                overflow-x: auto;
+                white-space: pre;
+            }
+
+            .reason {
+                grid-column: 2;
+                font-size: 0.875rem;
+                color: #842029;
+            }
         }
     }
 

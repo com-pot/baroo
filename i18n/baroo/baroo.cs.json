@@ -171,7 +171,27 @@
                 "due": "Dluženo {amountWithCurrency}",
                 "paid": "Uhrazeno {amountWithCurrency}",
                 "ordered_event": "Objednáno",
-                "close": "Zavřít"
+                "close": "Zavřít",
+                "import": {
+                    "action": "Import členů",
+                    "drawer_title": "Import členů",
+                    "data_label": "Data členů (odděleno tabulátory: číslo, jméno):",
+                    "data_hint": "Jeden řádek na člena: číslo, tabulátor, jméno. Existující čísla se přejmenují, nová se přidají.",
+                    "submit": "Importovat",
+                    "submitting": "Importuji…",
+                    "back": "Zpět k úpravám",
+                    "nothing": "Není co importovat — vložte alespoň jeden řádek.",
+                    "errors_title": "Odmítnuté řádky: {count}",
+                    "errors_intro": "Nic nebylo uloženo. Opravte řádky a vložte data znovu.",
+                    "partial": "Před chybou se uložilo: {created} přidaných, {renamed} přejmenovaných.",
+                    "result": "Import hotov: {created} přidaných, {renamed} přejmenovaných, {unchanged} bez změny.",
+                    "reason_format": "Očekávány dva sloupce oddělené tabulátorem: číslo a jméno",
+                    "reason_invalid_seq": "„{value}“ není platné číslo člena",
+                    "reason_duplicate_seq": "Číslo {seq} je ve vložených datech víckrát",
+                    "reason_duplicate_name": "Jméno „{nickName}“ je ve vložených datech víckrát",
+                    "reason_name_taken": "Jméno „{nickName}“ už patří členovi č. {seq}",
+                    "reason_write_failed": "Uložení selhalo: {message}"
+                }
             },
             "settlement": {
                 "nada": "Nic k úhradě.",

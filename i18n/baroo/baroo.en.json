@@ -171,7 +171,27 @@
                 "ordered_event": "Ordered",
                 "close": "Close",
                 "due": "Due {amountWithCurrency}",
-                "show_profile": "Show profile"
+                "show_profile": "Show profile",
+                "import": {
+                    "action": "Import members",
+                    "drawer_title": "Import members",
+                    "data_label": "Member data (tab-separated: number, name):",
+                    "data_hint": "One row per member: number, tab, name. Known numbers get renamed, new ones get added.",
+                    "submit": "Import",
+                    "submitting": "Importing…",
+                    "back": "Back to editing",
+                    "nothing": "Nothing to import — paste at least one row.",
+                    "errors_title": "Rejected rows: {count}",
+                    "errors_intro": "Nothing was saved. Fix these rows and paste the data again.",
+                    "partial": "Saved before the failure: {created} added, {renamed} renamed.",
+                    "result": "Import done: {created} added, {renamed} renamed, {unchanged} unchanged.",
+                    "reason_format": "Expected two tab-separated columns: number and name",
+                    "reason_invalid_seq": "“{value}” is not a valid member number",
+                    "reason_duplicate_seq": "Number {seq} appears more than once in the pasted data",
+                    "reason_duplicate_name": "Name “{nickName}” appears more than once in the pasted data",
+                    "reason_name_taken": "Name “{nickName}” already belongs to member #{seq}",
+                    "reason_write_failed": "Saving failed: {message}"
+                }
             },
             "pos": {
                 "title": "Point-of-sale devices",

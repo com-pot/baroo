@@ -35,11 +35,16 @@
                 "tag_unreadable": "Z NFC tagu se nepodařilo přečíst data.",
                 "reader_ready": "Čtečka karet připravena: {reader}",
                 "reader_error": "Problém se čtečkou karet: {error}",
+                "reader_gone": "Čtečka karet odpojena: {reader}. Do jejího návratu použijte zadání id.",
+                "reader_stalled": "Čtečka karet přestala odpovídat ({detail}). Zkouším ji obnovit.",
+                "reader_resetting": "Přepojuji čtečku karet…",
                 "error_processing": "Chyba při zpracování štítku {serialId}: {error}",
                 "idle": "Nečinný",
                 "user_not_mapped": "Uživatel {userId} není namapován. Přidejte prosím mapování v sekci Správa členů.",
                 "unknown_member_seq": "Nikdo nemá visačku číslo {seq}"
             },
+            "reset_reader": "Přepojit čtečku",
+            "reset_reader_failed": "Přepojení se nepovedlo: {detail}",
             "stream": "proud",
             "nfc": "NFC",
             "stock": {

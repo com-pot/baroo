@@ -337,8 +337,17 @@
                 handleScan(payload);
             } else if (kind === 'reader-detected') {
                 setStatus("✅", m["baroo.bar.status.reader_ready"]({ reader: payload }));
-            } else if (kind === 'reader-error') {
+            } else if (kind === 'reader-error' || kind === 'pcsc-error' || kind === 'reader-reset-failed') {
                 setStatus("❌", m["baroo.bar.status.reader_error"]({ error: payload }));
+            } else if (kind === 'reader-removed') {
+                // Worth saying out loud rather than letting taps quietly do nothing:
+                // the manual id input is right there, and a bartender who knows the
+                // reader is gone uses it instead of tapping harder.
+                setStatus("⚠️", m["baroo.bar.status.reader_gone"]({ reader: payload }));
+            } else if (kind === 'reader-unhealthy') {
+                setStatus("⚠️", m["baroo.bar.status.reader_stalled"]({ detail: payload }));
+            } else if (kind === 'reader-resetting') {
+                setStatus("ℹ️", m["baroo.bar.status.reader_resetting"]());
             }
         },
     });

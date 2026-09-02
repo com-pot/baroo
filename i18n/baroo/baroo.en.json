@@ -35,11 +35,16 @@
                 "tag_unreadable": "Cannot read data from the NFC tag.",
                 "reader_ready": "Card reader ready: {reader}",
                 "reader_error": "Card reader problem: {error}",
+                "reader_gone": "Card reader disconnected: {reader}. Use the id input until it is back.",
+                "reader_stalled": "Card reader stopped responding ({detail}). Trying to recover it.",
+                "reader_resetting": "Re-plugging the card reader…",
                 "error_processing": "Error processing tag {serialId}: {error}",
                 "idle": "Idle",
                 "user_not_mapped": "User {userId} is not mapped. Please add a mapping in the Member Management section.",
                 "unknown_member_seq": "Nobody holds badge number {seq}"
             },
+            "reset_reader": "Re-plug reader",
+            "reset_reader_failed": "Could not re-plug: {detail}",
             "stream": "stream",
             "nfc": "NFC",
             "stock": {

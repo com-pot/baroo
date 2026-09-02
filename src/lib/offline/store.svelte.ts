@@ -105,6 +105,11 @@ export class OfflineBar {
             if (stopped) return;
             await this.checkConnectivity();
             if (stopped) return;
+
+            // Two beats can be in flight over one shared probe — a hint arriving while
+            // the poll waits. Clearing first leaves exactly one timer alive whichever
+            // of them resumes last.
+            clearTimeout(timer);
             timer = setTimeout(beat, this.online ? interval : offlineInterval);
         };
 

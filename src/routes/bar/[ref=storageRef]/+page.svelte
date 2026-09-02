@@ -9,6 +9,7 @@
     import { onMount } from "svelte";
     import { Boot } from "$lib/boot";
     import { greetingFor } from "$lib/pos/device";
+    import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
     import { computeTotalPrice } from "$lib/bar/stats/memberSummaries";
     import { servingLabel, servingsOf } from "$lib/bar/servings";
@@ -421,11 +422,17 @@
             console.debug("No scanner stream (expected with no server):", err);
         }
 
+        // The only external reader a tablet browser can hear. Always armed: there is
+        // no way to ask whether one is plugged in, and with none attached it costs a
+        // discarded keystroke — the barman's typing is far too slow to reach it.
+        const unlistenWedge = listenForKeyboardWedge(document, { onScan: handleScan });
+
         const url = new URL(window.location.toString())
         debug = url.searchParams.get('debug') || ''
 
         return () => {
             unsubscribeScanner?.();
+            unlistenWedge();
             boot.destroy()
         };
     });

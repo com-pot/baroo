@@ -6,6 +6,12 @@ export async function createScannerStructure() {
         totalConnects: 0,
         totalevents: 0,
         listeners: [] as ScannerListener[],
+        /**
+         * Readers are found once, when PC/SC first comes up — long before the kiosk
+         * that cares reconnects. Remembering them lets a late client be told the
+         * reader is live instead of waiting for an event that already happened.
+         */
+        readers: [] as string[],
         emitMessage(message: string) {
             for (const listener of this.listeners) {
                 console.log("emit", listener, message)
@@ -32,7 +38,10 @@ export async function createScannerStructure() {
 
     const nfc = new NFC();
     nfc.on('reader', reader => {
-        console.log("Reader ready:")
+        console.log("Reader ready:", reader.reader.name)
+        if (!struct.readers.includes(reader.reader.name)) {
+            struct.readers.push(reader.reader.name)
+        }
         struct.emitMessage(`reader-detected:${reader.reader.name}`)
 
         reader.on('card', card => {

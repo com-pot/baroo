@@ -139,4 +139,5 @@ export function isValidMapping(data: unknown): data is TagMapping {
 export function normalizeTag(serialId: string): string {
     return serialId.trim()
         .replaceAll(/\:/g, '')
+        .toLowerCase()
 }

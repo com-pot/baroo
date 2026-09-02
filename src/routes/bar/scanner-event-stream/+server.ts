@@ -24,6 +24,11 @@ export const POST: RequestHandler = async ({ request, url }) => {
             type: 'baroo-scanner-hello',
             activeListeners: scannerStructure!.listeners.length,
         }))
+
+        // Catch the new client up on readers found before it connected.
+        for (const name of scannerStructure!.readers) {
+            emit('message', `reader-detected:${name}`)
+        }
     }, {
         ping: 10_000,
         stop() {

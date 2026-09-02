@@ -37,6 +37,14 @@
         font-size: 0.9rem;
     }
 
+    /* A machine-readable code under a human-readable alert — a heartbeat's reason. */
+    .alert .detail {
+        display: block;
+        font-family: monospace;
+        font-size: 0.85rem;
+        opacity: 0.8;
+    }
+
     .actions {
         display: flex;
         gap: 0.5rem;

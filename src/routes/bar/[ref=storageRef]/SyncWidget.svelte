@@ -78,7 +78,12 @@
     </p>
 
     {#if !store.online}
-        <p class="alert alert-warning">{m["baroo.staff.sync_offline"]()}</p>
+        <p class="alert alert-warning">
+            {m["baroo.staff.sync_offline"]()}
+            <!-- Which way the heartbeat failed, for whoever is holding the tablet
+                 wondering whether to blame the wifi or the server. -->
+            {#if store.heartbeatError}<span class="detail">{store.heartbeatError}</span>{/if}
+        </p>
     {/if}
 
     {#if store.lastError}

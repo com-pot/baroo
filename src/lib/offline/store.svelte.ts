@@ -24,6 +24,11 @@ import {
     readLastSyncAt,
     readSnapshot,
 } from './idb';
+import {
+    HEARTBEAT_INTERVAL_MS,
+    HEARTBEAT_OFFLINE_INTERVAL_MS,
+    probeHeartbeat,
+} from './heartbeat';
 import { NotEnrolledError, pullSnapshot, pushOutbox, type SyncOpResult } from './sync';
 import {
     LOCAL_MEMBER_PREFIX,
@@ -53,7 +58,15 @@ export class OfflineBar {
     snapshot = $state<BarSnapshot | null>(null);
     pending = $state<StoredOp[]>([]);
     lastSyncAt = $state<string | null>(null);
+    /**
+     * Whether the server answered the last heartbeat — see `heartbeat.ts`. Optimistic
+     * until the first probe comes back, which takes a moment after the kiosk boots.
+     */
     online = $state(true);
+    /** When the server last answered, for the staff console. */
+    lastHeartbeatAt = $state<string | null>(null);
+    /** Why the last heartbeat did not answer. A machine string, null while online. */
+    heartbeatError = $state<string | null>(null);
     syncing = $state<null | 'push' | 'pull'>(null);
     lastSyncResults = $state<SyncOpResult[] | null>(null);
     lastError = $state<string | null>(null);
@@ -69,25 +82,100 @@ export class OfflineBar {
         this.snapshot = await readSnapshot(this.barSlug);
         this.pending = await listOps(this.barSlug);
         this.lastSyncAt = await readLastSyncAt();
+    }
 
-        if (typeof navigator !== 'undefined') {
-            this.online = navigator.onLine;
+    /**
+     * Starts polling the heartbeat endpoint. Returns the teardown.
+     *
+     * The browser's own online/offline events are kept, but only as prompts to ask the
+     * server again — they are the fastest hint that something changed and the least
+     * trustworthy answer about whether the server is there. Losing the link is the one
+     * case they settle on their own: no link, no server, no reason to spend a probe.
+     */
+    watchConnectivity(opts?: ConnectivityWatchOptions): () => void {
+        const interval = opts?.intervalMs ?? HEARTBEAT_INTERVAL_MS;
+        const offlineInterval = opts?.offlineIntervalMs ?? HEARTBEAT_OFFLINE_INTERVAL_MS;
+
+        this.onConnectivityChange = opts?.onChange;
+
+        let stopped = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+
+        const beat = async () => {
+            if (stopped) return;
+            await this.checkConnectivity();
+            if (stopped) return;
+            timer = setTimeout(beat, this.online ? interval : offlineInterval);
+        };
+
+        /** Ask now, and restart the clock from the answer. */
+        const beatNow = () => {
+            clearTimeout(timer);
+            void beat();
+        };
+
+        const unregisters = [
+            on(window, 'offline', () => this.setOnline(false, 'no-link')),
+            on(window, 'online', beatNow),
+            // A tablet that was asleep, or whose kiosk tab was in the background, has
+            // been running on a stale verdict; the barman picking it up wants the truth.
+            on(document, 'visibilitychange', () => {
+                if (!document.hidden) beatNow();
+            }),
+        ];
+
+        void beat();
+
+        return () => {
+            stopped = true;
+            clearTimeout(timer);
+            this.onConnectivityChange = undefined;
+            unregisters.forEach(unregister => unregister());
+        };
+    }
+
+    private onConnectivityChange: ConnectivityWatchOptions['onChange'];
+    private probing: Promise<boolean> | null = null;
+    private connectivityKnown = false;
+
+    /**
+     * One heartbeat, now, and the connectivity it found.
+     *
+     * Concurrent callers — the poll, a reconnect hint, a sync that just failed — share
+     * one in-flight probe rather than piling requests onto a server that may already be
+     * struggling to answer.
+     */
+    checkConnectivity(): Promise<boolean> {
+        return (this.probing ??= this.runProbe());
+    }
+
+    private async runProbe(): Promise<boolean> {
+        try {
+            const beat = await probeHeartbeat();
+
+            if (beat.ok) this.lastHeartbeatAt = beat.at;
+            this.setOnline(beat.ok, beat.ok ? null : beat.reason);
+
+            return beat.ok;
+        } finally {
+            this.probing = null;
         }
     }
 
-    /** Wires up online/offline events. Returns the teardown. */
-    watchConnectivity(opts?: ConnectivityWatchOptions): () => void {
-        const update = () => {
-            this.online = navigator.onLine;
-            opts?.onChange?.(this.online)
-        };
-        const unregisters = [
-            on(window, "online", update),
-            on(window, "offline", update),
-        ]
-        update();
+    /**
+     * Records the verdict, notifying the watcher only when it is news — the poll runs
+     * whether or not anything changed, and a reconnect handler must not fire every
+     * thirty seconds for as long as the tablet stays online. The first verdict always
+     * counts as news, so a kiosk that boots connected still syncs on startup.
+     */
+    private setOnline(online: boolean, reason: string | null) {
+        const changed = this.online !== online || !this.connectivityKnown;
 
-        return () => unregisters.forEach((unregister) => unregister());
+        this.online = online;
+        this.heartbeatError = reason;
+        this.connectivityKnown = true;
+
+        if (changed) this.onConnectivityChange?.(online);
     }
 
     get isEnrolled() {
@@ -459,6 +547,13 @@ export class OfflineBar {
                     : err instanceof Error
                       ? err.message
                       : String(err);
+
+            // A sync that failed is the strongest evidence there is that the server is
+            // not answering, and it arrived before the next scheduled beat would have.
+            // The probe decides which it was: a lost server, or a request the server
+            // answered with a refusal.
+            void this.checkConnectivity();
+
             return false;
         } finally {
             this.syncing = null;
@@ -470,5 +565,10 @@ export class OfflineBar {
 }
 
 type ConnectivityWatchOptions = {
+    /** Called on every change of verdict, and once with the first one. */
     onChange?(online: boolean): unknown;
+    /** Poll period while the server answers. Defaults to `HEARTBEAT_INTERVAL_MS`. */
+    intervalMs?: number;
+    /** Poll period while it does not. Defaults to `HEARTBEAT_OFFLINE_INTERVAL_MS`. */
+    offlineIntervalMs?: number;
 }

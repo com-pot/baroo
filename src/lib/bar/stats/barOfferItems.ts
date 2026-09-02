@@ -1,7 +1,7 @@
 import type { BaseModel } from "pocketbase";
-import type { Bar, BarOfferItem, BarOrderItemRecord, BarEventRecord } from "../BarModel";
+import type { Bar, BarOfferItem, BarOrderItem, BarOrderItemRecord, BarEventRecord } from "../BarModel";
 import { effectiveDate, toPbDate } from "../BarModel";
-import { servingPreset, servingQuantity } from "../servings";
+import { servingPreset, servingQuantity, type Measure } from "../servings";
 
 /** Most recent unseal of an offer item, plus how many of its packages have been opened. */
 async function getLastUnseal(
@@ -188,6 +188,63 @@ export async function collectClosureData(
         totalOrders: orderItems.length,
         memberStats,
     };
+}
+
+/** How full one offer item's open package still is. */
+export type OfferStock = {
+    item: BarOfferItem;
+    /** Litres or pieces — what both quantities below are counted in. */
+    measure: Measure;
+    /** When the open package was opened, or `null` if none ever was. */
+    unsealedAt: string | null;
+    /** What that package held. Meaningless unless `unsealedAt` is set. */
+    unsealQuantity: number;
+    /** How much of it the orders since account for. */
+    consumed: number;
+    /** What is left in it, or `null` while nothing has been unsealed. */
+    left: number | null;
+};
+
+/**
+ * What is still in each open package, from the orders alone.
+ *
+ * Pure, and deliberately so: the kiosk runs it against its snapshot plus outbox, where
+ * an unseal that hasn't synced yet is still the newest package there is. Orders older
+ * than the open package belong to one already emptied and count for nothing.
+ */
+export function computeOfferStock(input: {
+    offerItems: BarOfferItem[];
+    unseals: Record<BarOfferItem["key"], { occurredAt: string; quantity: number }>;
+    orderItems: Pick<BarOrderItem, "key" | "variant" | "orderedAt">[];
+}): OfferStock[] {
+    const { offerItems, unseals, orderItems } = input;
+
+    const ordersByKey = new Map<string, typeof orderItems>();
+    for (const orderItem of orderItems) {
+        const list = ordersByKey.get(orderItem.key);
+        if (list) list.push(orderItem);
+        else ordersByKey.set(orderItem.key, [orderItem]);
+    }
+
+    return offerItems.map((item) => {
+        const unseal = unseals[item.key] ?? null;
+        const measure = servingPreset(item).measure;
+
+        const consumed = (ordersByKey.get(item.key) ?? [])
+            .filter((orderItem) => !unseal || orderItem.orderedAt >= unseal.occurredAt)
+            .reduce((total, orderItem) => total + servingQuantity(item, orderItem.variant), 0);
+
+        return {
+            item,
+            measure,
+            unsealedAt: unseal?.occurredAt ?? null,
+            unsealQuantity: unseal?.quantity ?? 0,
+            consumed: Math.round(consumed * 100) / 100,
+            // Keyed off the unseal existing, not off a truthy quantity — a package that
+            // turned out to be empty is a legitimate zero.
+            left: unseal ? quantityLeft(unseal.quantity, consumed) : null,
+        };
+    });
 }
 
 export type AppEvent<T extends object = object> = {

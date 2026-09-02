@@ -15,6 +15,7 @@
     import { Narrator } from "$lib/speech.svelte";
     import { ScannerEventStream } from "./scannerEventStream.svelte";
     import MessageStream from "./MessageStream.svelte";
+    import OfferStockBoard from "./OfferStockBoard.svelte";
     import Gzt from "./Gzt.svelte";
 
     const {
@@ -240,13 +241,14 @@
         );
     }
 
-    function submitSelectForm(e: SubmitEvent) {
-        e.preventDefault();
-        const form = e.target as HTMLFormElement;
-        const formData = Object.fromEntries(new FormData(form).entries());
-
-        const raw = String(formData.serialId || "");
+    /**
+     * The one way in. Whether the id was typed, tapped on the tablet's own NFC, or
+     * pushed up from a PC/SC reader, it lands here and is treated identically.
+     */
+    function handleEntry(raw: string, action: "order" | "summary") {
         const serialId = normalizeTag(raw);
+        if (!serialId) return;
+
         const mapping = resolveEntry(raw);
 
         if (!mapping) {
@@ -265,6 +267,11 @@
         }
 
         const displayName = mapping.nickName || "???";
+        setStatus("✅", m["baroo.bar.status.tag_recognized"]({
+            serialId,
+            nickName: displayName,
+            userId: mapping.userId,
+        }));
 
         // `null` when this device has no greeting template — narration is off entirely.
         const greeting = greetingFor(store.config, {
@@ -273,7 +280,7 @@
         });
         if (greeting) narrator?.speak(greeting);
 
-        if (formData.action === "summary") {
+        if (action === "summary") {
             balanceCtrl.showSummary(mapping, displayName);
             return;
         }
@@ -281,52 +288,55 @@
         balanceCtrl.startOrder(mapping, displayName);
     }
 
-    function submitTagId(serialId: string, statusEl?: HTMLElement | null) {
-        const serial = normalizeTag(serialId);
-        const member = store.findMapping(serial);
-        if (!statusEl) statusEl = document.getElementById('submitStatus')
+    function submitSelectForm(e: SubmitEvent) {
+        e.preventDefault();
+        const formData = Object.fromEntries(new FormData(e.target as HTMLFormElement).entries());
 
-        console.debug('submitTagId', { serialId, serial, member })
-        if (!member) {
-            store.noteUnknownTag(serial);
-            if (statusEl) {
-                statusEl.innerText = m["baroo.bar.status.unknown_tag"]({ serialId });
-            }
+        handleEntry(
+            String(formData.serialId || ""),
+            formData.action === "summary" ? "summary" : "order",
+        );
+    }
+
+    /**
+     * A tap on a reader, from whichever of them is present. It obeys the order/summary
+     * buttons exactly as the id field does, and is refused while a dialog is already
+     * open — a card brushing the reader twice must not discard a half-built order.
+     */
+    function handleScan(raw: string) {
+        if (balanceCtrl.workingCopy) {
+            setStatus("ℹ️", m["baroo.bar.status.processing"]({ userId: balanceCtrl.workingCopy.id }));
             return;
         }
 
         try {
-            (document.querySelector("#serialId") as HTMLInputElement)!.value = serial;
-            document.forms
-                .namedItem("selectBadgeForm")!
-                .dispatchEvent(new Event("submit"));
-            if (statusEl) {
-                statusEl.innerText = m["baroo.bar.status.tag_recognized"]({
-                    serialId: serial,
-                    nickName: member.nickName,
-                    userId: member.userId
-                })
-            }
+            handleEntry(raw, mode);
         } catch (error) {
-            console.error(error)
-            if (statusEl) {
-                statusEl.innerText = m["baroo.bar.status.error_processing"]({
-                    serialId: serial,
-                    error: error instanceof Error ? error.message : String(error)
-                });
-            }
+            console.error(error);
+            setStatus("❌", m["baroo.bar.status.error_processing"]({
+                serialId: normalizeTag(raw),
+                error: error instanceof Error ? error.message : String(error),
+            }));
         }
     }
 
     /**
-     * The PC/SC reader lives on a server, which the venue does not have. Kept for bars
-     * that do run one — but it must never hold up boot, so it is not a boot feature.
+     * A USB PC/SC reader (Akasa, ACR122U, any CCID device) is invisible to the browser
+     * — WebUSB refuses to claim the smart-card interface class — so it is read by
+     * `nfc-pcsc` on whichever machine it is plugged into and pushed here over SSE.
+     * Kept out of boot: a venue with no such server still has a working till.
      */
     const scannerEventStream = new ScannerEventStream(data.ref, {
         historySize: 5,
         onMessage(message) {
-            if (message.startsWith('card:')) {
-                submitTagId(normalizeTag(message.substring('card:'.length)))
+            const [, kind, payload] = message.match(/^([a-z-]+):([\s\S]*)$/) ?? [];
+
+            if (kind === 'card') {
+                handleScan(payload);
+            } else if (kind === 'reader-detected') {
+                setStatus("✅", m["baroo.bar.status.reader_ready"]({ reader: payload }));
+            } else if (kind === 'reader-error') {
+                setStatus("❌", m["baroo.bar.status.reader_error"]({ error: payload }));
             }
         },
     });
@@ -348,31 +358,14 @@
             // No Web NFC means no reader to bring up. The kiosk falls back to the manual
             // id input, which is a working till, not a broken one.
             isEnabled: () => typeof NDEFReader !== "undefined",
-            init: async (featureEl) => {
-                if (!featureEl) featureEl = document.createElement("div");
-
-                const statusEl: HTMLElement =
-                    featureEl.querySelector(".status") ||
-                    (() => {
-                        const p = document.createElement("p");
-                        p.classList.add("status");
-                        featureEl.appendChild(p);
-                        return p;
-                    })();
-
+            init: async () => {
                 const ndef = new NDEFReader();
                 await ndef.scan();
 
                 ndef.onreadingerror = () => {
-                    statusEl.innerText = "Cannot read data from the NFC tag.";
+                    setStatus("❌", m["baroo.bar.status.tag_unreadable"]());
                 };
-                ndef.onreading = (event) => {
-                    if (balanceCtrl.workingCopy) {
-                        statusEl.innerText = m["baroo.bar.status.processing"]({ userId: balanceCtrl.workingCopy.id });
-                        return;
-                    }
-                    submitTagId(event.serialNumber)
-                };
+                ndef.onreading = (event) => handleScan(event.serialNumber);
             },
         },
         {
@@ -489,10 +482,7 @@
                     <button type="submit" class="btn btn-primary" aria-label={m["generic.action.open"]()}>⏎</button>
                 </div>
             </div>
-            {:else}
-            <input type="hidden" name="serialId" id="serialId" />
             {/if}
-            <p id="submitStatus"></p>
         </form>
 
         <div class="info-sections" data-boot>
@@ -507,6 +497,10 @@
                 <Gzt {debug} />
             {/if}
         </div>
+
+        {#if store.isStaffDevice}
+            <OfferStockBoard bar={store} />
+        {/if}
 
         {#if debug?.includes('stream')}<MessageStream stream={scannerEventStream} />{/if}
     </div>

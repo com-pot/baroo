@@ -32,13 +32,25 @@
                 "processing": "Currently processing order for {userId}, please finish it first.",
                 "unknown_tag": "Unknown tag {serialId}",
                 "tag_recognized": "Tag {serialId} recognized as {nickName} ({userId}).",
+                "tag_unreadable": "Cannot read data from the NFC tag.",
+                "reader_ready": "Card reader ready: {reader}",
+                "reader_error": "Card reader problem: {error}",
                 "error_processing": "Error processing tag {serialId}: {error}",
                 "idle": "Idle",
                 "user_not_mapped": "User {userId} is not mapped. Please add a mapping in the Member Management section.",
                 "unknown_member_seq": "Nobody holds badge number {seq}"
             },
             "stream": "stream",
-            "nfc": "NFC"
+            "nfc": "NFC",
+            "stock": {
+                "title": "Stock",
+                "actions": "Actions",
+                "unseal_new": "Unseal new package",
+                "remaining": "Remaining",
+                "of_total": "of {total}",
+                "not_unsealed": "Nothing opened",
+                "empty": "This bar has nothing on offer yet."
+            }
         },
         "backstage": {
             "title": "Backstage",
@@ -149,7 +161,11 @@
                 "serving_preset": "Serving preset",
                 "preset_tap": "On tap (0.3 / 0.5 L)",
                 "preset_unit": "By the piece (1×)",
-                "serving_prices": "Serving prices"
+                "serving_prices": "Serving prices",
+                "picture": "Picture",
+                "picture_hint": "Square, {max} at most.",
+                "picture_current": "Current picture",
+                "picture_pending": "Uploads when you save."
             },
             "summaries": {
                 "title": "Member Summaries",

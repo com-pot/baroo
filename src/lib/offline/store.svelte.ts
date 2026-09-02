@@ -1,6 +1,11 @@
 import { on } from 'svelte/events';
 import type { BarMember, BarOfferItem } from '$lib/bar/BarModel';
-import { indexBarOffer, type BarOfferIndex } from '$lib/bar/stats/barOfferItems';
+import {
+    computeOfferStock,
+    indexBarOffer,
+    type BarOfferIndex,
+    type OfferStock,
+} from '$lib/bar/stats/barOfferItems';
 import {
     buildMemberTimeline,
     computeMemberStanding,
@@ -27,7 +32,7 @@ import {
     type OutboxOp,
     type StoredOp,
 } from './op';
-import type { BarSnapshot, DeviceIdentity } from './types';
+import type { BarSnapshot, DeviceIdentity, SnapshotUnseal } from './types';
 
 const newId = () =>
     typeof crypto !== 'undefined' && crypto.randomUUID
@@ -244,6 +249,52 @@ export class OfflineBar {
                 topRank: null,
             })),
         );
+    }
+
+    /**
+     * Every drink this tablet knows was poured — the snapshot's history and the rounds
+     * still in the outbox — flattened out of the per-member timelines it is filed under.
+     */
+    private get orderItems(): { key: string; variant: string; orderedAt: string }[] {
+        const items: { key: string; variant: string; orderedAt: string }[] = [];
+
+        for (const timeline of Object.values(this.snapshot?.timelines ?? {})) {
+            for (const entry of timeline) {
+                if (entry.type !== 'order') continue;
+                items.push({ ...entry.data, orderedAt: entry.date });
+            }
+        }
+
+        for (const op of this.pending) {
+            if (op.kind !== 'order') continue;
+            for (const item of op.items) {
+                items.push({ ...item, orderedAt: op.occurredAt });
+            }
+        }
+
+        return items;
+    }
+
+    /**
+     * What is left in each open package. The barman opens one and pours from it long
+     * before either op reaches a server, so the outbox overrides the snapshot on both
+     * sides of the sum.
+     */
+    get stock(): OfferStock[] {
+        const unseals: Record<string, SnapshotUnseal> = { ...(this.snapshot?.unseals ?? {}) };
+
+        for (const op of this.pending) {
+            if (op.kind !== 'unseal') continue;
+            const known = unseals[op.offerItemKey];
+            if (known && known.occurredAt >= op.occurredAt) continue;
+            unseals[op.offerItemKey] = { occurredAt: op.occurredAt, quantity: op.quantity };
+        }
+
+        return computeOfferStock({
+            offerItems: this.offerItems,
+            unseals,
+            orderItems: this.orderItems,
+        });
     }
 
     /** Cards scanned but not mapped to anyone — the staff kiosk's to-do list. */

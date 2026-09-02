@@ -32,13 +32,25 @@
                 "processing": "Právě zpracovávám objednávku pro {userId}, prosím dokončete ji nejprve.",
                 "unknown_tag": "Neznámý štítek {serialId}",
                 "tag_recognized": "Štítek {serialId} rozpoznán jako {nickName} ({userId}).",
+                "tag_unreadable": "Z NFC tagu se nepodařilo přečíst data.",
+                "reader_ready": "Čtečka karet připravena: {reader}",
+                "reader_error": "Problém se čtečkou karet: {error}",
                 "error_processing": "Chyba při zpracování štítku {serialId}: {error}",
                 "idle": "Nečinný",
                 "user_not_mapped": "Uživatel {userId} není namapován. Přidejte prosím mapování v sekci Správa členů.",
                 "unknown_member_seq": "Nikdo nemá visačku číslo {seq}"
             },
             "stream": "proud",
-            "nfc": "NFC"
+            "nfc": "NFC",
+            "stock": {
+                "title": "Zásoby",
+                "actions": "Akce",
+                "unseal_new": "Otevřít nové balení",
+                "remaining": "Zbývá",
+                "of_total": "z {total}",
+                "not_unsealed": "Nic neotevřeno",
+                "empty": "Bar zatím nic nenabízí."
+            }
         },
         "backstage": {
             "title": "Zákulisí",
@@ -149,7 +161,11 @@
                 "serving_preset": "Balení",
                 "preset_tap": "Čepované (0,3 / 0,5 l)",
                 "preset_unit": "Kusové (1×)",
-                "serving_prices": "Ceny porcí"
+                "serving_prices": "Ceny porcí",
+                "picture": "Obrázek",
+                "picture_hint": "Čtvercový, nejvýše {max}.",
+                "picture_current": "Současný obrázek",
+                "picture_pending": "Nahraje se po uložení."
             },
             "summaries": {
                 "title": "Přehledy Členů",

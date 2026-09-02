@@ -4,6 +4,8 @@
     import type { BarOfferItem } from '$lib/bar/BarModel';
     import { enhance } from '$app/forms';
     import Drawer from '$lib/components/Drawer.svelte';
+    import FileDrop from '$lib/components/FileDrop.svelte';
+    import { formatBytes } from '$lib/bar/quantity';
     import {
         SERVING_PRESET_KEYS,
         DEFAULT_SERVING_PRESET,
@@ -21,6 +23,15 @@
     let preset = $state<ServingPresetKey>(DEFAULT_SERVING_PRESET);
     /** Price inputs keyed by serving key. Keys the current preset doesn't offer are never submitted. */
     let prices = $state<Record<string, string>>({});
+    /**
+     * The picture waiting to go up with the next save. It never sits in the form as a
+     * file input — `enhance` appends it on submit — so cancelling the drawer discards it
+     * the same way cancelling discards a half-typed name.
+     */
+    let picture = $state<File | null>(null);
+
+    /** The kiosk draws these into a square frame, and PocketBase stores one per item. */
+    const PICTURE_MAX_BYTES = 200_000;
 
     /** Decides whether a serving reads "0.3" or "1×". */
     const presetMeasure = $derived(servingPreset({ servingPreset: preset }).measure);
@@ -32,6 +43,7 @@
 
     function startEdit(item: BarOfferItem) {
         editingItem = { ...item };
+        picture = null;
         preset = item.servingPreset ?? DEFAULT_SERVING_PRESET;
         prices = Object.fromEntries(
             Object.entries(item.pricing || {}).map(([key, price]) => [key, String(price)]),
@@ -42,6 +54,7 @@
     function cancelEdit() {
         editingItem = null;
         showCreateForm = false;
+        picture = null;
         preset = DEFAULT_SERVING_PRESET;
         prices = {};
     }
@@ -49,6 +62,7 @@
     function startCreate() {
         showCreateForm = true;
         editingItem = null;
+        picture = null;
         preset = DEFAULT_SERVING_PRESET;
         prices = {};
     }
@@ -81,6 +95,7 @@
                 <table class="table">
                     <thead>
                         <tr>
+                            <th class="picture-col">{m["baroo.backstage.offer.picture"]()}</th>
                             <th>{m["baroo.backstage.offer.key"]()}</th>
                             <th>{m["baroo.backstage.offer.name"]()}</th>
                             <th>{m["baroo.backstage.offer.pricing"]()}</th>
@@ -90,6 +105,15 @@
                     <tbody>
                         {#each data.items as item}
                             <tr>
+                                <td class="picture-col">
+                                    {#if item.preview_1x1}
+                                        <img
+                                            class="thumb"
+                                            src="/storage/api/files/bar_offer_items/{item.id}/{item.preview_1x1}"
+                                            alt=""
+                                        />
+                                    {/if}
+                                </td>
                                 <td><code>{item.key}</code></td>
                                 <td>{item.name}</td>
                                 <td>
@@ -138,7 +162,12 @@
                     <form
                         method="POST"
                         action={editingItem ? '?/update' : '?/create'}
-                        use:enhance={() => {
+                        enctype="multipart/form-data"
+                        use:enhance={({ formData }) => {
+                            // The drop zone holds the file in state rather than in an
+                            // input, so this is where it joins the rest of the fields.
+                            if (picture) formData.set('preview_1x1', picture);
+
                             return async ({ update, result }) => {
                                 await update();
                                 if (result.type === 'success') {
@@ -183,6 +212,28 @@
                             />
                             {#if form?.errors?.name}
                                 <span class="error-message">{form.errors.name}</span>
+                            {/if}
+                        </div>
+                        <div class="input-pair col-12">
+                            <span class="form-label">{m["baroo.backstage.offer.picture"]()}</span>
+                            <FileDrop
+                                accept="image/*"
+                                maxBytes={PICTURE_MAX_BYTES}
+                                aspectRatio={1}
+                                aspectLabel="1:1"
+                                hint={m["baroo.backstage.offer.picture_hint"]({
+                                    max: formatBytes(PICTURE_MAX_BYTES),
+                                })}
+                                currentSrc={editingItem?.preview_1x1
+                                    ? `/storage/api/files/bar_offer_items/${editingItem.id}/${editingItem.preview_1x1}`
+                                    : null}
+                                onselect={(file) => (picture = file)}
+                            />
+                            {#if picture}
+                                <small>{m["baroo.backstage.offer.picture_pending"]()}</small>
+                            {/if}
+                            {#if form?.errors?.preview_1x1}
+                                <span class="error-message">{form.errors.preview_1x1}</span>
                             {/if}
                         </div>
                         <div class="input-pair col-md-5">
@@ -240,6 +291,19 @@
 </main>
 
 <style lang="scss">
+.picture-col {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.thumb {
+    width: 2.5rem;
+    height: 2.5rem;
+    object-fit: contain;
+    border-radius: 0.25rem;
+    background: #fff;
+}
+
 .serving-prices {
     display: grid;
     grid-template-columns: 1fr 160px;

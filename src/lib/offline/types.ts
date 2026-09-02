@@ -14,6 +14,19 @@ export type BarSnapshot = {
     timelines: Record<BarMember['id'], MemberTimelineEntry[]>;
     /** Last settlement per member, so standings can be computed offline. */
     lastSettlements: Record<BarMember['id'], string>;
+    /**
+     * The package currently open for each offer item, so the kiosk can count stock down
+     * without asking. Optional: snapshots pulled before this existed simply have none,
+     * and an item with no entry has never been unsealed as far as the tablet knows.
+     */
+    unseals?: Record<BarOfferItem['key'], SnapshotUnseal>;
+};
+
+/** The open package of one offer item, as the last pull found it. */
+export type SnapshotUnseal = {
+    occurredAt: string;
+    /** What the package holds, in its serving preset's measure. */
+    quantity: number;
 };
 
 /** The tablet's identity, written once at enrolment. */

@@ -11,6 +11,14 @@
         "measure": {
             "volume": "l",
             "count": "ks"
+        },
+        "file_drop": {
+            "prompt": "Přetáhni sem soubor nebo klikni pro výběr",
+            "clear": "Zrušit výběr",
+            "not_accepted": "„{name}“ není podporovaný typ souboru.",
+            "too_large": "Soubor má {size}, povoleno je nejvýš {max}.",
+            "bad_aspect": "Poměr stran musí být {ratio}; tenhle obrázek je {width}×{height}.",
+            "unreadable": "Soubor se nepodařilo načíst jako obrázek."
         }
     }
 }

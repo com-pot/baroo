@@ -26,3 +26,22 @@ export function measureLabel(measure: Measure): string {
     // assumption and the safer thing to show.
     return measure === 'count' ? m['generic.measure.count']() : m['generic.measure.volume']();
 }
+
+/**
+ * A byte count as a person reads it: "980 B", "12,4 kB". Decimal units, because that is
+ * what a file picker and an upload limit are both quoted in.
+ */
+export function formatBytes(bytes: number): string {
+    if (bytes < 1000) return `${bytes} B`;
+
+    const units = ['kB', 'MB', 'GB'];
+    let value = bytes / 1000;
+    let unit = 0;
+
+    while (value >= 1000 && unit < units.length - 1) {
+        value /= 1000;
+        unit++;
+    }
+
+    return `${new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 1 }).format(value)} ${units[unit]}`;
+}

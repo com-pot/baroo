@@ -11,8 +11,6 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 const PRECACHE = `baroo-precache-${version}`;
 /** HTML documents, captured as they are visited. */
 const PAGES = `baroo-pages-${version}`;
-/** PocketBase files proxied through /storage. Content-addressed, so never invalidated. */
-const STORAGE = 'baroo-storage';
 
 const PRECACHE_URLS = [...build, ...files];
 
@@ -29,7 +27,7 @@ sw.addEventListener('activate', (event) => {
     event.waitUntil(
         (async () => {
             for (const key of await caches.keys()) {
-                if (key === PRECACHE || key === PAGES || key === STORAGE) continue;
+                if (key === PRECACHE || key === PAGES) continue;
                 if (!key.startsWith('baroo-')) continue;
                 await caches.delete(key);
             }
@@ -49,10 +47,10 @@ sw.addEventListener('fetch', (event) => {
     // responses on top of that would give the kiosk two sources of truth that disagree.
     if (url.pathname.startsWith('/api/')) return;
 
-    if (url.pathname.startsWith('/storage/')) {
-        event.respondWith(cacheFirst(request, STORAGE));
-        return;
-    }
+    // `/storage/` reverse-proxies the whole PocketBase instance, not just its files, so
+    // anything cached here (admin UI, collection endpoints) would be served stale forever.
+    // Images stay available offline through the HTTP cache — the proxy marks them immutable.
+    if (url.pathname.startsWith('/storage/')) return;
 
     if (request.mode === 'navigate') {
         event.respondWith(navigationFirst(request));
@@ -78,16 +76,6 @@ async function precachedOrNetwork(request: Request, url: URL): Promise<Response>
         if (hit) return hit;
         throw err;
     }
-}
-
-async function cacheFirst(request: Request, cacheName: string): Promise<Response> {
-    const cache = await caches.open(cacheName);
-    const hit = await cache.match(request);
-    if (hit) return hit;
-
-    const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
-    return response;
 }
 
 const NAVIGATION_TIMEOUT_MS = 2_000;

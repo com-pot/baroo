@@ -62,7 +62,6 @@ export async function pullSnapshot(barSlug?: string): Promise<BarSnapshot> {
     await writeSnapshot(snapshot);
     await refreshDeviceToken(token);
     if (config) await writeDeviceConfig(config);
-    await cacheSnapshotImages(snapshot);
 
     return snapshot;
 }
@@ -117,33 +116,4 @@ export async function syncAll(barSlug?: string) {
 function stripSeq(op: StoredOp): Omit<StoredOp, "seq"> {
     const { seq: _seq, ...rest } = op;
     return rest;
-}
-
-/**
- * Warms the HTTP cache with the offer and member images so they render underground.
- * Best-effort: a tablet with no Cache API still works, it just shows broken images.
- */
-async function cacheSnapshotImages(snapshot: BarSnapshot): Promise<void> {
-    if (typeof caches === 'undefined') return;
-
-    const urls = [
-        ...snapshot.offerItems
-            .filter(item => item.preview_1x1)
-            .map(item => `/storage/api/files/bar_offer_items/${item.id}/${item.preview_1x1}`),
-        ...snapshot.members
-            .filter(member => member.avatar_1x1)
-            .map(member => `/storage/api/files/bar_members/${member.id}/${member.avatar_1x1}`),
-    ];
-
-    try {
-        const cache = await caches.open('baroo-storage');
-        await Promise.all(
-            urls.map(async url => {
-                if (await cache.match(url)) return;
-                await cache.add(url).catch(() => {});
-            }),
-        );
-    } catch {
-        // No cache storage (private mode, old browser) — not fatal.
-    }
 }

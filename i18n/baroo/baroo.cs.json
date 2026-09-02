@@ -355,6 +355,11 @@
             "snapshot_missing": "Zařízení nemá žádný snímek.",
             "snapshot_items": "{count} položek",
             "snapshot_keys": "{count} klíčů",
+            "cache_reset": "Vymazat cache a načíst znovu",
+            "cache_resetting": "Mažu…",
+            "cache_reset_confirm": "Vymazat uložené soubory aplikace na tomto zařízení a načíst ji znovu? Nesynchronizované objednávky zůstanou.",
+            "cache_reset_offline": "Nejdřív se připoj k síti — po vymazání offline by nebylo z čeho aplikaci načíst.",
+            "cache_reset_failed": "Cache se nepodařilo vymazat: {error}",
             "snapshot_empty_value": "chybí"
         },
         "devices": {

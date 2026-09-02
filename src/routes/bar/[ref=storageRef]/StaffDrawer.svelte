@@ -11,6 +11,7 @@
     import UnsealWidget from "./UnsealWidget.svelte";
     import SyncWidget from "./SyncWidget.svelte";
     import SnapshotDebugWidget from "./SnapshotDebugWidget.svelte";
+    import CacheResetWidget from "./CacheResetWidget.svelte";
 
     /**
      * The barman's tools, one operation per fold.
@@ -48,6 +49,7 @@
         <h2>{m["baroo.staff.debug_section"]()}</h2>
 
         <SnapshotDebugWidget {bar} />
+        <CacheResetWidget {bar} />
 
         <AccordionGroup>
             <Accordion title={m["baroo.staff.sync_section"]()}>

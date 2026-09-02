@@ -10,6 +10,7 @@
     import SettlementWidget from "./SettlementWidget.svelte";
     import UnsealWidget from "./UnsealWidget.svelte";
     import SyncWidget from "./SyncWidget.svelte";
+    import SnapshotDebugWidget from "./SnapshotDebugWidget.svelte";
 
     /**
      * The barman's tools, one operation per fold.
@@ -45,6 +46,8 @@
     <!-- Not an operation, so it sits under its own heading and out of the exclusive group. -->
     <section class="staff-section">
         <h2>{m["baroo.staff.debug_section"]()}</h2>
+
+        <SnapshotDebugWidget {bar} />
 
         <AccordionGroup>
             <Accordion title={m["baroo.staff.sync_section"]()}>

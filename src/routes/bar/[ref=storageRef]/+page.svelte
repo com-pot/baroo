@@ -14,6 +14,7 @@
     import { computeTotalPrice } from "$lib/bar/stats/memberSummaries";
     import { servingLabel, servingsOf } from "$lib/bar/servings";
     import { Narrator } from "$lib/speech.svelte";
+    import { APP_VERSION, formatBuildDate } from "$lib/version";
     import { ScannerEventStream } from "./scannerEventStream.svelte";
     import MessageStream from "./MessageStream.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
@@ -510,6 +511,17 @@
         {/if}
 
         {#if debug?.includes('stream')}<MessageStream stream={scannerEventStream} />{/if}
+
+        <!--
+            Which build is on this tablet. Not decoration: kiosks are primed one by one
+            and then left alone for the evening, so the first question about any odd
+            behaviour is whether this one ever got the fix.
+        -->
+        <footer class="build-info">
+            <span>{m["baroo.bar.build_version"]({ version: APP_VERSION })}</span>
+            <span aria-hidden="true">·</span>
+            <span>{m["baroo.bar.build_date"]({ date: formatBuildDate() })}</span>
+        </footer>
     </div>
 </main>
 
@@ -659,6 +671,17 @@
 }
 .instr-text {
     font-size: 2rem;
+}
+
+.build-info {
+    // Clears the fixed connectivity badge, which owns the bottom-right corner.
+    margin-block: 2rem 3rem;
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-variant-numeric: tabular-nums;
 }
 
 

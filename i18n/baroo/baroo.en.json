@@ -50,7 +50,9 @@
                 "of_total": "of {total}",
                 "not_unsealed": "Nothing opened",
                 "empty": "This bar has nothing on offer yet."
-            }
+            },
+            "build_version": "version {version}",
+            "build_date": "built {date}"
         },
         "backstage": {
             "title": "Backstage",
@@ -345,7 +347,15 @@
             "member_invalid": "Fill in a nickname and a badge number.",
             "member_duplicate": "{nickName} is already in this bar.",
             "member_seq_taken": "Badge number {seq} is already taken.",
-            "tags_member_required": "Pick a card and the member it belongs to."
+            "tags_member_required": "Pick a card and the member it belongs to.",
+            "snapshot_section": "Snapshot data",
+            "snapshot_open": "Inspect snapshot",
+            "snapshot_title": "Bar data snapshot",
+            "snapshot_close": "Close",
+            "snapshot_missing": "This device holds no snapshot.",
+            "snapshot_items": "{count} items",
+            "snapshot_keys": "{count} keys",
+            "snapshot_empty_value": "missing"
         },
         "devices": {
             "title": "Devices",

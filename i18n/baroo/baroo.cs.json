@@ -50,7 +50,9 @@
                 "of_total": "z {total}",
                 "not_unsealed": "Nic neotevřeno",
                 "empty": "Bar zatím nic nenabízí."
-            }
+            },
+            "build_version": "verze {version}",
+            "build_date": "sestaveno {date}"
         },
         "backstage": {
             "title": "Zákulisí",
@@ -345,7 +347,15 @@
             "member_invalid": "Vyplň přezdívku a číslo visačky.",
             "member_duplicate": "{nickName} už v baru je.",
             "member_seq_taken": "Visačku číslo {seq} už někdo má.",
-            "tags_member_required": "Vyber čip a člena, kterému patří."
+            "tags_member_required": "Vyber čip a člena, kterému patří.",
+            "snapshot_section": "Data snímku",
+            "snapshot_open": "Prohlédnout snímek",
+            "snapshot_title": "Snímek dat baru",
+            "snapshot_close": "Zavřít",
+            "snapshot_missing": "Zařízení nemá žádný snímek.",
+            "snapshot_items": "{count} položek",
+            "snapshot_keys": "{count} klíčů",
+            "snapshot_empty_value": "chybí"
         },
         "devices": {
             "title": "Zařízení",

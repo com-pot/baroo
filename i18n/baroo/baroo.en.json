@@ -365,6 +365,9 @@
             "cache_reset_confirm": "Clear this device's cached app files and reload? Unsynced orders are kept.",
             "cache_reset_offline": "Connect to the network first — clearing while offline leaves nothing to reload from.",
             "cache_reset_failed": "Could not clear the caches: {error}",
+            "kiosk_section": "This device",
+            "id_input_letters": "Letters in the id field",
+            "id_input_letters_help": "Off: the id field opens a number pad. On: the full keyboard, for tag serial ids.",
             "snapshot_empty_value": "missing"
         },
         "devices": {

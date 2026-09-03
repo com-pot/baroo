@@ -17,6 +17,13 @@
      */
     let { bar }: { bar: OfflineBar } = $props();
 
+    const stockSorted = $derived(bar.stock.toSorted((a, b) => {
+        if (!a.unsealedAt && !b.unsealedAt) return 0
+        if (!b.unsealedAt) return -1
+        if (!a.unsealedAt) return 1
+        return a.unsealedAt.localeCompare(b.unsealedAt)
+    }))
+
     /** The item whose unseal form is open, if any. */
     let unsealing = $state<string | null>(null);
 
@@ -28,9 +35,9 @@
 <section class="stock-board">
     <h2>{m["baroo.bar.stock.title"]()}</h2>
 
-    {#if bar.stock.length}
+    {#if stockSorted.length}
         <div class="stock-grid">
-            {#each bar.stock as entry (entry.item.key)}
+            {#each stockSorted as entry (entry.item.key)}
                 {@const item = entry.item}
                 {@const anchor = `--stock-${uid}-${item.key}`}
                 <article
@@ -70,13 +77,16 @@
                         {#if entry.left === null}
                             <span class="not-unsealed">{m["baroo.bar.stock.not_unsealed"]()}</span>
                         {:else}
-                            <span class="label">{m["baroo.bar.stock.remaining"]()}</span>
-                            <span class="left">{formatQuantity(entry.measure, entry.left)}</span>
-                            <span class="of-total">
-                                {m["baroo.bar.stock.of_total"]({
-                                    total: formatQuantity(entry.measure, entry.unsealQuantity),
-                                })}
-                            </span>
+                            <div>
+                                <span class="label">{m["baroo.bar.stock.remaining"]()}</span>
+                                <span class="left">{formatQuantity(entry.measure, entry.left)}</span>
+                                <span class="of-total">
+                                    {m["baroo.bar.stock.of_total"]({
+                                        total: formatQuantity(entry.measure, entry.unsealQuantity),
+                                    })}
+                                </span>
+                            </div>
+                            <progress value={Math.max(0, entry.left)} max={entry.unsealQuantity}></progress>
                         {/if}
                     </div>
 
@@ -196,6 +206,9 @@
             font-size: 2rem;
             font-weight: 700;
             color: #cbd5e1;
+            min-height: 1em;
+            min-width: 1em;
+            line-height: 1;
         }
     }
 

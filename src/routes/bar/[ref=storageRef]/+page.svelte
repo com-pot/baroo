@@ -10,6 +10,7 @@
     import { Boot } from "$lib/boot";
     import { greetingFor } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
+    import { kioskPrefs } from "$lib/pos/kioskPrefs.svelte";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
     import { computeTotalPrice } from "$lib/bar/stats/memberSummaries";
     import { servingLabel, servingsOf } from "$lib/bar/servings";
@@ -493,6 +494,7 @@
                         class="form-control"
                         required
                         aria-label={m["baroo.bar.userRef"]()}
+                        inputmode={kioskPrefs.idInputMode}
                         bind:value={userIdInput}
                         placeholder={m["baroo.bar.pos.id_input_placeholder"]()}
                     />

@@ -365,6 +365,9 @@
             "cache_reset_confirm": "Vymazat uložené soubory aplikace na tomto zařízení a načíst ji znovu? Nesynchronizované objednávky zůstanou.",
             "cache_reset_offline": "Nejdřív se připoj k síti — po vymazání offline by nebylo z čeho aplikaci načíst.",
             "cache_reset_failed": "Cache se nepodařilo vymazat: {error}",
+            "kiosk_section": "Toto zařízení",
+            "id_input_letters": "Písmena v poli pro ID",
+            "id_input_letters_help": "Vypnuto: pole otevře číselnou klávesnici. Zapnuto: celou klávesnici, pro sériová ID tagů.",
             "snapshot_empty_value": "chybí"
         },
         "devices": {

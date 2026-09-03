@@ -12,6 +12,7 @@
     import SyncWidget from "./SyncWidget.svelte";
     import SnapshotDebugWidget from "./SnapshotDebugWidget.svelte";
     import CacheResetWidget from "./CacheResetWidget.svelte";
+    import { kioskPrefs } from "$lib/pos/kioskPrefs.svelte";
 
     /**
      * The barman's tools, one operation per fold.
@@ -44,6 +45,30 @@
         </Accordion>
     </AccordionGroup>
 
+    <!--
+        Device preferences, not operations: nothing is queued or synced, the switch just
+        changes how this tablet behaves. Hidden entirely when the manual id field is off,
+        since then there is no keyboard to choose.
+    -->
+    {#if bar.config.idInput}
+        <section class="staff-section">
+            <h2>{m["baroo.staff.kiosk_section"]()}</h2>
+
+            <div class="form-check">
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="idInputLetters"
+                    bind:checked={kioskPrefs.idInputLetters}
+                />
+                <label class="form-check-label" for="idInputLetters">
+                    {m["baroo.staff.id_input_letters"]()}
+                    <small>{m["baroo.staff.id_input_letters_help"]()}</small>
+                </label>
+            </div>
+        </section>
+    {/if}
+
     <!-- Not an operation, so it sits under its own heading and out of the exclusive group. -->
     <section class="staff-section">
         <h2>{m["baroo.staff.debug_section"]()}</h2>
@@ -58,3 +83,12 @@
         </AccordionGroup>
     </section>
 </div>
+
+<style lang="scss">
+    // The help line reads as a second line under the label, the way the backstage
+    // device form sets its checkboxes out.
+    .form-check-label small {
+        display: block;
+        color: #666;
+    }
+</style>

@@ -8,7 +8,7 @@
     import type { PageData } from "./$types";
     import { onMount } from "svelte";
     import { Boot } from "$lib/boot";
-    import { greetingFor } from "$lib/pos/device";
+    import { greetingFor, orderConfirmation } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import { kioskPrefs } from "$lib/pos/kioskPrefs.svelte";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
@@ -20,6 +20,7 @@
     import MessageStream from "./MessageStream.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
     import Gzt from "./Gzt.svelte";
+    import WallClock from "./WallClock.svelte";
 
     const {
         data,
@@ -105,6 +106,9 @@
             });
 
             setStatus("✅", m["baroo.offline.pending"]({ count: String(store.pending.length) }));
+            // Said after the order is stored, not before: the line is a receipt, so it
+            // must not go out for an order that failed to land in the outbox.
+            if (narrationEnabled) narrator?.speak(orderConfirmation());
             this.reset();
         },
 
@@ -450,6 +454,8 @@
 </script>
 
 <main class="boot-stack" data-theme={store.config.theme}>
+    <WallClock />
+
     <div data-boot-init>
         <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>Tak to rozjedem</button>
     </div>
@@ -682,6 +688,12 @@
 }
 .instr-text {
     font-size: 2rem;
+}
+
+.main-content h1 {
+    @media (width <= 34rem) {
+        padding-block-start: 2.5rem;
+    }
 }
 
 .build-info {

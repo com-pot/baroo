@@ -56,6 +56,7 @@
                 "not_unsealed": "Nothing opened",
                 "empty": "This bar has nothing on offer yet."
             },
+            "clock_label": "Time {time}",
             "build_version": "version {version}",
             "build_date": "built {date}"
         },

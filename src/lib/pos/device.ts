@@ -60,6 +60,25 @@ export function greetingFor(
     return template.replaceAll(GREETING_NAME_TOKEN, member.nickName || '');
 }
 
+/**
+ * What the kiosk says once an order is safely in the outbox. Fixed lines rather than a
+ * config field: the greeting is the part a bar wants to make its own, while this is the
+ * house's own patter — and a till that says the same thing every round gets tuned out,
+ * so the line is drawn at random.
+ */
+export const ORDER_CONFIRMATIONS = [
+    'Ča čing',
+    'Muhehe',
+    'Díky. Přijďte zas',
+    'Bude to stačit?',
+    'testovací potvrzovací hláška šest',
+] as const;
+
+/** One of {@link ORDER_CONFIRMATIONS}, picked at random. */
+export function orderConfirmation(): string {
+    return ORDER_CONFIRMATIONS[Math.floor(Math.random() * ORDER_CONFIRMATIONS.length)];
+}
+
 /** Normalises whatever the `config` JSON column holds into a complete config. */
 export function readPosConfig(raw: unknown): PosDeviceConfig {
     const config = (raw ?? {}) as Partial<PosDeviceConfig>;

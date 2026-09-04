@@ -19,7 +19,7 @@
     import { ScannerEventStream } from "./scannerEventStream.svelte";
     import MessageStream from "./MessageStream.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
-    import Gzt from "./Gzt.svelte";
+    import Gzt from "$lib/eggs/Gzt.svelte";
     import WallClock from "./WallClock.svelte";
 
     const {

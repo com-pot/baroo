@@ -129,29 +129,85 @@ export class CpsCounter {
     }
 }
 
-type TotalCounterStorage = {
-    get: () => Promise<number>,
-    set: (value: number) => Promise<unknown>,
+export type CounterState = {
+    /** Everyone's clicks, as the server knows them. */
+    total: number,
+    /** This device's share of them. */
+    mine: number,
 }
+
+type TotalCounterStorage = {
+    load: () => Promise<CounterState>,
+    /** Adds `delta` and answers with the counter as it stands afterwards. */
+    push: (delta: number) => Promise<CounterState>,
+}
+
+/**
+ * The shared counter, as this device sees it.
+ *
+ * Deltas rather than absolutes, because the total is not ours alone: between two of our
+ * clicks any number of other people have pushed their own, so writing back a number we
+ * computed locally would silently discard theirs.
+ */
 export class TotalCounter {
-    public constructor(private storage: TotalCounterStorage) {
+    public constructor(private storage: TotalCounterStorage) {}
 
-    }
+    public total = $state(0);
+    public mine = $state(0);
 
-    public value = $state(0);
+    /** Clicks the server has not acknowledged yet. */
+    private pending = 0;
+    private draining = false;
 
     public trigger(n: number = 1) {
-        this.value += n;
+        this.pending += n;
+        // Optimistic: the bubble has to move on the click, not a network round trip later.
+        this.total += n;
+        this.mine += n;
     }
 
     public async load() {
-        this.value = await this.storage.get();
+        this.reconcile(await this.storage.load());
     }
+
+    /**
+     * Pushes what has piled up, one request at a time.
+     *
+     * Several people hammering the same counter is the normal case here, so a push is a
+     * read-modify-write the server has to serialise; adding our own concurrency on top of
+     * that just multiplies the contention. Clicks that land mid-flight ride the next lap of
+     * the loop instead of racing this one.
+     */
     public async commit() {
-        const result = await this.storage.set(this.value);
-        if (typeof result === 'number') {
-            this.value = result;
+        if (this.draining) return;
+
+        this.draining = true;
+        try {
+            while (this.pending > 0) {
+                const delta = this.pending;
+                this.pending = 0;
+
+                try {
+                    this.reconcile(await this.storage.push(delta));
+                } catch (err) {
+                    // Hand the clicks back so the next commit retries them: a failed push
+                    // should cost the tick, not the taps.
+                    this.pending += delta;
+                    throw err;
+                }
+            }
+        } finally {
+            this.draining = false;
         }
+    }
+
+    /**
+     * The server's numbers already include everything we pushed, but not what was clicked
+     * while we waited for it — that is still only ours to know.
+     */
+    private reconcile(state: CounterState) {
+        this.total = state.total + this.pending;
+        this.mine = state.mine + this.pending;
     }
 }
 

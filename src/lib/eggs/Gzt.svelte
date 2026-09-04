@@ -7,6 +7,7 @@
         StreakCounter,
         TotalCounter,
     } from "./eggs.svelte";
+    import { lizardCounterStorage } from "./lizardCounter";
 
     /**
      * Gzt as Gen-Z toy. This captures attention and makes the number go up.
@@ -15,32 +16,34 @@
      * component reads them, and the page has no business holding a soundpad. The kiosk
      * only decides whether the toy exists at all — see `config.genZToy`.
      */
-    const { debug = "" }: { debug?: string } = $props();
+    const {
+        debug = "",
+        /**
+         * Whether to show this device's own share of the total.
+         *
+         * Worth having where the toy is the whole page and the clicks are one person's. A
+         * kiosk tablet is passed around, so its tally would mean nothing to whoever is
+         * holding it — hence off by default.
+         */
+        showMine = false,
+    }: { debug?: string; showMine?: boolean } = $props();
 
-    const sound = new BrainrotSoundPad("🫧", [
+    const sound = new BrainrotSoundPad("🦎", [
+    { src: "/assets/eggs/lizard-button-sound.mp3" },
+        /*
         { src: "/assets/eggs/pop/bubble-pop-02-293341.mp3" },
         { src: "/assets/eggs/pop/bubble-pop-04-323580.mp3" },
         { src: "/assets/eggs/pop/bubble-pop-06-351337.mp3" },
         { src: "/assets/eggs/pop/bubble-pop-07-351339.mp3" },
         { src: "/assets/eggs/pop/pop-402323.mp3" },
+        */
     ]);
 
     const shutUp = new DecayCounter();
 
     // The lizard counter lives on the server. Offline it simply does not tick — swallow
     // the failures rather than letting them surface as unhandled rejections.
-    const total = new TotalCounter({
-        get: () => fetch("/api/counters/lizard").then((res) => res.json()).then((data) => data.count),
-        set: (value) => {
-            return fetch("/api/counters/lizard", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ delta: value }),
-            })
-                .then((res) => res.json())
-                .then((data) => data.count);
-        },
-    });
+    const total = new TotalCounter(lizardCounterStorage);
 
     const streak = new StreakCounter({
         onExpire(num) {
@@ -84,7 +87,7 @@
     </div>
 
     <div class="counter -total">
-        {total.value.toString().padStart(5, "0")}
+        {total.total.toString().padStart(5, "0")}
     </div>
 
     <div
@@ -93,6 +96,12 @@
     >
         {cps.value}
     </div>
+
+    {#if showMine}
+        <div class="counter -mine">
+            {total.mine}
+        </div>
+    {/if}
 </div>
 <button
     class="btn-shut-up"
@@ -143,6 +152,12 @@
         &.-total {
             width: calc(var(--size) * 1.75);
         }
+
+        &.-mine {
+            --size: 3rem;
+            font-size: 1.25rem;
+            box-shadow: lightgray 0px 0px 1px 1px;
+        }
     }
 
     .lizard-grid {
@@ -174,6 +189,11 @@
         .counter:nth-of-type(3) {
             margin-block-start: -0.5rem;
             margin-inline-start: 11rem;
+        }
+        // The contribution bubble, when there is one. The button ends 10rem down, so this
+        // clears its chin rather than sitting on it.
+        .counter:nth-of-type(4) {
+            margin-block-start: 14.5rem;
         }
     }
     .btn-lizard {

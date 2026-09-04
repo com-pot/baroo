@@ -1,6 +1,27 @@
+import { pushCounter, readCounter, type CounterState } from "$lib/counters/counters.server";
 import type { RequestHandler } from "./$types";
 
-export const GET: RequestHandler = async ({ params, locals }) => {
+const json = (state: CounterState) => new Response(JSON.stringify(state), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+});
+
+const failed = (err: unknown, what: string) => {
+    if ((err as { status?: number })?.status === 404) {
+        return new Response('Counter not found', { status: 404 });
+    }
+    console.error(err)
+    return new Response(what, { status: 500 });
+};
+
+/** Devices name themselves; nothing is authenticated, so only the shape is worth checking. */
+const readDeviceId = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const deviceId = value.trim();
+    return deviceId && deviceId.length <= 64 ? deviceId : null;
+};
+
+export const GET: RequestHandler = async ({ params, url, locals }) => {
     const name = params.name?.toString();
 
     if (!name) {
@@ -8,23 +29,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     }
 
     try {
-        const counterRecord = await locals.pb
-            .collection('counters')
-            .getFirstListItem(`name="${name}"`);
-
-        return new Response(JSON.stringify({
-            name: counterRecord.name,
-            count: counterRecord.value,
-        }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-        });
-    } catch (err: any) {
-        if (err.status === 404) {
-            return new Response('Counter not found', { status: 404 });
-        }
-        console.error(err)
-        return new Response('Failed to load counter', { status: 500 });
+        return json(await readCounter(locals.pb, name, readDeviceId(url.searchParams.get('device'))));
+    } catch (err: unknown) {
+        return failed(err, 'Failed to load counter');
     }
 }
 
@@ -36,48 +43,14 @@ export const PUT: RequestHandler = async ({ request, params, locals }) => {
     }
 
     try {
-        const { delta } = await request.json();
+        const { delta, deviceId } = await request.json();
 
-        if (typeof delta !== 'number') {
-            return new Response('Invalid request body: delta number required', { status: 400 });
+        if (!Number.isInteger(delta)) {
+            return new Response('Invalid request body: delta integer required', { status: 400 });
         }
 
-        const counterRecord = await locals.pb
-            .collection('counters')
-            .getFirstListItem(`name="${name}"`);
-
-        const newCount = (counterRecord.value || 0) + delta;
-
-        const updatedRecord = await locals.pb
-            .collection('counters')
-            .update(counterRecord.id, { value: newCount });
-
-        // The audit event needs a signed-in manager; the counter itself is public.
-        // An anonymous kiosk should still be able to tick it, so this is best-effort.
-        await locals.pb.collection('events')
-            .create({
-                type: 'counter-increase',
-                target: `counter:${name}`,
-                occurredAt: new Date().toISOString(),
-                data: {
-                    delta,
-                    newCount,
-                },
-            })
-            .catch(() => {})
-
-        return new Response(JSON.stringify({
-            name: updatedRecord.name,
-            count: updatedRecord.value,
-        }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-        });
-    } catch (err: any) {
-        if (err.status === 404) {
-            return new Response('Counter not found', { status: 404 });
-        }
-        console.error(err)
-        return new Response('Failed to update counter', { status: 500 });
+        return json(await pushCounter(locals.pb, name, delta, readDeviceId(deviceId)));
+    } catch (err: unknown) {
+        return failed(err, 'Failed to update counter');
     }
 }

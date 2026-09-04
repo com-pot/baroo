@@ -824,6 +824,95 @@
     "system": false
   },
   {
+    "id": "pbc_1405557158",
+    "listRule": "",
+    "viewRule": "",
+    "createRule": "",
+    "updateRule": "",
+    "deleteRule": null,
+    "name": "counter_contributions",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_90131592",
+        "hidden": false,
+        "id": "relation_counter",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "counter",
+        "presentable": true,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_deviceId",
+        "max": 64,
+        "min": 1,
+        "name": "deviceId",
+        "pattern": "",
+        "presentable": true,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "number_value",
+        "max": null,
+        "min": 0,
+        "name": "value",
+        "onlyInt": true,
+        "presentable": true,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_counter_contributions_device` ON `counter_contributions` (`counter`, `deviceId`)"
+    ],
+    "system": false
+  },
+  {
     "id": "pbc_1687431684",
     "listRule": "",
     "viewRule": "",

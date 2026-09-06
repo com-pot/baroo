@@ -18,6 +18,8 @@
         maximumFractionDigits: 2,
     });
 
+    const orderedSummaries = $derived(store.summaries.toSorted((a, b) => a.member.seq - b.member.seq))
+
     let memberId = $state("");
     let amountPaid = $state("");
     let error = $state<string | null>(null);
@@ -56,9 +58,9 @@
         {m["baroo.staff.settle_member"]()}
         <select class="form-select" bind:value={memberId} required>
             <option value="" disabled>—</option>
-            {#each store.summaries as summary (summary.member.id)}
+            {#each orderedSummaries as summary (summary.member.id)}
                 <option value={summary.member.id}>
-                    {summary.member.nickName} · {priceFormatter.format(summary.standing.amountDue)}
+                    {summary.member.seq} - {summary.member.nickName}
                 </option>
             {/each}
         </select>

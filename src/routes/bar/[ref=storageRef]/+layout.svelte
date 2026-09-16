@@ -2,21 +2,16 @@
     import * as m from "$lib/paraglide/messages.js";
     import { onMount } from "svelte";
     import type { Snippet } from "svelte";
+    import { APP_VERSION, formatBuildDate } from "$lib/version";
     import type { LayoutData } from "./$types";
-    import Drawer from "$lib/components/Drawer.svelte";
-    import StaffDrawer from "./StaffDrawer.svelte";
+    import { setUiLayers, UiLayerManager } from "$lib/ui/uiLayers.svelte";
+    import DrawerStack from "$lib/ui/DrawerStack.svelte";
 
     let { data, children }: { data: LayoutData; children: Snippet } = $props();
     const bar = data.bar;
 
-    /**
-     * The barman's console rides over the kiosk rather than replacing it — opening it
-     * mid-order no longer tears down the half-built order behind it.
-     */
-    let staffOpen = $state(false);
+    const layerManager = setUiLayers(new UiLayerManager())
 
-    // Ops push themselves as they are made; this catches up whatever was buffered while
-    // the tablet had no signal, and refreshes the snapshot on the way back in.
     onMount(() => bar.watchConnectivity({
         onChange(online) {
             if (online) bar.requestSync('sync');
@@ -43,6 +38,13 @@
     {@render children()}
 {/if}
 
+<footer class="build-info">
+    <a href="https://github.com/com-pot/baroo" target="_blank">Baroo</a>
+    <span>{m["baroo.bar.build_version"]({ version: APP_VERSION })}</span>
+    <span role="separator">⊙</span>
+    <span>{m["baroo.bar.build_date"]({ date: formatBuildDate() })}</span>
+</footer>
+
 <div
     class="conn-badge"
     data-online={bar.online}
@@ -56,19 +58,9 @@
     {#if pendingCount > 0}
         <span class="pending">{m["baroo.offline.pending"]({ count: String(pendingCount) })}</span>
     {/if}
-    {#if bar.isStaffDevice && bar.snapshot}
-        <button type="button" class="staff-link" onclick={() => (staffOpen = true)}>
-            {m["baroo.staff.title"]()}
-        </button>
-    {/if}
 </div>
 
-{#if staffOpen}
-    <Drawer bind:isOpen={staffOpen}>
-        {#snippet heading()}{m["baroo.staff.title"]()} — {bar.snapshot?.bar.name}{/snippet}
-        <StaffDrawer {bar} />
-    </Drawer>
-{/if}
+<DrawerStack layerManager={layerManager} />
 
 <style lang="scss">
     .offline-notice {
@@ -132,5 +124,15 @@
             font: inherit;
             text-decoration: underline;
         }
+    }
+
+    .build-info {
+        margin-block: 2rem 3rem;
+        display: flex;
+        justify-content: center;
+        gap: 0.4rem;
+        font-size: 0.75rem;
+        color: #9ca3af;
+        font-variant-numeric: tabular-nums;
     }
 </style>

@@ -2,8 +2,7 @@ import type { BarMember } from "./BarModel"
 
 export type TagMapping = {
     serialId: string,
-    userId: BarMember["id"],
-    nickName: BarMember["nickName"],
+    member: Pick<BarMember, "id" | "nickName" | "seq">
     extra?: Record<string, unknown>,
 }
 
@@ -89,8 +88,11 @@ export class TagMapper {
                     // Convert ImportMapping to TagMapping (seq becomes userId for now)
                     const tagMapping: TagMapping = {
                         serialId: mapping.serialId,
-                        userId: mapping.seq, // Using seq as userId as per requirements
-                        nickName: mapping.nickName
+                        member: {
+                            id: mapping.seq, // Using seq as userId as per requirements
+                            nickName: mapping.nickName,
+                            seq: Number(mapping.seq),
+                        },
                     };
 
                     await this.put(tagMapping);

@@ -57,22 +57,6 @@
         margin-block-end: 0.75rem;
     }
 
-    .inline-form {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: end;
-        gap: 0.75rem;
-
-        label {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-            font-size: 0.9rem;
-            // Pair up in the drawer's ~550px instead of stacking one per row.
-            flex: 1 1 14rem;
-        }
-    }
-
     .op-list {
         list-style: none;
         padding: 0;

@@ -43,8 +43,11 @@ export async function loadBarData(pb: Db, ref: string, knownBar?: Bar) {
 export function toTagMappings(mappings: { serialId: string, expand?: { member?: any } }[]): TagMapping[] {
     return mappings.map((mapping): TagMapping => ({
         serialId: mapping.serialId,
-        userId: String(mapping.expand?.member?.id || ''),
-        nickName: mapping.expand?.member?.nickName || '',
+        member: {
+            id: String(mapping.expand?.member?.id || ''),
+            nickName: mapping.expand?.member?.nickName || '',
+            seq: mapping.expand?.member?.seq || 0,
+        },
         extra: {
             seq: String(mapping.expand?.member?.seq ?? ''),
             greeting: mapping.expand?.member?.greeting,

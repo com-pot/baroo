@@ -7,7 +7,6 @@ import {
     type OfferStock,
 } from '$lib/bar/stats/barOfferItems';
 import {
-    buildMemberTimeline,
     computeMemberStanding,
     rankSummaries,
     type MemberStanding,
@@ -229,8 +228,11 @@ export class OfflineBar {
             if (op.kind !== 'tag-mapping') continue;
             merged.set(op.serialId, {
                 serialId: op.serialId,
-                userId: op.memberId || `${LOCAL_MEMBER_PREFIX}${op.clientId}`,
-                nickName: op.nickName,
+                member: {
+                    id: op.memberId || `${LOCAL_MEMBER_PREFIX}${op.clientId}`,
+                    nickName: op.nickName,
+                    seq: op.seq,
+                },
             });
         }
 
@@ -284,7 +286,7 @@ export class OfflineBar {
 
     /** The card mapped to a member, if they have one. */
     findMappingByMember(memberId: string): TagMapping | undefined {
-        return this.mappings.find(mapping => mapping.userId === memberId);
+        return this.mappings.find(mapping => mapping.member.id === memberId);
     }
 
     /** Orders sitting in the outbox for one member, as timeline entries. */
@@ -293,7 +295,7 @@ export class OfflineBar {
 
         for (const op of this.pending) {
             if (op.kind === 'order') {
-                const owner = op.memberId || this.findMapping(op.serialId)?.userId;
+                const owner = op.memberId || this.findMapping(op.serialId)?.member.id;
                 if (owner !== memberId) continue;
                 for (const item of op.items) {
                     entries.push({ type: 'order', date: op.occurredAt, data: item });

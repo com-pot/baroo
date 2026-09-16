@@ -22,8 +22,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         const result = mappings
             .map((mapping): TagMapping => ({
                 serialId: mapping.serialId,
-                userId: String(mapping.expand?.member?.id || ''),
-                nickName: mapping.expand?.member?.nickName || '',
+                member: {
+                    id: String(mapping.expand?.member?.id || ''),
+                    nickName: mapping.expand?.member?.nickName || '',
+                    seq: mapping.expand?.member?.seq || 0,
+                },
                 extra: {
                     seq: String(mapping.expand?.member?.seq || ''),
                     greeting: mapping.expand?.member?.greeting,
@@ -52,7 +55,8 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
         throw error(400, `Validation failed: ${errorMessages}`);
     }
 
-    const { serialId, userId, nickName } = validationResult.data;
+    const { serialId } = validationResult.data;
+    const { nickName } = validationResult.data.member;
 
     try {
         const bar = await locals.pb
@@ -95,8 +99,11 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 
             return json({
                 serialId,
-                userId: member.id,
-                nickName: member.nickName
+                member: {
+                    id: member.id,
+                    nickName: member.nickName,
+                    seq: member.seq,
+                },
             } satisfies TagMapping);
         } catch (err: any) {
             if (err.status === 404) {

@@ -1,4 +1,4 @@
-import { createContext, getContext } from "svelte";
+import { createContext } from "svelte";
 
 export class Renderer {
 

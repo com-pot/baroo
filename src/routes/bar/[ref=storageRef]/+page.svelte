@@ -12,15 +12,19 @@
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import { kioskPrefs } from "$lib/pos/kioskPrefs.svelte";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
-    import { computeTotalPrice } from "$lib/bar/stats/memberSummaries";
-    import { servingLabel, servingsOf } from "$lib/bar/servings";
+    import { servingsOf } from "$lib/bar/servings";
     import { Narrator } from "$lib/speech.svelte";
-    import { APP_VERSION, formatBuildDate } from "$lib/version";
     import { ScannerEventStream } from "./scannerEventStream.svelte";
     import MessageStream from "./MessageStream.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
     import Gzt from "$lib/eggs/Gzt.svelte";
     import WallClock from "./WallClock.svelte";
+    import type { BarOrderItem } from "$lib/bar/BarModel";
+    import MemberSummary from "./MemberSummary.svelte";
+    import { getUiLayers } from "$lib/ui/uiLayers.svelte";
+    import StaffDrawer from "./StaffDrawer.svelte";
+
+    const layerManager = getUiLayers()
 
     const {
         data,
@@ -33,17 +37,33 @@
     let debug = $state('')
 
     let status = $state<{ level: "✅" | "ℹ️" | "⚠️" | "❌"; text: string }>();
-    let mode = $state<"order" | "summary">("order");
+    const modes = [
+        {
+            name: "order",
+            label: m["baroo.bar.pos.action.order"],
+        },
+        {
+            name: "summary",
+            label: m["baroo.bar.pos.action.summary"],
+        },
+    ] as const
+
+    let mode = $state<typeof modes[number]["name"]>("order");
     let userIdInput = $state("");
+    function selectMode(opt: typeof modes[number]) {
+        if (userIdInput.length) {
+            return handleEntry(userIdInput, opt.name)
+        }
+        mode = opt.name
+    }
 
     let bar = $derived(store.snapshot?.bar ?? null);
-    let offerItems = $derived(store.offerItems);
     let narrationEnabled = $derived(!!store.config.greetingTemplate.trim());
 
     let orderDialog = $state<HTMLDialogElement>();
     let summaryDialog = $state<HTMLDialogElement>();
 
-    type OrderItem = { key: string; variant: string };
+    type OrderItem = Pick<BarOrderItem, "key" | "variant">;
 
     const balanceCtrl = $state({
         activeMapping: null as null | TagMapping,
@@ -100,7 +120,7 @@
                 serialId: this.workingCopy.id,
                 // Carried alongside the card so a badge-number order — where there is no
                 // card to resolve — still lands on the right tab.
-                memberId: this.activeMapping?.userId,
+                memberId: this.activeMapping?.member.id,
                 memberLabel: this.workingCopy.label,
                 items: [...this.currentOrder.items],
             });
@@ -116,7 +136,7 @@
         showSummary(mapping: TagMapping, label: string) {
             this.activeMapping = mapping;
 
-            const timeline = store.timeline(mapping.userId);
+            const timeline = store.timeline(mapping.member.id);
             const lastSettlement = timeline.find((entry) => entry.type === 'settlement');
 
             const items = timeline
@@ -147,66 +167,6 @@
         return counts;
     });
 
-    const summaryRows = $derived.by(() => {
-        const itemCounts: Record<
-            string,
-            {
-                name: string;
-                valueCounts: Record<
-                    string,
-                    { value: string; price: number; count: number }
-                >;
-            }
-        > = {};
-
-        for (const item of balanceCtrl.workingCopy?.items || []) {
-            const offerItem = offerItems.find((o) => o.key === item.key);
-            if (!offerItem) {
-                console.warn("Unknown offer item in balance:", item);
-                continue
-            }
-
-            if (!itemCounts[item.key]) {
-                itemCounts[item.key] = { name: offerItem.name, valueCounts: {} };
-            }
-            if (!itemCounts[item.key].valueCounts[item.variant]) {
-                itemCounts[item.key].valueCounts[item.variant] = {
-                    value: servingLabel(offerItem, item.variant),
-                    price: offerItem.pricing?.[item.variant] || 0,
-                    count: 0,
-                };
-            }
-            itemCounts[item.key].valueCounts[item.variant].count++;
-        }
-
-        return Object.values(itemCounts)
-                .map((item) => ({
-                    item: item.name,
-                    amount: Object.values(item.valueCounts)
-                        .map(
-                            (data) =>
-                                `${data.count}×${data.value}` +
-                                (data.price ? ` (${data.price} Kč)` : ""),
-                        )
-                        .join(", "),
-                    price: Object.values(item.valueCounts).reduce(
-                        (sum, vc) => sum + vc.count * vc.price,
-                        0,
-                    ),
-                }));
-    });
-
-    const summaryTotalPrice = $derived(
-        computeTotalPrice(balanceCtrl.workingCopy?.items || [], store.barOffer),
-    );
-
-    const priceFormatter = new Intl.NumberFormat('cs', {
-        style: 'currency',
-        currency: "czk",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-    })
-
     function setStatus(
         level: NonNullable<typeof status>["level"],
         text: NonNullable<typeof status>["text"],
@@ -235,27 +195,28 @@
         if (!member) return null;
 
         // Members enrolled without a card still drink — the order names them by id.
-        return (
-            store.findMappingByMember(member.id) ?? {
-                serialId: "",
-                userId: member.id,
+        const foundMapping = store.findMappingByMember(member.id)
+        if (foundMapping) return foundMapping
+
+        return {
+            serialId: "",
+            member: {
+                id: member.id,
                 nickName: member.nickName,
-                extra: {
-                    avatar_1x1: member.avatar_1x1 ?? "",
-                    greeting: member.greeting,
-                },
-            }
-        );
+                seq: member.seq,
+            },
+            extra: {
+                avatar_1x1: member.avatar_1x1 ?? "",
+                greeting: member.greeting,
+            },
+        }
     }
 
     /**
      * The one way in. Whether the id was typed, tapped on the tablet's own NFC, or
      * pushed up from a PC/SC reader, it lands here and is treated identically.
      */
-    function handleEntry(raw: string, action: "order" | "summary") {
-        const serialId = normalizeTag(raw);
-        if (!serialId) return;
-
+    function handleEntry(raw: string, action: typeof modes[number]["name"]) {
         const mapping = resolveEntry(raw);
 
         if (!mapping) {
@@ -263,23 +224,17 @@
 
             // A mistyped badge number is not a card — putting it on the staff console's
             // to-do list would only give them a phantom to chase.
-            if (BADGE_NUMBER.test(serialId)) {
-                setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: serialId }));
+            if (BADGE_NUMBER.test(raw)) {
+                setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: raw }));
                 return;
             }
 
-            store.noteUnknownTag(serialId);
-            setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId }));
+            store.noteUnknownTag(raw);
+            setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId: raw }));
             return;
         }
 
-        const displayName = mapping.nickName || "???";
-        setStatus("✅", m["baroo.bar.status.tag_recognized"]({
-            serialId,
-            nickName: displayName,
-            userId: mapping.userId,
-        }));
-
+        const displayName = mapping.member.nickName || "???";
         // `null` when this device has no greeting template — narration is off entirely.
         const greeting = greetingFor(store.config, {
             nickName: displayName,
@@ -437,78 +392,83 @@
             console.debug("No scanner stream (expected with no server):", err);
         }
 
-        // The only external reader a tablet browser can hear. Always armed: there is
-        // no way to ask whether one is plugged in, and with none attached it costs a
-        // discarded keystroke — the barman's typing is far too slow to reach it.
-        const unlistenWedge = listenForKeyboardWedge(document, { onScan: handleScan });
-
         const url = new URL(window.location.toString())
         debug = url.searchParams.get('debug') || ''
 
         return () => {
             unsubscribeScanner?.();
-            unlistenWedge();
             boot.destroy()
         };
     });
+
+    // The only external reader a tablet browser can hear. Always armed: there is
+    // no way to ask whether one is plugged in, and with none attached it costs a
+    // discarded keystroke — the barman's typing is far too slow to reach it.
+    onMount(() => listenForKeyboardWedge(document, { onScan: handleScan }))
 </script>
 
-<main class="boot-stack" data-theme={store.config.theme}>
+<main class="grid-stack" data-theme={store.config.theme}>
     <WallClock />
 
-    <div data-boot-init>
-        <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>Tak to rozjedem</button>
-    </div>
-
     <div class="main-content">
-        <h1>
-            {m["baroo.page_front.title"]({ barName: bar?.name || bar?.slug || "" })}
-        </h1>
-        {#if store.deviceLabel}
-            <p class="device-name">{store.deviceLabel}</p>
-        {/if}
-        <form name="selectBadgeForm" class="card card-body" data-boot onsubmit={submitSelectForm}>
-            <div class="form-section">
-                <div class="btn-group">
-                    <label class="btn btn-baroo">
+        <div class="card -title">
+            <div class="card-body">
+                <h1>{m["baroo.page_front.title"]({ barName: bar?.name || bar?.slug || "" })}</h1>
+            </div>
+        </div>
+        <div class="card -form grid-stack">
+            <div class="card-body" data-boot-init>
+                <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>Tak to rozjedem</button>
+            </div>
+            <form name="selectBadgeForm" class="card-body" onsubmit={submitSelectForm} data-boot>
+                {#if store.config.idInput}
+                <div class="form-section">
+                    <div class="input-group input-group-lg">
                         <input
-                            type="radio"
-                            name="action"
-                            value="order"
+                            name="serialId"
+                            id="serialId"
+                            class="form-control"
                             required
-                            checked={mode === "order"}
-                            onchange={() => mode = 'order'}
+                            aria-label={m["baroo.bar.userRef"]()}
+                            inputmode={kioskPrefs.idInputMode}
+                            bind:value={userIdInput}
+                            placeholder={m["baroo.bar.pos.id_input_placeholder"]()}
                         />
-                        <span class="text">{m["baroo.bar.pos.action.order"]()}</span>
-                    </label>
-                    <label class="btn btn-baroo">
-                        <input type="radio" name="action" value="summary" required
-                        checked={mode === "summary"}
-                        onchange={() => mode = 'summary'}
-                    />
-                        <span class="text">{m["baroo.bar.pos.action.summary"]()}</span>
-                    </label>
+                    </div>
                 </div>
+                {/if}
+                <div class="form-section">
+                    <div class="btn-group">
+                        {#each modes as opt (opt.name)}
+                        <button class="btn btn-baroo {opt.name === mode ? 'btn-primary' : 'btn-outline-primary'}"
+                            type="button"
+                            onclick={() => selectMode(opt)}
+                        >
+                            <span class="text">{opt.label()}</span>
+                        </button>
+                        {/each}
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="card -info">
+            <div class="card-footer">
+                {#if store.deviceLabel}
+                    <span class="device-name">{store.deviceLabel}</span>
+                {/if}
+                {#if store.isStaffDevice && store.snapshot}
+                    <span role="separator">⊙</span>
+                    <button type="button" class="btn btn-link btn-text" onclick={() => (
+                        layerManager.pushComponent(StaffDrawer, { bar: store}, {
+                            heading: `${m["baroo.staff.title"]()} — ${store.snapshot?.bar.name}`
+                        })
+                    )}>
+                        {m["baroo.staff.title"]()}
+                    </button>
+                {/if}
             </div>
+        </div>
 
-            {#if store.config.idInput}
-            <div class="form-section">
-                <div class="input-group input-group-lg">
-                    <input
-                        name="serialId"
-                        id="serialId"
-                        class="form-control"
-                        required
-                        aria-label={m["baroo.bar.userRef"]()}
-                        inputmode={kioskPrefs.idInputMode}
-                        bind:value={userIdInput}
-                        placeholder={m["baroo.bar.pos.id_input_placeholder"]()}
-                    />
-                    <button type="submit" class="btn btn-primary" aria-label={m["generic.action.open"]()}>⏎</button>
-                </div>
-            </div>
-            {/if}
-        </form>
 
         <div class="info-sections" data-boot>
             {#if status?.text}
@@ -528,17 +488,6 @@
         {/if}
 
         {#if debug?.includes('stream')}<MessageStream stream={scannerEventStream} />{/if}
-
-        <!--
-            Which build is on this tablet. Not decoration: kiosks are primed one by one
-            and then left alone for the evening, so the first question about any odd
-            behaviour is whether this one ever got the fix.
-        -->
-        <footer class="build-info">
-            <span>{m["baroo.bar.build_version"]({ version: APP_VERSION })}</span>
-            <span aria-hidden="true">·</span>
-            <span>{m["baroo.bar.build_date"]({ date: formatBuildDate() })}</span>
-        </footer>
     </div>
 </main>
 
@@ -559,7 +508,7 @@
             <img
                 class="avatar-1x1"
                 src={balanceCtrl.activeMapping?.extra?.avatar_1x1
-                    ? `/storage/api/files/bar_members/${balanceCtrl.activeMapping.userId}/${balanceCtrl.activeMapping.extra.avatar_1x1}`
+                    ? `/storage/api/files/bar_members/${balanceCtrl.activeMapping.member.id}/${balanceCtrl.activeMapping.extra.avatar_1x1}`
                     : '/assets/default-badge.svg'
                 }
                 alt=""
@@ -569,7 +518,7 @@
             </h2>
         </div>
         <div class="card-body offer">
-            {#each offerItems as item (item.key)}
+            {#each store.offerItems as item (item.key)}
                 {@const servings = servingsOf(item).filter((serving) => item.pricing?.[serving.key] != null)}
                 <div class="item" data-key={item.key}>
                     <span class="item-name">{item.name}</span>
@@ -631,60 +580,61 @@
         aria-label={m["baroo.bar.order.cancel"]()}
         onclick={() => summaryDialog!.close()}>✖</button
     >
-    <div class="card">
-        <div class="card-header">
-            <img
-                class="avatar-1x1"
-                src={balanceCtrl.activeMapping?.extra?.avatar_1x1
-                    ? `/storage/api/files/bar_members/${balanceCtrl.activeMapping.userId}/${balanceCtrl.activeMapping.extra.avatar_1x1}`
-                    : '/assets/default-badge.svg'
-                }
-                alt=""
-            />
-            <h2>
-                {m["baroo.bar.order.title_summary"]({ userName: balanceCtrl.workingCopy?.label || "" })}
-            </h2>
-        </div>
-        <div class="summary">
-            <table>
-                <thead>
-                    <tr>
-                        <th data-name="item">{m["baroo.bar.summary.item"]()}</th>
-                        <th data-name="amount">{m["baroo.bar.summary.amount"]()}</th>
-                        <th data-name="price">{m["baroo.bar.summary.price"]()}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {#each summaryRows as item, i (i)}
-                        <tr>
-                            <td data-name="item">{item.item}</td>
-                            <td data-name="amount">{item.amount}</td>
-                            <td data-name="price">{priceFormatter.format(item.price)}</td>
-                        </tr>
-                    {/each}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="2"></td>
-                        <td data-name="price">{priceFormatter.format(summaryTotalPrice)}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
+    {#if balanceCtrl.workingCopy && balanceCtrl.activeMapping}
+    <MemberSummary bar={store}
+        items={balanceCtrl.workingCopy.items}
+        activeMapping={balanceCtrl.activeMapping}
+    >
+
+    </MemberSummary>
+    {:else}
+    ???
+    {/if}
 </dialog>
 {/if}
 
 <style lang="scss">
-.boot-stack {
+.card {
+    transition: translate 0.5s;
+    --hide-rate: 1;
+
+    &.-title {
+        --bs-card-spacer-y: 0.25rem;
+        text-align: center;
+        margin: 0 1rem calc(-1 * var(--bs-card-spacer-y));
+
+        translate: 0 calc(var(--hide-rate) * 100%);
+        transition-delay: 0.2s;
+
+        h1 {
+            margin: 0;
+        }
+    }
+    &.-form {
+        z-index: 1;
+    }
+    &.-info {
+        margin: calc(-1 * var(--bs-card-inner-border-radius)) 1rem 0;
+
+        translate: 0 calc(var(--hide-rate) * -100%);
+        transition-delay: 0.4s;
+    }
+}
+:global(body[data-boot-status="ready"]) {
+    .card {
+        --hide-rate: 0;
+    }
+}
+
+.grid-stack {
     display: grid;
     > * {
         grid-area: 1 / 1;
     }
-
-    [data-boot-init] {
-        z-index: 20;
-    }
+}
+[data-boot-init] {
+    z-index: 20;
+    text-align: center;
 }
 .instr-text {
     font-size: 2rem;
@@ -696,22 +646,9 @@
     }
 }
 
-.build-info {
-    // Clears the fixed connectivity badge, which owns the bottom-right corner.
-    margin-block: 2rem 3rem;
-    display: flex;
-    justify-content: center;
-    gap: 0.4rem;
-    font-size: 0.75rem;
-    color: #9ca3af;
-    font-variant-numeric: tabular-nums;
-}
-
 
 .btn-xl {
-    font-size: 4rem;
-    width: 100%;
-    height: 10ch;
+    font-size: 3rem;
 }
 
 :global(.message-stream) {

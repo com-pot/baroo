@@ -39,10 +39,6 @@
         <Accordion name="staff-op" title={m["baroo.staff.settle_section"]()}>
             <SettlementWidget {bar} />
         </Accordion>
-
-        <Accordion name="staff-op" title={m["baroo.staff.unseal_section"]()}>
-            <UnsealWidget {bar} />
-        </Accordion>
     </AccordionGroup>
 
     <!--

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Snippet } from "svelte";
+    import { onMount, type Snippet } from "svelte";
 
     let {
         isOpen = $bindable(false),
@@ -7,14 +7,24 @@
         children,
     }: {
         isOpen?: boolean,
-        heading?: Snippet,
+        heading?: Snippet | string,
         children: Snippet
     } = $props()
+
+    onMount(() => {
+        $inspect({
+            isOpen,
+            heading,
+            children,
+        })
+    })
 </script>
 
 <aside class="drawer">
     <header class="drawer-header">
-        {#if heading}
+        {#if typeof heading === "string"}
+        <h3>{heading}</h3>
+        {:else if heading}
         <h3>{@render heading()}</h3>
         {/if}
         <button

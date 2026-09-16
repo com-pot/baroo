@@ -58,6 +58,9 @@
                 {serial}
             </button>
         {/each}
+        <button type="button" class="btn btn-sm btn-outline-warning"
+            onclick={() => { store.unknownTags = [] }}
+        >✖️</button>
     </div>
 {:else}
     <p class="meta">{m["baroo.staff.tags_empty"]()}</p>

@@ -1,0 +1,44 @@
+.card-body.-flush {
+    padding: 0;
+}
+
+.table.-sticky {
+    thead {
+        position: sticky;
+        top: 0;
+    }
+    tfoot {
+        position: sticky;
+        bottom: 0;
+
+        container: sticky-tfoot;
+        container-type: scroll-state;
+    }
+}
+
+@container sticky-tfoot scroll-state(stuck: bottom) {
+    tr {
+        box-shadow: 0px -4px 12px #dddd !important;
+    }
+}
+
+.inline-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.75rem;
+
+    label {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+        // Pair up in the drawer's ~550px instead of stacking one per row.
+        flex: 1 1 14rem;
+    }
+}
+
+.btn-text {
+    padding: 0;
+}

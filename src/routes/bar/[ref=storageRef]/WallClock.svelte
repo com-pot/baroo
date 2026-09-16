@@ -2,11 +2,6 @@
     import * as m from "$lib/paraglide/messages.js";
     import { onMount } from "svelte";
 
-    /**
-     * The time, in its own corner. A tablet parked in kiosk mode hides the system
-     * status bar, so this is the only clock in the room — and "how long till last
-     * orders" is asked across the bar all evening.
-     */
     let now = $state(new Date());
 
     onMount(() => {
@@ -22,9 +17,6 @@
     });
 
     const pad = (value: number) => String(value).padStart(2, "0");
-
-    // Padded by hand rather than through Intl: the kiosk runs in whichever locale the
-    // bar is set to, and this face is 24h HH:MM in all of them.
     const time = $derived(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
 </script>
 
@@ -37,8 +29,6 @@
     position: fixed;
     inset-block-start: 0.5rem;
     inset-inline-start: 0.5rem;
-    // Level with the connectivity badge in the opposite corner, so the boot overlay
-    // dims the page without swallowing either of them.
     z-index: 50;
 
     padding: 0.35rem 0.9rem;
@@ -49,7 +39,7 @@
     font-size: 2rem;
     font-weight: 600;
     line-height: 1;
-    // Keeps the pill from twitching as the digits change width.
+
     font-variant-numeric: tabular-nums;
 }
 </style>

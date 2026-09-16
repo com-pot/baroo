@@ -32,7 +32,7 @@
     const uid = $props.id();
 </script>
 
-<section class="stock-board">
+<section class="stock-board" data-boot>
     <h2>{m["baroo.bar.stock.title"]()}</h2>
 
     {#if stockSorted.length}

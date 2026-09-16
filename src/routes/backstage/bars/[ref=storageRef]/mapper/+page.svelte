@@ -33,13 +33,13 @@
         const byUser = new Map<string, { userId: string; nickName: string; tags: TagMapping[] }>();
 
         for (const mapping of mappings) {
-            const entry = byUser.get(mapping.userId) ?? {
-                userId: mapping.userId,
-                nickName: mapping.nickName,
+            const entry = byUser.get(mapping.member.id) ?? {
+                userId: mapping.member.id,
+                nickName: mapping.member.nickName,
                 tags: [],
             };
             entry.tags.push(mapping);
-            byUser.set(mapping.userId, entry);
+            byUser.set(mapping.member.id, entry);
         }
 
         return [...byUser.values()];
@@ -72,7 +72,7 @@
         const confirmed = confirm(
             m["baroo.backstage.mapper.remove_confirm"]({
                 serialId: mapping.serialId,
-                nickName: mapping.nickName,
+                nickName: mapping.member.nickName,
             }),
         );
         if (!confirmed) return;
@@ -82,7 +82,7 @@
             sync();
             statusMessage = m["baroo.backstage.mapper.removed"]({
                 serialId: mapping.serialId,
-                nickName: mapping.nickName,
+                nickName: mapping.member.nickName,
             });
         } catch (error) {
             alert(String(error));
@@ -109,10 +109,10 @@
                 };
                 ndef.onreading = async (event: any) => {
                     serialId = event.serialNumber;
-                    const member = await mapper.get(serialId);
-                    if (member) {
-                        userId = member.userId;
-                        nickName = member.nickName;
+                    const mapping = await mapper.get(serialId);
+                    if (mapping) {
+                        userId = mapping.member.id;
+                        nickName = mapping.member.nickName;
                     }
 
                     document.getElementById("userId")?.focus();

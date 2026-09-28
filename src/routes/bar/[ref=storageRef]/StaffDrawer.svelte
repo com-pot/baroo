@@ -8,11 +8,14 @@
     import NewMemberWidget from "./NewMemberWidget.svelte";
     import TagMemberMappingWidget from "./TagMemberMappingWidget.svelte";
     import SettlementWidget from "./SettlementWidget.svelte";
-    import UnsealWidget from "./UnsealWidget.svelte";
     import SyncWidget from "./SyncWidget.svelte";
     import SnapshotDebugWidget from "./SnapshotDebugWidget.svelte";
     import CacheResetWidget from "./CacheResetWidget.svelte";
     import { kioskPrefs } from "$lib/pos/kioskPrefs.svelte";
+    import { getUiLayers } from "$lib/ui/uiLayers.svelte";
+    import DevicePreferences from "./DevicePreferences.svelte";
+
+    const uiLayers = getUiLayers()
 
     /**
      * The barman's tools, one operation per fold.
@@ -24,6 +27,12 @@
      * mean scrolling past three of them to reach the fourth.
      */
     let { bar }: { bar: OfflineBar } = $props();
+
+    function openPreferences() {
+        uiLayers.pushComponent(DevicePreferences, {config: bar.config}, {
+            heading: "Předvolby zařízení " + bar.deviceLabel,
+        })
+    }
 </script>
 
 <div class="staff-drawer">
@@ -41,11 +50,13 @@
         </Accordion>
     </AccordionGroup>
 
-    <!--
-        Device preferences, not operations: nothing is queued or synced, the switch just
-        changes how this tablet behaves. Hidden entirely when the manual id field is off,
-        since then there is no keyboard to choose.
-    -->
+    <div class="actions">
+        <button class="btn btn-outline-secondary btn-sm" onclick={() => openPreferences()}>
+            <span>Předvolby zařízení</span>
+        </button>
+
+    </div>
+
     {#if bar.config.idInput}
         <section class="staff-section">
             <h2>{m["baroo.staff.kiosk_section"]()}</h2>

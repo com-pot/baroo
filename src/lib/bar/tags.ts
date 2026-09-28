@@ -6,13 +6,6 @@ export type TagMapping = {
     extra?: Record<string, unknown>,
 }
 
-export type ImportMapping = {
-    seq: string,
-    userId: BarMember["id"],
-    nickName: BarMember["nickName"],
-    serialId: string,
-}
-
 /**
  * Server-backed tag mapping, used by the backstage mapper where there is always a
  * connection. The kiosk does not use this — it reads mappings from its offline
@@ -72,62 +65,53 @@ export class TagMapper {
         return this.mappings.find(m => m.serialId === serialId)
     }
 
-    public async bulkImport(csvData: string): Promise<{ success: number, errors: string[] }> {
-        const errors: string[] = [];
+    public async bulkImport(result: BulkImportData<TagMapping> ): Promise<{ success: number, errors: LineError[] }> {
+        const errors: LineError[] = [];
         let success = 0;
-
-        const lines = csvData.trim().split('\n').filter(line => line.trim());
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-
-            try {
-                const mapping = parseImportLine(line);
-                if (mapping) {
-                    // Convert ImportMapping to TagMapping (seq becomes userId for now)
-                    const tagMapping: TagMapping = {
-                        serialId: mapping.serialId,
-                        member: {
-                            id: mapping.seq, // Using seq as userId as per requirements
-                            nickName: mapping.nickName,
-                            seq: Number(mapping.seq),
-                        },
-                    };
-
-                    await this.put(tagMapping);
-                    success++;
-                } else {
-                    errors.push(`Line ${i + 1}: Invalid format`);
-                }
-            } catch (error) {
-                errors.push(`Line ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            }
+        for (let i = 0; i < result.items.length; i++ ) {
+            const mapping = result.items[i]
+            await this.put({
+                serialId: mapping.serialId,
+                member: {
+                    id: mapping.member.id || `${mapping.member.seq}`,
+                    nickName: mapping.member.nickName,
+                    seq: mapping.member.seq,
+                },
+            })
+                .then(() => success++)
+                .catch((err) => errors.push({line: i, error: `${err instanceof Error ? err.message : String(err)}`}))
         }
 
         return { success, errors };
     }
 }
 
-/** Parses one tab-separated `seq\tnickName\tserialId` import line. */
-export function parseImportLine(line: string): ImportMapping | null {
-    const parts = line.split('\t');
-    if (parts.length !== 3) {
-        return null;
+type LineError = { line: number, error: string }
+export type BulkImportData<T> = {
+    items: T[],
+    errors: LineError[],
+}
+
+export function parseMappingFromCsv<T>(csvData: string, parseImportLine: (line: string) => T | null): BulkImportData<T> {
+    const lines = csvData.trim().split('\n')
+        .map((line, i) => ({line: i, data: line.trim()}))
+        .filter(({ data }) => data.length);
+
+    const result: BulkImportData<T> = {
+        items: [],
+        errors: [],
     }
 
-    const [seq, nickName, serialId] = parts.map(p => p.trim());
-
-    if (!seq || !nickName || !serialId) {
-        return null;
+    for (const entry of lines) {
+        const mapping = parseImportLine(entry.data)
+        if (mapping) {
+            result.items.push(mapping)
+        } else {
+            result.errors.push({line: entry.line, error: `Invalid format`});
+        }
     }
 
-    return {
-        seq,
-        userId: seq, // seq is used as userId
-        nickName,
-        serialId
-    };
+    return result
 }
 
 export function isValidMapping(data: unknown): data is TagMapping {

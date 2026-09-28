@@ -19,17 +19,23 @@
     }
 }
 
-.backstage-header {
+.backstage-layout > .navbar {
+    --bs-navbar-padding-x: 1rem;
     background: #1a1a1a;
     color: white;
-    padding: 1rem 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
 
-    .brand {
-        margin-block-start: -0.5rem;
-        margin-block-end: -0.5rem;
+    .navbar-brand {
+        margin: calc(-1 * var(--bs-navbar-padding-y))
+                calc(-1 * var(--bs-gutter-x) * 0.5)
+                calc(-1 * var(--bs-navbar-padding-y));
+        padding: var(--bs-navbar-padding-y);
+        width: var(--brand-width);
+        display: grid;
+        place-content: center;
+        place-self: start;
+
+        background-color: #666;
+        color: white;
 
         small {
             color: #ccc;
@@ -40,9 +46,7 @@
         line-height: 1;
         font-size: 1.5rem;
     }
-}
 
-.backstage-nav {
     ul {
         list-style: none;
         padding: 0;
@@ -56,10 +60,53 @@
         text-decoration: none;
         padding: 0.5rem 1rem;
         border-radius: 4px;
-        transition: background 0.2s;
+        transition: background-color 0.2s;
 
         &:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    }
+
+    .dropdown {
+        position: relative;
+
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+        }
+        &:hover {
+            .dropdown-menu {
+                display: block;
+            }
+        }
+    }
+}
+
+@media (max-width: 499px) {
+    .backstage-layout {
+        .navbar-brand {
+            grid-auto-flow: column;
+            gap: 0.5rem;
+        }
+    }
+}
+@media (min-width: 500px) {
+    .backstage-layout {
+        --brand-overshoot: 1rem;
+        --brand-width: 8ch;
+
+        > .navbar {
+            padding-inline-start: calc(var(--bs-navbar-padding-x) + var(--brand-width));
+            .navbar-brand {
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+
+            & + .breadcrumbs {
+                margin-inline-start: var(--brand-width);
+            }
         }
     }
 }

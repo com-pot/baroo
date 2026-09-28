@@ -3,65 +3,37 @@
     import type { PageData, ActionData } from './$types';
     import { enhance } from '$app/forms';
     import type { SubmitFunction } from '@sveltejs/kit';
-    import { onMount } from 'svelte';
-    import type { MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
-    import Drawer from '$lib/components/Drawer.svelte';
-    import TimelineMemberHistory from './TimelineMemberHistory.svelte';
-    import { aggregateMemberOrders } from '$lib/bar/stats/memberOrderOverview';
-    import ProfileBadge from './ProfileBadge.svelte';
+    import { onMount, type ComponentProps } from 'svelte';
+    import type { MemberSummary, MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
     import type { MemberImportIssue } from '$lib/bar/memberImport';
+    import { getUiLayers, type UiComponentLayer, type UiLayerCtrl } from '$lib/ui/uiLayers.svelte';
+    import MemberSummaryCards from './MemberSummaryCards.svelte';
+
+    const uiLayers = getUiLayers()
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
-    let selectedMember = $state<typeof data.summaries[0] | null>(null);
-    let timeline = $state<MemberTimelineEntry[] | null>(null);
+    let memberDetailLayer = $state<UiComponentLayer<ComponentProps<typeof MemberSummaryCards>>|null>(null)
     let settlementAmount = $state(0);
     let toDue = $derived.by(() => {
-        if (!selectedMember?.standing.amountDue) return null
+        const summary = memberDetailLayer?.props.summary
+        if (!summary?.standing.amountDue) return null
 
-        return selectedMember.standing.amountDue - settlementAmount;
+        return summary.standing.amountDue - settlementAmount;
     })
+    async function openMemberDetail(summary: MemberSummary) {
+        const timeline = await loadTimeline(summary.member.id)
 
-    function openMemberDetail(member: typeof data.summaries[0]) {
-        selectedMember = member;
-        return loadTimeline(member.member.id);
-    }
+        memberDetailLayer = uiLayers.pushComponent(MemberSummaryCards, {
+            barOffer: data.barOffer,
+            summary,
+            timeline,
 
-    function closeDrawer() {
-        selectedMember = null;
-        timeline = null;
-        settlementAmount = 0;
-        profileBadgeStats = null;
-    }
-
-    let profileBadgeStats = $state<null|ReturnType<typeof aggregateMemberOrders>>(null)
-    function showProfileBadge() {
-        if (!selectedMember || !timeline) {
-            console.error("No selected member to show profile badge for.");
-            return;
-        }
-        console.log(selectedMember)
-        profileBadgeStats = aggregateMemberOrders(timeline, data.barOffer)
-    }
-    function saveProfileBadgeImg() {
-        const badgeElement = document.querySelector('.profile-badge') as HTMLElement;
-        if (!badgeElement) {
-            console.error("Profile badge element not found.");
-            return;
-        }
-
-        import('html-to-image').then(({ toPng }) => {
-            toPng(badgeElement, { cacheBust: true })
-                .then((dataUrl) => {
-                    const link = document.createElement('a');
-                    link.download = `${selectedMember!.member.nickName}-badge.png`;
-                    link.href = dataUrl;
-                    link.click();
-                })
-                .catch((error) => {
-                    console.error('Error generating image:', error);
-                });
-        });
+            settlementFormSnippet,
+        }, {
+            heading: m["baroo.backstage.summaries.timeline_title"]({ nickName: summary.member.nickName }),
+            onDestroyed: () => { memberDetailLayer = null }
+        })
     }
 
     async function loadTimeline(memberId: string) {
@@ -76,7 +48,7 @@
         });
 
         const result = await response.json();
-        timeline = result || [];
+        return (result || []) as MemberTimelineEntry[]
     }
 
     onMount(() => {
@@ -84,7 +56,6 @@
         import("bootstrap/dist/js/bootstrap.bundle.min.js");
     });
 
-    let isImportOpen = $state(false);
     let importText = $state('');
     let importPending = $state(false);
     /**
@@ -95,11 +66,23 @@
     let importPartial = $state<{ created: number; renamed: number } | null>(null);
     let importResult = $state<{ created: number; renamed: number; unchanged: number } | null>(null);
 
+    let importLayerCtrl = $state<UiLayerCtrl | null>(null)
     function openImport() {
+        if (importLayerCtrl) {
+            console.warn("Import already open")
+            return
+        }
+
         importIssues = null;
         importPartial = null;
         importResult = null;
-        isImportOpen = true;
+
+        importLayerCtrl = uiLayers.pushSnippet(importMembersSnippet, {
+            heading: m["baroo.backstage.summaries.import.drawer_title"](),
+            onDestroyed: () => {
+                importLayerCtrl = null
+            },
+        }).ctrl
     }
 
     /** Back from the error report to the paste that produced it, still in the textarea. */
@@ -129,7 +112,6 @@
                 importIssues = null;
                 importPartial = null;
                 importText = '';
-                isImportOpen = false;
             }
 
             // Reloads the member list from the server, which is what makes the new names show.
@@ -148,17 +130,6 @@
             case 'write_failed': return m["baroo.backstage.summaries.import.reason_write_failed"]({ message: reason.message });
         }
     }
-
-    $effect(() => {
-        if (form?.success && form.action === 'settleMember') {
-            if (selectedMember) {
-                loadTimeline(selectedMember.member.id);
-            }
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
-        }
-    });
 </script>
 
 <main class="backstage-content" data-page="bar.summaries">
@@ -230,145 +201,104 @@
     {/if}
 </main>
 
-{#if isImportOpen}
-    <Drawer bind:isOpen={isImportOpen}>
-        {#snippet heading()}{m["baroo.backstage.summaries.import.drawer_title"]()}{/snippet}
-        {#snippet children()}
-            <form method="POST" action="?/importMembers" use:enhance={submitImport} class="member-import">
-                {#if importIssues}
-                    <div class="alert alert-danger">
-                        {#if importIssues.length === 0}
-                            <p>{m["baroo.backstage.summaries.import.nothing"]()}</p>
-                        {:else}
-                            <strong>{m["baroo.backstage.summaries.import.errors_title"]({ count: String(importIssues.length) })}</strong>
-                            <p>{m["baroo.backstage.summaries.import.errors_intro"]()}</p>
-                        {/if}
-                        {#if importPartial}
-                            <p>{m["baroo.backstage.summaries.import.partial"]({
-                                created: String(importPartial.created),
-                                renamed: String(importPartial.renamed),
-                            })}</p>
-                        {/if}
-                    </div>
+{#snippet settlementFormSnippet(summary: MemberSummary)}
+<form method="POST" action="?/settleMember" use:enhance={() => {
+    return async ({ update }) => {
+        await update()
 
-                    <ul class="issues">
-                        {#each importIssues as issue (issue.lineNo)}
-                            <li>
-                                <span class="line-no">{issue.lineNo}</span>
-                                <code>{issue.raw}</code>
-                                <span class="reason">{issueText(issue.reason)}</span>
-                            </li>
-                        {/each}
-                    </ul>
+        const timeline = await loadTimeline(summary.member.id)
+        if (memberDetailLayer && timeline) {
+            memberDetailLayer.props = { ...memberDetailLayer.props, timeline }
+        }
+    }
+}} class="card-body">
+    <h3>{m["baroo.backstage.summaries.settle_tab"]()}</h3>
+    <input type="hidden" name="memberId" value={summary!.member.id} />
+    <div class="input-group">
+        <input
+            type="number"
+            name="amountPaid"
+            class="form-control"
+            placeholder={m["baroo.backstage.summaries.amount_paid"]()}
+            step="1"
+            min="0"
+            required
+            bind:value={settlementAmount}
+        />
+        <span class="input-group-text">Kč</span>
+        <button type="submit" class="btn btn-primary">{m["baroo.backstage.summaries.settle"]()}</button>
+    </div>
+    {#if toDue === null}
+        <p>{m["baroo.backstage.settlement.nada"]()}</p>
+    {:else if toDue > 0}
+        <p>{m["baroo.backstage.settlement.due"]({ amountWithCurrency: toDue.toFixed(2) + ' Kč' })}</p>
+    {:else}
+        <p>{m["baroo.backstage.settlement.toReturn"]({ amountWithCurrency: (-toDue).toFixed(2) + ' Kč' })}</p>
+    {/if}
 
-                    <!-- The paste never left `importText`, so going back lands on it unchanged. -->
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-outline-secondary" onclick={resumeEditing}>
-                            {m["baroo.backstage.summaries.import.back"]()}
-                        </button>
-                    </div>
+    {#if form?.error}
+        <div class="alert alert-danger mt-2">{form.error}</div>
+    {/if}
+</form>
+{/snippet}
+
+{#snippet importMembersSnippet()}
+    <form method="POST" action="?/importMembers" use:enhance={submitImport} class="member-import">
+        {#if importIssues}
+            <div class="alert alert-danger">
+                {#if importIssues.length === 0}
+                    <p>{m["baroo.backstage.summaries.import.nothing"]()}</p>
                 {:else}
-                    <label class="form-label" for="members">{m["baroo.backstage.summaries.import.data_label"]()}</label>
-                    <textarea
-                        id="members"
-                        name="members"
-                        class="form-control"
-                        rows="5"
-                        spellcheck="false"
-                        bind:value={importText}
-                        required
-                    ></textarea>
-                    <p class="form-text">{m["baroo.backstage.summaries.import.data_hint"]()}</p>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary" disabled={importPending}>
-                            {importPending
-                                ? m["baroo.backstage.summaries.import.submitting"]()
-                                : m["baroo.backstage.summaries.import.submit"]()}
-                        </button>
-                    </div>
+                    <strong>{m["baroo.backstage.summaries.import.errors_title"]({ count: String(importIssues.length) })}</strong>
+                    <p>{m["baroo.backstage.summaries.import.errors_intro"]()}</p>
                 {/if}
-            </form>
-        {/snippet}
-    </Drawer>
-{/if}
-
-{#if selectedMember}
-    <Drawer bind:isOpen={() => selectedMember !== null, (value) => value || closeDrawer()}>
-        {#snippet heading()}{m["baroo.backstage.summaries.timeline_title"]({ nickName: selectedMember!.member.nickName })}{/snippet}
-        {#snippet children()}
-                <div class="member-stats">
-                    <div class="stat-item">
-                        <span class="label">{m["baroo.backstage.summaries.settled_orders"]()}</span>
-                        <span class="value">{selectedMember!.standing.settledOrderItems} / {selectedMember!.standing.totalOrderItems}</span>
-                    </div>
-                    <div class="stat-item" data-slots="2">
-                        <div class="label">{m["baroo.backstage.summaries.amount_due"]()}</div>
-                        <div class="value">{selectedMember!.standing.amountDue.toFixed(2)} Kč</div>
-                    </div>
-                </div>
-
-                <div class="settlement-form card">
-                    <form method="POST" action="?/settleMember" use:enhance class="card-body">
-                        <h3>{m["baroo.backstage.summaries.settle_tab"]()}</h3>
-                        <input type="hidden" name="memberId" value={selectedMember!.member.id} />
-                        <div class="input-group">
-                            <input
-                                type="number"
-                                name="amountPaid"
-                                class="form-control"
-                                placeholder={m["baroo.backstage.summaries.amount_paid"]()}
-                                step="1"
-                                min="0"
-                                required
-                                bind:value={settlementAmount}
-                            />
-                            <span class="input-group-text">Kč</span>
-                            <button type="submit" class="btn btn-primary">{m["baroo.backstage.summaries.settle"]()}</button>
-                        </div>
-                        {#if toDue === null}
-                            <p>{m["baroo.backstage.settlement.nada"]()}</p>
-                        {:else if toDue > 0}
-                            <p>{m["baroo.backstage.settlement.due"]({ amountWithCurrency: toDue.toFixed(2) + ' Kč' })}</p>
-                        {:else}
-                            <p>{m["baroo.backstage.settlement.toReturn"]({ amountWithCurrency: (-toDue).toFixed(2) + ' Kč' })}</p>
-                        {/if}
-
-                        {#if form?.error}
-                            <div class="alert alert-danger mt-2">{form.error}</div>
-                        {/if}
-                    </form>
-                </div>
-            {#if profileBadgeStats}
-            <div class=" card">
-                <div class="card-header">
-                    <h3>{selectedMember!.member.nickName}</h3>
-                    <div class="actions">
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick={saveProfileBadgeImg}>📸</button>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <ProfileBadge member={selectedMember!.member} stats={profileBadgeStats}>
-                        {#snippet header()}
-                            <div class="badge-header" data-rank={selectedMember!.topRank}>
-                                <span>{selectedMember!.member.nickName}</span>
-                                {#if selectedMember!.topRank}<small>{selectedMember!.topRank}. největší pijan</small>{/if}
-                            </div>
-                        {/snippet}
-                        {#snippet footer()}
-                        <div class="badge-footer">
-                            <img src="/assets/eggs/minicon.svg" alt="">
-                            <span>2025</span>
-                        </div>
-                        {/snippet}
-                    </ProfileBadge>
-                </div>
+                {#if importPartial}
+                    <p>{m["baroo.backstage.summaries.import.partial"]({
+                        created: String(importPartial.created),
+                        renamed: String(importPartial.renamed),
+                    })}</p>
+                {/if}
             </div>
-            {/if}
-            <TimelineMemberHistory timeline={timeline!} {showProfileBadge} />
-        {/snippet}
-    </Drawer>
-{/if}
+
+            <ul class="issues">
+                {#each importIssues as issue (issue.lineNo)}
+                    <li>
+                        <span class="line-no">{issue.lineNo}</span>
+                        <code>{issue.raw}</code>
+                        <span class="reason">{issueText(issue.reason)}</span>
+                    </li>
+                {/each}
+            </ul>
+
+            <!-- The paste never left `importText`, so going back lands on it unchanged. -->
+            <div class="form-actions">
+                <button type="button" class="btn btn-outline-secondary" onclick={resumeEditing}>
+                    {m["baroo.backstage.summaries.import.back"]()}
+                </button>
+            </div>
+        {:else}
+            <label class="form-label" for="members">{m["baroo.backstage.summaries.import.data_label"]()}</label>
+            <textarea
+                id="members"
+                name="members"
+                class="form-control"
+                rows="5"
+                spellcheck="false"
+                bind:value={importText}
+                required
+            ></textarea>
+            <p class="form-text">{m["baroo.backstage.summaries.import.data_hint"]()}</p>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled={importPending}>
+                    {importPending
+                        ? m["baroo.backstage.summaries.import.submitting"]()
+                        : m["baroo.backstage.summaries.import.submit"]()}
+                </button>
+            </div>
+        {/if}
+    </form>
+{/snippet}
 
 <style lang="scss">
     .clickable {
@@ -377,46 +307,6 @@
 
         &:hover {
             background-color: rgba(0, 0, 0, 0.05);
-        }
-    }
-
-    .member-stats {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-
-        .stat-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 8px;
-
-            .label {
-                font-size: 0.875rem;
-                color: #6c757d;
-                margin-bottom: 0.5rem;
-            }
-
-            .value {
-                font-size: 1.5rem;
-                font-weight: bold;
-            }
-
-            &[data-slots="2"] {
-                grid-column: span 2;
-            }
-        }
-    }
-
-    .settlement-form {
-        margin-bottom: 2rem;
-
-        h3 {
-            font-size: 1.125rem;
-            margin-bottom: 1rem;
         }
     }
 
@@ -471,52 +361,5 @@
         p {
             margin: 0;
         }
-    }
-
-    .badge-header {
-        grid-row: 1;
-        grid-column: 1 / span 2;
-        place-self: start;
-        font-size: 3rem;
-        font-family: var(--font-not-jam-old-style);
-
-        display: flex;
-        flex-direction: column;
-        line-height: 1;
-
-        small {
-            align-self: start;
-
-            padding: 0.05em 0.2em;
-            border-radius: calc(10px * var(--scale));
-            font-size: 0.5em;
-            color: var(--rank-color, gray);
-            background-color: whitesmoke;
-            border: 2px solid var(--rank-color, gray);
-        }
-
-        &[data-rank="1"] { --rank-color: rgb(255, 183, 0); }
-        &[data-rank="2"] { --rank-color: rgb(153, 153, 153); }
-        &[data-rank="3"] { --rank-color: hsl(0 82% 78% / 1) }
-    }
-    .badge-footer {
-        grid-row: 1;
-        grid-column: 1 / span 2;
-        place-self: end start;
-
-        display: flex;
-        flex-direction: column;
-
-
-        img {
-            width: 10ch;
-        }
-        span {
-            align-self: end;
-            font-family: var(--font-not-jam-old-style);
-            font-size: 3rem;
-            line-height: 0.5;
-        }
-
     }
 </style>

@@ -4,8 +4,10 @@
     import * as m from "$lib/paraglide/messages.js";
     import type { OfflineBar } from "$lib/offline/store.svelte";
     import { formatQuantity } from "$lib/bar/quantity";
-    import Drawer from "$lib/components/Drawer.svelte";
     import UnsealWidget from "./UnsealWidget.svelte";
+    import { getUiLayers } from "$lib/ui/uiLayers.svelte";
+
+    const uiLayers = getUiLayers()
 
     /**
      * What is still in the open packages, one card per offer item.
@@ -23,9 +25,6 @@
         if (!a.unsealedAt) return 1
         return a.unsealedAt.localeCompare(b.unsealedAt)
     }))
-
-    /** The item whose unseal form is open, if any. */
-    let unsealing = $state<string | null>(null);
 
     // Ids have to be unique in the document, and the kiosk page may hold more than one
     // of these before long — the popovers are wired by id, so they can't share a name.
@@ -101,7 +100,15 @@
                                 type="button"
                                 popovertarget="{uid}-actions-{item.key}"
                                 popovertargetaction="hide"
-                                onclick={() => (unsealing = item.key)}
+                                onclick={() => {
+                                    const layer = uiLayers.pushComponent(UnsealWidget, {
+                                        bar,
+                                        lockedItemKey: item.key,
+                                        onDone: () => ( uiLayers.close(layer.id) )
+                                    }, {
+                                        heading: `${m["baroo.bar.stock.unseal_new"]()} — ${item.name}`,
+                                    })
+                                }}
                             >
                                 {m["baroo.bar.stock.unseal_new"]()}
                             </button>
@@ -114,22 +121,6 @@
         <p class="empty">{m["baroo.bar.stock.empty"]()}</p>
     {/if}
 </section>
-
-{#if unsealing}
-    {@const item = bar.offerItems.find((offer) => offer.key === unsealing)}
-    <!-- Closing the drawer by its own X or overlay has to clear the item too, so the
-         open flag is derived from `unsealing` in both directions rather than mirrored. -->
-    <Drawer bind:isOpen={() => true, (open) => { if (!open) unsealing = null; }}>
-        {#snippet heading()}{m["baroo.bar.stock.unseal_new"]()} — {item?.name ?? unsealing}{/snippet}
-        <div class="staff-drawer">
-            <UnsealWidget
-                {bar}
-                lockedItemKey={unsealing}
-                onDone={() => (unsealing = null)}
-            />
-        </div>
-    </Drawer>
-{/if}
 
 <style lang="scss">
     .stock-board {

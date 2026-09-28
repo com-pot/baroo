@@ -14,8 +14,6 @@
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
     import { servingsOf } from "$lib/bar/servings";
     import { Narrator } from "$lib/speech.svelte";
-    import { ScannerEventStream } from "./scannerEventStream.svelte";
-    import MessageStream from "./MessageStream.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
     import Gzt from "$lib/eggs/Gzt.svelte";
     import WallClock from "./WallClock.svelte";
@@ -154,7 +152,6 @@
             this.currentOrder = null;
             this.activeMapping = null;
             userIdInput = "";
-            mode = "order"
         },
     });
 
@@ -282,36 +279,6 @@
         }
     }
 
-    /**
-     * A USB PC/SC reader (Akasa, ACR122U, any CCID device) is invisible to the browser
-     * — WebUSB refuses to claim the smart-card interface class — so it is read by
-     * `nfc-pcsc` on whichever machine it is plugged into and pushed here over SSE.
-     * Kept out of boot: a venue with no such server still has a working till.
-     */
-    const scannerEventStream = new ScannerEventStream(data.ref, {
-        historySize: 5,
-        onMessage(message) {
-            const [, kind, payload] = message.match(/^([a-z-]+):([\s\S]*)$/) ?? [];
-
-            if (kind === 'card') {
-                handleScan(payload);
-            } else if (kind === 'reader-detected') {
-                setStatus("✅", m["baroo.bar.status.reader_ready"]({ reader: payload }));
-            } else if (kind === 'reader-error' || kind === 'pcsc-error' || kind === 'reader-reset-failed') {
-                setStatus("❌", m["baroo.bar.status.reader_error"]({ error: payload }));
-            } else if (kind === 'reader-removed') {
-                // Worth saying out loud rather than letting taps quietly do nothing:
-                // the manual id input is right there, and a bartender who knows the
-                // reader is gone uses it instead of tapping harder.
-                setStatus("⚠️", m["baroo.bar.status.reader_gone"]({ reader: payload }));
-            } else if (kind === 'reader-unhealthy') {
-                setStatus("⚠️", m["baroo.bar.status.reader_stalled"]({ detail: payload }));
-            } else if (kind === 'reader-resetting') {
-                setStatus("ℹ️", m["baroo.bar.status.reader_resetting"]());
-            }
-        },
-    });
-
     let narrator = $state<Narrator | undefined>();
 
     const boot = new Boot([
@@ -384,19 +351,17 @@
         stepInitMinMs: 137,
     });
 
-    onMount(() => {
-        let unsubscribeScanner: (() => void) | undefined;
-        try {
-            unsubscribeScanner = scannerEventStream.init();
-        } catch (err) {
-            console.debug("No scanner stream (expected with no server):", err);
-        }
+    function openStaffDrawer() {
+        layerManager.pushComponent(StaffDrawer, { bar: store}, {
+            heading: `${m["baroo.staff.title"]()} — ${store.snapshot?.bar.name}`
+        })
+    }
 
+    onMount(() => {
         const url = new URL(window.location.toString())
         debug = url.searchParams.get('debug') || ''
 
         return () => {
-            unsubscribeScanner?.();
             boot.destroy()
         };
     });
@@ -458,11 +423,8 @@
                 {/if}
                 {#if store.isStaffDevice && store.snapshot}
                     <span role="separator">⊙</span>
-                    <button type="button" class="btn btn-link btn-text" onclick={() => (
-                        layerManager.pushComponent(StaffDrawer, { bar: store}, {
-                            heading: `${m["baroo.staff.title"]()} — ${store.snapshot?.bar.name}`
-                        })
-                    )}>
+                    <button type="button" class="btn btn-link btn-text"
+                        onclick={() => openStaffDrawer()}>
                         {m["baroo.staff.title"]()}
                     </button>
                 {/if}
@@ -486,8 +448,6 @@
         {#if store.isStaffDevice}
             <OfferStockBoard bar={store} />
         {/if}
-
-        {#if debug?.includes('stream')}<MessageStream stream={scannerEventStream} />{/if}
     </div>
 </main>
 
@@ -636,9 +596,6 @@
     z-index: 20;
     text-align: center;
 }
-.instr-text {
-    font-size: 2rem;
-}
 
 .main-content h1 {
     @media (width <= 34rem) {
@@ -649,6 +606,9 @@
 
 .btn-xl {
     font-size: 3rem;
+    height: 1px;
+    min-height: 100%;
+    width: 1px; min-width: 100%;
 }
 
 :global(.message-stream) {

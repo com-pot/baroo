@@ -3,7 +3,8 @@
     "generic": {
         "action": {
             "open": "Open",
-            "copy": "copy"
+            "copy": "copy",
+            "save": "Save"
         },
         "list": {
             "no_items": "No items to display."

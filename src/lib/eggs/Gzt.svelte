@@ -9,15 +9,11 @@
     } from "./eggs.svelte";
     import { lizardCounterStorage } from "./lizardCounter";
 
-    /**
-     * Gzt as Gen-Z toy. This captures attention and makes the number go up.
-     *
-     * The counters live here rather than on the kiosk page: nothing outside this
-     * component reads them, and the page has no business holding a soundpad. The kiosk
-     * only decides whether the toy exists at all — see `config.genZToy`.
-     */
     const {
         debug = "",
+        showMine = false,
+    }: {
+        debug?: string;
         /**
          * Whether to show this device's own share of the total.
          *
@@ -25,8 +21,8 @@
          * kiosk tablet is passed around, so its tally would mean nothing to whoever is
          * holding it — hence off by default.
          */
-        showMine = false,
-    }: { debug?: string; showMine?: boolean } = $props();
+        showMine?: boolean,
+    } = $props();
 
     const sound = new BrainrotSoundPad("🦎", [
     { src: "/assets/eggs/lizard-button-sound.mp3" },

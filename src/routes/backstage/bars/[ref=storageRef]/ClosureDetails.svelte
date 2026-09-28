@@ -58,8 +58,8 @@
     {/if}
 
     {#if closure.memberStats && closure.memberStats.length > 0}
-        <div class="member-stats">
-            <strong>Top Consumers:</strong>
+        <section>
+            <heading>Top Consumers:</heading>
             <table class="table table-sm">
                 <thead>
                     <tr>
@@ -80,6 +80,6 @@
                     {/each}
                 </tbody>
             </table>
-        </div>
+        </section>
     {/if}
 </div>

@@ -35,6 +35,7 @@
         "idb": "^8.0.3",
         "nfc-pcsc": "^0.8.1",
         "pocketbase": "^0.26.3",
-        "sveltekit-sse": "^0.14.3"
+        "sveltekit-sse": "^0.14.3",
+        "zod": "^4.6.5"
     }
 }

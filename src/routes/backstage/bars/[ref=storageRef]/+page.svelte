@@ -9,10 +9,11 @@
     import { formatQuantity, measureLabel } from '$lib/bar/quantity';
     import { quantityLeft } from '$lib/bar/stats/barOfferItems';
     import ClosureDetails from './ClosureDetails.svelte';
+    import { getUiLayers } from '$lib/ui/uiLayers.svelte';
+
+    const uiLayers = getUiLayers()
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
-
-    let openDrawer: { offerItemKey: string; closureIndex: number } | null = $state(null);
 
     const offerItemUsage = $derived.by(() => {
         return (data.stats?.offerItems || [])
@@ -252,7 +253,10 @@
                                                                 type="button"
                                                                 class="dropdown-item"
                                                                 onclick={() => {
-                                                                    openDrawer = { offerItemKey: offerItem.data.key, closureIndex: index };
+                                                                    const sequenceNumber = data.stats.closureEvents[offerItem.data.key].length - index
+                                                                    uiLayers.pushComponent(ClosureDetails, {event: closure}, {
+                                                                        heading: `#${sequenceNumber} - ${closure.data.offerItemName}`
+                                                                    })
                                                                 }}
                                                             >
                                                                 #{data.stats.closureEvents[offerItem.data.key].length - index} - {new Date(closure.created).toLocaleDateString()}
@@ -302,16 +306,6 @@
                 {/if}
             </section>
         </div>
-    {/if}
-
-    <!-- Drawer for closure event details -->
-    {#if openDrawer && data.stats?.closureEvents?.[openDrawer.offerItemKey]?.[openDrawer.closureIndex]}
-        {@const closure = data.stats.closureEvents[openDrawer.offerItemKey][openDrawer.closureIndex]}
-        {@const sequenceNumber = data.stats.closureEvents[openDrawer.offerItemKey].length - openDrawer.closureIndex}
-        <Drawer bind:isOpen={() => !!openDrawer, (value) => openDrawer = value ? openDrawer : null}>
-            {#snippet heading()}#{sequenceNumber} - {closure.data.offerItemName}{/snippet}
-            <ClosureDetails event={closure} />
-        </Drawer>
     {/if}
 </main>
 

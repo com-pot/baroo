@@ -226,16 +226,7 @@
                 "title": "Pokladní zařízení",
                 "none": "Pro tento bar zatím není zaregistrováno žádné zařízení.",
                 "configure": "Nastavit",
-                "theme": "Motiv",
-                "gen_z_toy": "Gen-Z hračka",
-                "gen_z_toy_help": "Zobrazí ještěrku a počítadlo na kiosku.",
-                "id_input": "Ruční zadání ID",
-                "id_input_help": "Umožní zadat ID visačky z klávesnice.",
                 "save_config": "Uložit nastavení",
-                "greeting_template": "Šablona pozdravu",
-                "greeting_template_help": "{token} se nahradí přezdívkou. Prázdné = kiosek mlčí.",
-                "custom_greetings": "Vlastní pozdravy členů",
-                "custom_greetings_help": "Má-li člen vlastní pozdrav, použije se místo šablony.",
                 "narration_off": "Bez šablony kiosek nemluví, takže tohle nemá efekt.",
                 "create_device": "Vytvořit zařízení",
                 "create_title": "Nové zařízení",
@@ -272,6 +263,19 @@
             "logout": "Odhlásit",
             "error_invalid": "Špatný e-mail nebo heslo.",
             "error_missing": "Vyplň e-mail i heslo."
+        },
+        "pos": {
+            "config": {
+                "theme": "Motiv",
+                "genZToy": "Gen-Z hračka",
+                "genZToy.help": "Zobrazí ještěrku a počítadlo na kiosku.",
+                "idInput": "Ruční zadání ID",
+                "idInput.help": "Umožní zadat ID visačky z klávesnice.",
+                "greetingTemplate": "Šablona pozdravu",
+                "greetingTemplate.help": "\\{name\\} se nahradí přezdívkou. Prázdné = kiosek mlčí.",
+                "customGreetings": "Vlastní pozdravy členů",
+                "customGreetings.help": "Má-li člen vlastní pozdrav, použije se místo šablony."
+            }
         },
         "enroll": {
             "title": "Spárovat zařízení",

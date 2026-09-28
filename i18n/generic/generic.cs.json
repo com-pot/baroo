@@ -3,7 +3,8 @@
     "generic": {
         "action": {
             "open": "Otevřít",
-            "copy": "kopírovat"
+            "copy": "kopírovat",
+            "save": "Uložit"
         },
         "list": {
             "no_items": "Žádné položky k zobrazení."

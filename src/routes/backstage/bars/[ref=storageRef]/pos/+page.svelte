@@ -3,7 +3,7 @@
     import { enhance } from "$app/forms";
     import type { PageData, ActionData } from "./$types";
     import PosConfigFields from "$lib/pos/PosConfigFields.svelte";
-    import { DEFAULT_POS_CONFIG } from "$lib/pos/device";
+    import { configSchema } from "$lib/pos/device";
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -123,7 +123,7 @@
 
                 <fieldset>
                     <legend class="form-label">{m["baroo.backstage.pos.config_legend"]()}</legend>
-                    <PosConfigFields config={DEFAULT_POS_CONFIG} idSuffix="new" />
+                    <PosConfigFields config={configSchema.parse({})} idSuffix="new" />
                 </fieldset>
 
                 <div class="actions">

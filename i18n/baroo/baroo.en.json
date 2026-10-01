@@ -167,8 +167,6 @@
                 "cancel": "Cancel",
                 "price_list_link": "Price list",
                 "serving_preset": "Serving preset",
-                "preset_tap": "On tap (0.3 / 0.5 L)",
-                "preset_unit": "By the piece (1×)",
                 "serving_prices": "Serving prices",
                 "picture": "Picture",
                 "picture_hint": "Square, {max} at most.",

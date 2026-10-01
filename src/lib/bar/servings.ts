@@ -28,6 +28,7 @@ export type ServingPreset = {
     key: ServingPresetKey;
     /** How this preset's quantities read: litres from a tap, pieces out of a box. */
     measure: Measure;
+    label: Record<string, string>,
     servings: readonly Serving[];
 };
 
@@ -35,6 +36,10 @@ export const SERVING_PRESETS = {
     tap: {
         key: 'tap',
         measure: 'volume',
+        label: {
+            cs: "Čepované (0,3 / 0,5 l)",
+            en: "On tap (0.3 / 0.5 L)",
+        },
         servings: [
             { key: '0_3', label: '0.3', quantity: 0.3 },
             { key: '0_5', label: '0.5', quantity: 0.5 },
@@ -43,13 +48,15 @@ export const SERVING_PRESETS = {
     unit: {
         key: 'unit',
         measure: 'count',
+        label: {
+            cs: "Kusové (1×)",
+            en: "By the piece (1×)",
+        },
         servings: [
             { key: '1', label: '1', quantity: 1 },
         ],
     },
 } as const satisfies Record<ServingPresetKey, ServingPreset>;
-
-export const SERVING_PRESET_KEYS = Object.keys(SERVING_PRESETS) as ServingPresetKey[];
 
 /** Items saved before presets existed poured beer. Treat them as tap until re-entered. */
 export const DEFAULT_SERVING_PRESET: ServingPresetKey = 'tap';

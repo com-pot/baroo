@@ -4,6 +4,7 @@ import { SERVING_PRESETS, DEFAULT_SERVING_PRESET, type ServingPresetKey } from '
 import { validate, getFieldErrors, type ValidationError } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
+import { PICTURE_MAX_BYTES } from './offerItem';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
     // Only the items — the bar itself comes from the section layout. The actions below
@@ -130,9 +131,6 @@ function collectErrors(
 }
 
 type PictureResult = { file: File | null } | { error: string };
-
-/** What the kiosk's square frames are worth carrying over a venue's connection. */
-const PICTURE_MAX_BYTES = 200_000;
 
 /**
  * The uploaded picture, re-checked here.

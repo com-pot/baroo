@@ -7,7 +7,7 @@
     import FileDrop from '$lib/components/FileDrop.svelte';
     import { formatBytes } from '$lib/bar/quantity';
     import {
-        SERVING_PRESET_KEYS,
+        SERVING_PRESETS,
         DEFAULT_SERVING_PRESET,
         servingLabel,
         servingPreset,
@@ -15,6 +15,10 @@
         servingText,
         type ServingPresetKey,
     } from '$lib/bar/servings';
+    import { PICTURE_MAX_BYTES } from './offerItem';
+    import { getRenderer } from '$lib/rendering.svelte';
+
+    const renderer = getRenderer()
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -30,16 +34,7 @@
      */
     let picture = $state<File | null>(null);
 
-    /** The kiosk draws these into a square frame, and PocketBase stores one per item. */
-    const PICTURE_MAX_BYTES = 200_000;
-
-    /** Decides whether a serving reads "0.3" or "1×". */
     const presetMeasure = $derived(servingPreset({ servingPreset: preset }).measure);
-
-    const presetLabels: Record<ServingPresetKey, () => string> = {
-        tap: m["baroo.backstage.offer.preset_tap"],
-        unit: m["baroo.backstage.offer.preset_unit"],
-    };
 
     function startEdit(item: BarOfferItem) {
         editingItem = { ...item };
@@ -244,8 +239,8 @@
                                 class="form-select"
                                 bind:value={preset}
                             >
-                                {#each SERVING_PRESET_KEYS as presetKey (presetKey)}
-                                    <option value={presetKey}>{presetLabels[presetKey]()}</option>
+                                {#each Object.values(SERVING_PRESETS) as preset (preset.key)}
+                                    <option value={preset.key}>{renderer.print(preset.label)}</option>
                                 {/each}
                             </select>
                         </div>

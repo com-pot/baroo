@@ -1,4 +1,5 @@
 import { createContext } from "svelte";
+import type { Printable } from "./i18n";
 
 export class Renderer {
 
@@ -14,6 +15,16 @@ export class Renderer {
     formatDate(dateStr: Date|string) {
         const date = new Date(dateStr);
         return this.dateFormatter.format(date);
+    }
+
+    public print(s: Printable) {
+        if (!s) return ""
+        if (typeof s === "string") return s
+        if (typeof s === "object") {
+            return s[this.opts.locale] ?? ""
+        }
+
+        return `${s}`
     }
 }
 

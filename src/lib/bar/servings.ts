@@ -93,7 +93,7 @@ export function servingQuantity(item: WithPreset, variant: string): number {
  * quantity — a piece is worth 1, same as a litre would be.
  */
 export function servingText(serving: Serving, measure: Measure): string {
-    return measure === 'count' ? `${serving.label}×` : serving.label;
+    return measure === 'count' ? `${serving.label}×` : `${serving.label}l`;
 }
 
 /** Label for a variant key against a known item. Unrecognised keys echo themselves. */

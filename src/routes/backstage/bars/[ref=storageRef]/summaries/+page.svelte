@@ -77,7 +77,7 @@
         importPartial = null;
         importResult = null;
 
-        importLayerCtrl = uiLayers.pushSnippet(importMembersSnippet, {
+        importLayerCtrl = uiLayers.pushSnippet(importMembersSnippet, undefined, {
             heading: m["baroo.backstage.summaries.import.drawer_title"](),
             onDestroyed: () => {
                 importLayerCtrl = null

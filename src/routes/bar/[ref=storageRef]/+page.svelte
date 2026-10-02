@@ -554,6 +554,12 @@
 {/if}
 
 <style lang="scss">
+@property --hide-rate {
+    syntax: "<number>";
+    inherits: true;
+    initial-value: 0;
+}
+
 .card {
     transition: translate 0.5s;
     --hide-rate: 1;
@@ -595,6 +601,29 @@
 [data-boot-init] {
     z-index: 20;
     text-align: center;
+    transition: all 0.4s ease-in-out;
+    border-radius: inherit;
+
+    & + form {
+        z-index: 1;
+
+        opacity: 1;
+    }
+
+    clip-path: polygon(
+        0 0,
+        0 calc(var(--hide-rate) * 100%),
+        100% calc(var(--hide-rate) * 100%),
+        100% 0,
+    );
+}
+
+:global(body[data-boot-status="ready"]) {
+    [data-boot-init] {
+        opacity: 1;
+        --hide-rate: 0;
+        background-color: var(--bs-card-bg);
+    }
 }
 
 .main-content h1 {

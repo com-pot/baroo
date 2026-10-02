@@ -5,7 +5,7 @@
     import { onMount } from "svelte";
 
     import type { PageData } from "./$types";
-    import { getUiLayers, type UiLayer } from "$lib/ui/uiLayers.svelte";
+    import { getUiLayers } from "$lib/ui/uiLayers.svelte";
     import ImportMembersForm from "./ImportMembersForm.svelte";
 
     const uiLayers = getUiLayers()
@@ -90,7 +90,7 @@
         }
     }
 
-    let importLayer = $state<null|UiLayer>(null)
+    let importLayer = $state<null|ReturnType<typeof uiLayers["pushComponent"]>>(null)
     function openMappingImport() {
         importLayer = uiLayers.pushComponent(ImportMembersForm, {
             doImport: async (data) => {

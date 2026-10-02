@@ -3,7 +3,6 @@
     import type { PageData, ActionData } from './$types';
     import type { BarOfferItem } from '$lib/bar/BarModel';
     import { enhance } from '$app/forms';
-    import Drawer from '$lib/components/Drawer.svelte';
     import FileDrop from '$lib/components/FileDrop.svelte';
     import { formatBytes } from '$lib/bar/quantity';
     import {
@@ -17,49 +16,35 @@
     } from '$lib/bar/servings';
     import { PICTURE_MAX_BYTES } from './offerItem';
     import { getRenderer } from '$lib/rendering.svelte';
+    import { getUiLayers, type UiLayerCtrl } from '$lib/ui/uiLayers.svelte';
 
     const renderer = getRenderer()
+    const uiLayers = getUiLayers()
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
-    let editingItem = $state<BarOfferItem | null>(null);
-    let showCreateForm = $state(false);
     let preset = $state<ServingPresetKey>(DEFAULT_SERVING_PRESET);
-    /** Price inputs keyed by serving key. Keys the current preset doesn't offer are never submitted. */
-    let prices = $state<Record<string, string>>({});
-    /**
-     * The picture waiting to go up with the next save. It never sits in the form as a
-     * file input — `enhance` appends it on submit — so cancelling the drawer discards it
-     * the same way cancelling discards a half-typed name.
-     */
     let picture = $state<File | null>(null);
 
     const presetMeasure = $derived(servingPreset({ servingPreset: preset }).measure);
 
-    function startEdit(item: BarOfferItem) {
-        editingItem = { ...item };
-        picture = null;
-        preset = item.servingPreset ?? DEFAULT_SERVING_PRESET;
-        prices = Object.fromEntries(
-            Object.entries(item.pricing || {}).map(([key, price]) => [key, String(price)]),
-        );
-        showCreateForm = false;
-    }
+    let formLayerCtrl = $state<UiLayerCtrl | null>(null);
+    function openItemForm(item: BarOfferItem | null) {
+        if (formLayerCtrl) return;
 
-    function cancelEdit() {
-        editingItem = null;
-        showCreateForm = false;
         picture = null;
-        preset = DEFAULT_SERVING_PRESET;
-        prices = {};
-    }
+        preset = item?.servingPreset ?? DEFAULT_SERVING_PRESET;
 
-    function startCreate() {
-        showCreateForm = true;
-        editingItem = null;
-        picture = null;
-        preset = DEFAULT_SERVING_PRESET;
-        prices = {};
+        formLayerCtrl = uiLayers.pushSnippet(offerItemForm, item, {
+            heading: item
+                ? m["baroo.backstage.offer.edit_item"]()
+                : m["baroo.backstage.offer.create_item"](),
+            onDestroyed: () => {
+                formLayerCtrl = null;
+                picture = null;
+                preset = DEFAULT_SERVING_PRESET;
+            },
+        }).ctrl;
     }
 </script>
 
@@ -77,7 +62,7 @@
                     <h3>{m["baroo.backstage.offer.offer_items"]()}</h3>
                     <div class="actions">
                         <a class="btn btn-outline-secondary" href="/backstage/bars/{data.ref}/offer/price-list">{m["baroo.backstage.offer.price_list_link"]()}</a>
-                        <button type="button" class="btn btn-outline-primary" onclick={startCreate}>{m["baroo.backstage.offer.add_item"]()}</button>
+                        <button type="button" class="btn btn-outline-primary" onclick={() => openItemForm(null)}>{m["baroo.backstage.offer.add_item"]()}</button>
                     </div>
                 </header>
 
@@ -124,7 +109,7 @@
                                 </td>
                                 <td>
                                     <div class="actions">
-                                        <button type="button" class="btn btn-link" onclick={() => startEdit(item)}>
+                                        <button type="button" class="btn btn-link" onclick={() => openItemForm(item)}>
                                             {m["baroo.backstage.offer.edit"]()}
                                         </button>
                                         <form method="POST" action="?/delete" use:enhance>
@@ -150,140 +135,135 @@
 
             {/if}
             </section>
-
-            {#if showCreateForm || editingItem}
-            <Drawer>
-                <h3>{editingItem ? m["baroo.backstage.offer.edit_item"]() : m["baroo.backstage.offer.create_item"]()}</h3>
-                    <form
-                        method="POST"
-                        action={editingItem ? '?/update' : '?/create'}
-                        enctype="multipart/form-data"
-                        use:enhance={({ formData }) => {
-                            // The drop zone holds the file in state rather than in an
-                            // input, so this is where it joins the rest of the fields.
-                            if (picture) formData.set('preview_1x1', picture);
-
-                            return async ({ update, result }) => {
-                                await update();
-                                if (result.type === 'success') {
-                                    cancelEdit();
-                                }
-                            };
-                        }}
-                        class="row g-3"
-                    >
-                        {#if editingItem}
-                            <input type="hidden" name="itemId" value={editingItem.id} />
-                        {/if}
-                        <div class="input-pair col-md-5">
-                            <label for="key" class="form-label">{m["baroo.backstage.offer.key"]()}</label>
-                            <input
-                                type="text"
-                                id="key"
-                                name="key"
-                                class="form-control"
-                                value={form?.data?.key ?? editingItem?.key ?? ''}
-                                required
-                                pattern="[a-z0-9\-]+"
-                                placeholder={m["baroo.backstage.offer.placeholder_key"]()}
-                                class:error={form?.errors?.key}
-                            />
-                            {#if form?.errors?.key}
-                                <span class="error-message">{form.errors.key}</span>
-                            {/if}
-                            <small>{m["baroo.backstage.offer.key_help"]()}</small>
-                        </div>
-                        <div class="input-pair col-md-7">
-                            <label for="name" class="form-label">{m["baroo.backstage.offer.name"]()}</label>
-                            <input
-                                type="text"
-                                id="name"
-                                name="name"
-                                class="form-control"
-                                value={form?.data?.name ?? editingItem?.name ?? ''}
-                                required
-                                placeholder={m["baroo.backstage.offer.placeholder_name"]()}
-                                class:error={form?.errors?.name}
-                            />
-                            {#if form?.errors?.name}
-                                <span class="error-message">{form.errors.name}</span>
-                            {/if}
-                        </div>
-                        <div class="input-pair col-12">
-                            <span class="form-label">{m["baroo.backstage.offer.picture"]()}</span>
-                            <FileDrop
-                                accept="image/*"
-                                maxBytes={PICTURE_MAX_BYTES}
-                                aspectRatio={1}
-                                aspectLabel="1:1"
-                                hint={m["baroo.backstage.offer.picture_hint"]({
-                                    max: formatBytes(PICTURE_MAX_BYTES),
-                                })}
-                                currentSrc={editingItem?.preview_1x1
-                                    ? `/storage/api/files/bar_offer_items/${editingItem.id}/${editingItem.preview_1x1}`
-                                    : null}
-                                onselect={(file) => (picture = file)}
-                            />
-                            {#if picture}
-                                <small>{m["baroo.backstage.offer.picture_pending"]()}</small>
-                            {/if}
-                            {#if form?.errors?.preview_1x1}
-                                <span class="error-message">{form.errors.preview_1x1}</span>
-                            {/if}
-                        </div>
-                        <div class="input-pair col-md-5">
-                            <label for="servingPreset" class="form-label">{m["baroo.backstage.offer.serving_preset"]()}</label>
-                            <select
-                                id="servingPreset"
-                                name="servingPreset"
-                                class="form-select"
-                                bind:value={preset}
-                            >
-                                {#each Object.values(SERVING_PRESETS) as preset (preset.key)}
-                                    <option value={preset.key}>{renderer.print(preset.label)}</option>
-                                {/each}
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">{m["baroo.backstage.offer.serving_prices"]()}</label>
-                            <div class="serving-prices">
-                                {#each servingsOf({ servingPreset: preset }) as serving (serving.key)}
-                                    <label class="serving-label" for="price_{serving.key}">{servingText(serving, presetMeasure)}</label>
-                                    <div class="input-group">
-                                        <input
-                                            type="number"
-                                            id="price_{serving.key}"
-                                            name="price_{serving.key}"
-                                            class="form-control"
-                                            placeholder={m["baroo.backstage.offer.variant_price_placeholder"]()}
-                                            bind:value={prices[serving.key]}
-                                            step="0.01"
-                                            min="0"
-                                        />
-                                        <span class="input-group-text">Kč</span>
-                                    </div>
-                                {/each}
-                            </div>
-                            {#if form?.errors?.pricing}
-                                <span class="error-message">{form.errors.pricing}</span>
-                            {/if}
-                            {#if form?.errors?.servingPreset}
-                                <span class="error-message">{form.errors.servingPreset}</span>
-                            {/if}
-                        </div>
-                        <div class="col-12 actions">
-                            <button type="submit" class="btn btn-primary">
-                                {editingItem ? m["baroo.backstage.offer.update"]() : m["baroo.backstage.offer.create"]()}
-                            </button>
-                            <button type="button" class="btn btn-secondary" onclick={cancelEdit}>
-                                {m["baroo.backstage.offer.cancel"]()}
-                            </button>
-                        </div>
-                    </form>
-            </Drawer>
-            {/if}
         </div>
 </main>
+
+{#snippet offerItemForm(item: BarOfferItem | null)}
+    <form
+        method="POST"
+        action={item ? '?/update' : '?/create'}
+        enctype="multipart/form-data"
+        use:enhance={({ formData }) => {
+            // The drop zone holds the file in state rather than in an
+            // input, so this is where it joins the rest of the fields.
+            if (picture) formData.set('preview_1x1', picture);
+
+            return async ({ update, result }) => {
+                await update();
+                if (result.type === 'success') {
+                    formLayerCtrl?.close();
+                }
+            };
+        }}
+        class="row g-3"
+    >
+        {#if item}
+            <input type="hidden" name="itemId" value={item.id} />
+        {/if}
+        <div class="input-pair col-md-5">
+            <label for="key" class="form-label">{m["baroo.backstage.offer.key"]()}</label>
+            <input
+                type="text"
+                id="key"
+                name="key"
+                class="form-control"
+                value={form?.data?.key ?? item?.key ?? ''}
+                required
+                pattern="[a-z0-9\-]+"
+                placeholder={m["baroo.backstage.offer.placeholder_key"]()}
+                class:error={form?.errors?.key}
+            />
+            {#if form?.errors?.key}
+                <span class="error-message">{form.errors.key}</span>
+            {/if}
+            <small>{m["baroo.backstage.offer.key_help"]()}</small>
+        </div>
+        <div class="input-pair col-md-7">
+            <label for="name" class="form-label">{m["baroo.backstage.offer.name"]()}</label>
+            <input
+                type="text"
+                id="name"
+                name="name"
+                class="form-control"
+                value={form?.data?.name ?? item?.name ?? ''}
+                required
+                placeholder={m["baroo.backstage.offer.placeholder_name"]()}
+                class:error={form?.errors?.name}
+            />
+            {#if form?.errors?.name}
+                <span class="error-message">{form.errors.name}</span>
+            {/if}
+        </div>
+        <div class="input-pair col-12">
+            <span class="form-label">{m["baroo.backstage.offer.picture"]()}</span>
+            <FileDrop
+                accept="image/*"
+                maxBytes={PICTURE_MAX_BYTES}
+                aspectRatio={1}
+                aspectLabel="1:1"
+                hint={m["baroo.backstage.offer.picture_hint"]({ max: formatBytes(PICTURE_MAX_BYTES) })}
+                currentSrc={item?.preview_1x1
+                    ? `/storage/api/files/bar_offer_items/${item.id}/${item.preview_1x1}`
+                    : null}
+                onselect={(file) => (picture = file)}
+            />
+            {#if picture}
+                <small>{m["baroo.backstage.offer.picture_pending"]()}</small>
+            {/if}
+            {#if form?.errors?.preview_1x1}
+                <span class="error-message">{form.errors.preview_1x1}</span>
+            {/if}
+        </div>
+        <div class="input-pair col-md-5">
+            <label for="servingPreset" class="form-label">{m["baroo.backstage.offer.serving_preset"]()}</label>
+            <select
+                id="servingPreset"
+                name="servingPreset"
+                class="form-select"
+                bind:value={preset}
+            >
+                {#each Object.values(SERVING_PRESETS) as preset (preset.key)}
+                    <option value={preset.key}>{renderer.print(preset.label)}</option>
+                {/each}
+            </select>
+        </div>
+        <div class="col-12">
+            <label class="form-label">{m["baroo.backstage.offer.serving_prices"]()}</label>
+            <div class="serving-prices">
+                {#each servingsOf({ servingPreset: preset }) as serving (serving.key)}
+                    <label class="serving-label" for="price_{serving.key}">{servingText(serving, presetMeasure)}</label>
+                    <div class="input-group">
+                        <input
+                            type="number"
+                            id="price_{serving.key}"
+                            name="price_{serving.key}"
+                            class="form-control"
+                            placeholder={m["baroo.backstage.offer.variant_price_placeholder"]()}
+                            value={item?.pricing?.[serving.key]}
+                            step="0.01"
+                            min="0"
+                        />
+                        <span class="input-group-text">Kč</span>
+                    </div>
+                {/each}
+            </div>
+            {#if form?.errors?.pricing}
+                <span class="error-message">{form.errors.pricing}</span>
+            {/if}
+            {#if form?.errors?.servingPreset}
+                <span class="error-message">{form.errors.servingPreset}</span>
+            {/if}
+        </div>
+        <div class="col-12 actions">
+            <button type="submit" class="btn btn-primary">
+                {item ? m["baroo.backstage.offer.update"]() : m["baroo.backstage.offer.create"]()}
+            </button>
+            <button type="button" class="btn btn-secondary" onclick={() => formLayerCtrl?.close()}>
+                {m["baroo.backstage.offer.cancel"]()}
+            </button>
+        </div>
+    </form>
+{/snippet}
 
 <style lang="scss">
 .picture-col {

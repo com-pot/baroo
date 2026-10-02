@@ -10,7 +10,7 @@ type UiLayerCommon<Type extends string> = {
     onDestroyed?: () => void,
 }
 export type UiComponentLayer<Props extends Record<string, unknown> = Record<string, unknown>> = UiLayerCommon<'component'> & { component: Component, props: Props }
-export type UiSnippetLayer = UiLayerCommon<'snippet'> & { snippet: Snippet }
+export type UiSnippetLayer<Arg = unknown> = UiLayerCommon<'snippet'> & { snippet: Snippet<[Arg]>, arg: Arg }
 export type UiLayer = UiComponentLayer | UiSnippetLayer
 
 type OpenOpts = Omit<UiLayerCommon<string>, "id" | "type" | "ctrl">
@@ -29,51 +29,46 @@ export class UiLayerManager {
         props: ComponentProps<Component<Props>>,
         opts?: OpenOpts,
     ) {
-        const ctrl: UiLayerCtrl = {
-            get id() { return layer.id },
-            close: () => {
-                this.close(layer.id)
-            },
-        }
-
-        const layer: UiComponentLayer<Props> = {
-            id: this.uniqueId(),
+        return this.pushLayer<UiComponentLayer<Props>>({
             type: "component",
-            ctrl,
 
             component: component as unknown as Component,
             props,
             ...opts,
-        }
+        })
+    }
 
-        this.layers = [...this.layers, layer]
+    public pushSnippet<Arg = unknown>(
+        snippet: Snippet<[Arg]>,
+        arg: Arg,
+        opts?: OpenOpts,
+    ) {
+        return this.pushLayer<UiSnippetLayer<Arg>>({
+            type: "snippet",
+
+            snippet,
+            arg,
+            ...opts,
+        })
+    }
+    public pushLayer<T extends UiLayerCommon<string>>(layer: Omit<T, "ctrl"|"id">): T {
+        const ctrl: UiLayerCtrl = Object.freeze({
+            id: this.uniqueId(),
+            close: () => {
+                this.close(ctrl.id)
+            },
+        })
+
+        this.layers = this.layers.toSpliced(this.layers.length, 0, {
+            ...layer,
+            id: ctrl.id,
+            ctrl,
+         } as unknown as UiLayer)
 
         // We can't return the layer in var because it's not identical to the one in $state
         //  hmm, I wonder what happens to the reference once another layer opens / closes.
         //  Haha, it's gonna be suuurely okay!
-        return this.layers.at(-1) as typeof layer
-    }
-
-    public pushSnippet(snippet: Snippet, opts?: OpenOpts) {
-        const ctrl: UiLayerCtrl = {
-            get id() { return layer.id },
-            close: () => {
-                this.close(layer.id)
-            },
-        }
-
-        const layer: UiSnippetLayer = {
-            id: this.uniqueId(),
-            type: "snippet",
-            ctrl,
-
-            snippet,
-            ...opts,
-        }
-
-        this.layers = [...this.layers, layer]
-
-        return layer
+        return this.layers.at(-1) as unknown as T
     }
 
     public close(id: UiLayer["id"]) {

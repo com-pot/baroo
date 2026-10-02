@@ -46,7 +46,7 @@ const visibleLayers = $derived.by(() => {
     {#if layer.type === 'component'}
     <layer.component {...layer.props} />
     {:else if layer.type === 'snippet'}
-    {@render layer.snippet()}
+    {@render layer.snippet(layer.arg)}
     {:else}
     <div class="alert alert-danger">
         Unknown layer type

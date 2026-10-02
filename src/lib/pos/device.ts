@@ -12,7 +12,6 @@ export const configSchema = z.object({
     greetingTemplate: z.string().default("Ave, {name}"),
     customGreetings: z.boolean().default(true),
 })
-configSchema.def.shape.theme.def.innerType.options
 
 export type PosDeviceConfig = z.infer<typeof configSchema>
 
@@ -62,11 +61,23 @@ export function readPosConfig(raw: unknown): PosDeviceConfig {
 }
 
 /**
- * The config a device-settings form submits. Shared by backstage and enrolment so a
- * tablet is configured the same way whichever page it was set up from.
+ * The config a device-settings form submits, carried as one JSON field rather than as
+ * loose inputs.
+ *
+ * Loose inputs cannot express this form. An unchecked checkbox is simply absent from a
+ * `FormData`, which is indistinguishable from a field the form never had — so the three
+ * toggles would read as "unset" and fall back to their defaults, which for
+ * `customGreetings` means on. The fields are edited as an object either way; this just
+ * sends that object.
  */
 export function posConfigFromForm(formData: FormData): PosDeviceConfig {
-    return configSchema.parse(formData)
+    try {
+        return readPosConfig(JSON.parse(String(formData.get('config') ?? '{}')))
+    } catch {
+        // A malformed field is a broken client, not a request to wipe the settings — but
+        // there is nothing here to merge, so the defaults are all that is left to give.
+        return readPosConfig({})
+    }
 }
 
 /** An enrolled tablet. `bar` is the id; `expand.bar` is present when expanded. */

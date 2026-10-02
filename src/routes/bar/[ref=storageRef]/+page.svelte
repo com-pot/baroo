@@ -387,7 +387,7 @@
             </div>
             <form name="selectBadgeForm" class="card-body" onsubmit={submitSelectForm} data-boot>
                 {#if store.config.idInput}
-                <div class="form-section">
+                <div class="form-section" data-name="serialId">
                     <div class="input-group input-group-lg">
                         <input
                             name="serialId"
@@ -402,7 +402,7 @@
                     </div>
                 </div>
                 {/if}
-                <div class="form-section">
+                <div class="form-section" data-name="submitMode">
                     <div class="btn-group">
                         {#each modes as opt (opt.name)}
                         <button class="btn btn-baroo {opt.name === mode ? 'btn-primary' : 'btn-outline-primary'}"
@@ -638,6 +638,13 @@
     height: 1px;
     min-height: 100%;
     width: 1px; min-width: 100%;
+
+    display: grid;
+    place-content: center;
+}
+[data-name="submitMode"] {
+    flex: 1;
+    .btn-group { flex: 1; }
 }
 
 :global(.message-stream) {

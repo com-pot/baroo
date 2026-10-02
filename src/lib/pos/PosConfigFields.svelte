@@ -1,36 +1,23 @@
 <script lang="ts">
     import * as m from "$lib/paraglide/messages.js";
-    import { configSchema, GREETING_NAME_TOKEN, type PosDeviceConfig } from "$lib/pos/device";
-    import { type Size } from "$lib/ui/bootstrap";
+    import { configSchema, type PosDeviceConfig } from "$lib/pos/device";
     import SchemaInput from "$lib/ui/zchem/SchemaInput.svelte";
 
     let {
-        config,
+        data = $bindable(),
         idSuffix,
         layout = "stack",
-        size = "md",
     }: {
-        /** What the fields start from — a stored config, or the defaults when enrolling. */
-        config: PosDeviceConfig;
-        /** Keeps the field ids unique when a page shows several of these at once. */
+        data: PosDeviceConfig;
         idSuffix?: string;
-        /** `row` for the inline form in a backstage table, `stack` for a plain form. */
         layout?: "row" | "stack";
-        size?: Size;
     } = $props();
 
     const fieldId = (name: string) => (idSuffix ? `${name}-${idSuffix}` : name);
 
-    /** Live copy of the template, so the greeting hint reacts before saving. */
-    let draftTemplate = $state(config.greetingTemplate);
+    const narrationOff = $derived(!data.greetingTemplate.trim());
 
-    const data = $state(configSchema.parse({...config}))
-    const narrationOff = $derived(!draftTemplate.trim());
-
-    const placeholders = $derived({
-        greetingTemplate: `Ave ${GREETING_NAME_TOKEN}`,
-    })
-    const wrapperClasses = $derived({
+    const wrapperClasses: Record<string, string | undefined> = $derived({
         customGreetings: narrationOff ? 'moot' : undefined,
     })
 </script>
@@ -45,9 +32,8 @@
             {fieldId}
 
             wrapperClass={wrapperClasses[name] ?? ''}
-            placeholder={placeholders[name]}
 
-            bind:value={data[name]}
+            bind:value={data[name as keyof PosDeviceConfig]}
         />
     {/each}
 </div>

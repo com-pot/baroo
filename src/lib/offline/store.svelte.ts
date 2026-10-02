@@ -22,10 +22,10 @@ import {
     readDevice,
     readLastSyncAt,
     readSnapshot,
+    writeDeviceConfig,
 } from './idb';
 import {
-    HEARTBEAT_INTERVAL_MS,
-    HEARTBEAT_OFFLINE_INTERVAL_MS,
+    heartbeatConfig,
     probeHeartbeat,
 } from './heartbeat';
 import { NotEnrolledError, pullSnapshot, pushOutbox, type SyncOpResult } from './sync';
@@ -92,8 +92,8 @@ export class OfflineBar {
      * case they settle on their own: no link, no server, no reason to spend a probe.
      */
     watchConnectivity(opts?: ConnectivityWatchOptions): () => void {
-        const interval = opts?.intervalMs ?? HEARTBEAT_INTERVAL_MS;
-        const offlineInterval = opts?.offlineIntervalMs ?? HEARTBEAT_OFFLINE_INTERVAL_MS;
+        const interval = opts?.intervalMs ?? heartbeatConfig.interval.total("millisecond");
+        const offlineInterval = opts?.offlineIntervalMs ?? heartbeatConfig.offlineInterval.total("millisecond");
 
         this.onConnectivityChange = opts?.onChange;
 
@@ -155,12 +155,12 @@ export class OfflineBar {
 
     private async runProbe(): Promise<boolean> {
         try {
-            const beat = await probeHeartbeat();
+            const beat = await probeHeartbeat(heartbeatConfig.timeout.total("millisecond"));
 
-            if (beat.ok) this.lastHeartbeatAt = beat.at;
-            this.setOnline(beat.ok, beat.ok ? null : beat.reason);
+            if (beat.status === "fulfilled") this.lastHeartbeatAt = beat.value.at;
+            this.setOnline(beat.status === "fulfilled", beat.status === "fulfilled" ? null : beat.reason);
 
-            return beat.ok;
+            return beat.status === "fulfilled";
         } finally {
             this.probing = null;
         }
@@ -429,12 +429,38 @@ export class OfflineBar {
             this.unknownTags = this.unknownTags.filter(tag => tag !== full.serialId);
         }
 
+        if (full.kind === 'device-config') {
+            await this.adoptConfig(full.config, stored.seq);
+        }
+
         // The outbox is a buffer for having no network, not a to-do list — with signal
         // an op belongs on the server immediately. Deliberately not awaited: the barman
         // gets their dialog back at IndexedDB speed, not at the network's.
         this.requestSync();
 
         return stored;
+    }
+
+    /**
+     * Settings hold at the tablet the moment they are saved, not when the server hears
+     * about them — the kiosk being configured is the one in front of the barman, and it
+     * may not see a server again tonight.
+     *
+     * Any earlier edit still in the outbox goes with it. Only the newest settings are
+     * worth pushing, and an older one retried after this one — which is what happens when
+     * the first push fails and the second goes through — would quietly put the tablet
+     * back. Dropping it is lossless: the op is the whole config, not a patch.
+     */
+    private async adoptConfig(config: PosDeviceConfig, keepSeq: number) {
+        for (const stale of [...this.pending]) {
+            if (stale.kind === 'device-config' && stale.seq !== keepSeq) {
+                await this.voidOp(stale.seq);
+            }
+        }
+
+        await writeDeviceConfig(config);
+        // A fresh object, or the `config` getter has nothing new to read.
+        if (this.device) this.device = { ...this.device, config };
     }
 
     /** Drops a pending op. Only ever legal before it has synced. */
@@ -491,6 +517,10 @@ export class OfflineBar {
 
     private async pullCore(): Promise<void> {
         this.snapshot = await pullSnapshot(this.barSlug);
+        // The pull may have brought new kiosk settings down with it, along with the
+        // rotated token; the getters read those off `device`, so it has to come back out
+        // of IndexedDB for any of it to reach the screen.
+        this.device = await readDevice();
     }
 
     /**
@@ -574,8 +604,6 @@ export class OfflineBar {
 type ConnectivityWatchOptions = {
     /** Called on every change of verdict, and once with the first one. */
     onChange?(online: boolean): unknown;
-    /** Poll period while the server answers. Defaults to `HEARTBEAT_INTERVAL_MS`. */
     intervalMs?: number;
-    /** Poll period while it does not. Defaults to `HEARTBEAT_OFFLINE_INTERVAL_MS`. */
     offlineIntervalMs?: number;
 }

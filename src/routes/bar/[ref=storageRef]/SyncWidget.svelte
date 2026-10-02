@@ -50,6 +50,8 @@
                 });
             case "unseal":
                 return m["baroo.staff.op_unseal"]({ offerItem: op.offerItemName });
+            case "device-config":
+                return m["baroo.staff.op_device_config"]();
         }
     }
 
@@ -58,7 +60,7 @@
         return op.items.map((item) => `${item.key}/${item.variant}`).join(", ");
     }
 
-    async function voidOp(op: StoredOp) {
+    async function voidOp(op: Pick<StoredOp, "seq">) {
         if (!confirm(m["baroo.staff.void_confirm"]())) return;
         await store.voidOp(op.seq);
     }
@@ -80,8 +82,6 @@
     {#if !store.online}
         <p class="alert alert-warning">
             {m["baroo.staff.sync_offline"]()}
-            <!-- Which way the heartbeat failed, for whoever is holding the tablet
-                 wondering whether to blame the wifi or the server. -->
             {#if store.heartbeatError}<span class="detail">{store.heartbeatError}</span>{/if}
         </p>
     {/if}

@@ -3,7 +3,7 @@
     import { enhance } from "$app/forms";
     import type { PageData, ActionData } from "./$types";
     import PosConfigFields from "$lib/pos/PosConfigFields.svelte";
-    import { configSchema } from "$lib/pos/device";
+    import { configSchema, readPosConfig, type PosDeviceConfig } from "$lib/pos/device";
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -11,6 +11,21 @@
     let configuring = $state<string | null>(null);
     /** Whether the create panel is open. */
     let creating = $state(false);
+
+    /**
+     * The fields edit an object rather than loose inputs, so each form keeps its own
+     * draft and posts it as one JSON field. Only ever one row is expanded, so one draft
+     * is enough for the whole table.
+     */
+    let configDraft = $state<PosDeviceConfig>(configSchema.parse({}));
+    let newConfig = $state<PosDeviceConfig>(configSchema.parse({}));
+
+    function toggleConfig(device: { id: string; config: PosDeviceConfig }) {
+        configuring = configuring === device.id ? null : device.id;
+        // Seeded on open, so cancelling and reopening starts from what is stored rather
+        // than from the edits that were abandoned.
+        if (configuring) configDraft = readPosConfig(device.config);
+    }
 
     const errorMessages: Record<string, () => string> = {
         "pairing-unavailable": m["baroo.backstage.pos.pairing_unavailable"],
@@ -96,6 +111,10 @@
                 use:enhance={() => async ({ update }) => {
                     await update();
                     creating = false;
+                    // `update()` resets the native inputs, but the config fields are
+                    // driven by this draft — so the next device starts from the defaults
+                    // rather than from the last one's settings.
+                    newConfig = configSchema.parse({});
                 }}
             >
                 <div class="input-pair">
@@ -123,7 +142,8 @@
 
                 <fieldset>
                     <legend class="form-label">{m["baroo.backstage.pos.config_legend"]()}</legend>
-                    <PosConfigFields config={configSchema.parse({})} idSuffix="new" />
+                    <input type="hidden" name="config" value={JSON.stringify(newConfig)} />
+                    <PosConfigFields bind:data={newConfig} idSuffix="new" />
                 </fieldset>
 
                 <div class="actions">
@@ -180,7 +200,7 @@
                                         type="button"
                                         class="btn btn-sm btn-outline-secondary"
                                         aria-expanded={configuring === device.id}
-                                        onclick={() => (configuring = configuring === device.id ? null : device.id)}
+                                        onclick={() => toggleConfig(device)}
                                     >
                                         {m["baroo.backstage.pos.configure"]()}
                                     </button>
@@ -272,11 +292,12 @@
                                 >
                                     <input type="hidden" name="deviceId" value={device.id} />
 
+                                    <input type="hidden" name="config" value={JSON.stringify(configDraft)} />
+
                                     <PosConfigFields
-                                        config={device.config}
+                                        bind:data={configDraft}
                                         idSuffix={device.id}
                                         layout="row"
-                                        size="sm"
                                     />
 
                                     <div class="actions">

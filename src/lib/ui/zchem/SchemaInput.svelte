@@ -56,9 +56,9 @@
 {:else if inputSchema.def.innerType.type === 'enum'}
     <div class="input-pair">
         <label class="form-label" for={fieldId(name)}>{caption}</label>
-        <select class={"form-select"} id={fieldId(name)} name={name}>
+        <select class={"form-select"} id={fieldId(name)} name={name} bind:value={value}>
             {#each inputSchema.def.innerType.options as optionValue (optionValue)}
-                <option value={optionValue} selected={optionValue === value}>{optionValue}</option>
+                <option value={optionValue}>{optionValue}</option>
             {/each}
         </select>
         {#if help}<small>{help}</small>{/if}

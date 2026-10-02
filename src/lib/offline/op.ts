@@ -1,13 +1,20 @@
+import type { DeviceConfigOp } from './ops/DeviceConfigOp';
 import type { MemberCreateOp } from './ops/MemberCreateOp';
 import type { OrderOp } from './ops/OrderOp';
 import type { SettlementOp } from './ops/SettlementOp';
 import type { TagMappingOp } from './ops/TagMappingOp';
 import type { UnsealOp } from './ops/UnsealOp';
 
-export type { MemberCreateOp, OrderOp, SettlementOp, TagMappingOp, UnsealOp };
+export type { DeviceConfigOp, MemberCreateOp, OrderOp, SettlementOp, TagMappingOp, UnsealOp };
 
 /** Everything that can happen at a kiosk, as the thing itself. */
-export type BarOp = OrderOp | TagMappingOp | SettlementOp | MemberCreateOp | UnsealOp;
+export type BarOp =
+    | OrderOp
+    | TagMappingOp
+    | SettlementOp
+    | MemberCreateOp
+    | UnsealOp
+    | DeviceConfigOp;
 
 export type OpKind = BarOp['kind'];
 

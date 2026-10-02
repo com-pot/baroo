@@ -2,10 +2,12 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { Db } from '$lib/db.server';
 import { resolveDevice, type PosDevice } from '$lib/pos/device.server';
+import { readPosConfig } from '$lib/pos/device';
 import { collectClosureData, type UnsealEvent } from '$lib/bar/stats/barOfferItems';
 import type { Bar, BarMember } from '$lib/bar/BarModel';
 import {
     serverMemberId,
+    type DeviceConfigOp,
     type MemberCreateOp,
     type OrderOp,
     type OutboxOp,
@@ -54,7 +56,7 @@ export const POST: RequestHandler = async (event) => {
         }
 
         // A guest kiosk drains its own orders, but only a staff device may settle tabs,
-        // unseal packages or hand out cards.
+        // unseal packages, hand out cards or change what the tablet is configured to do.
         if (op.kind !== 'order' && device.kind !== 'staff') {
             results.push({ clientId: op.clientId, status: 'failed', error: 'staff-device-required' });
             continue;
@@ -89,6 +91,8 @@ function applyOp(ctx: Ctx): Promise<SyncOpResult> {
             return applyMemberCreate({ ...ctx, op: ctx.op });
         case 'unseal':
             return applyUnseal({ ...ctx, op: ctx.op });
+        case 'device-config':
+            return applyDeviceConfig({ ...ctx, op: ctx.op });
         default:
             throw new Error(`unknown op kind: ${(ctx.op as OutboxOp).kind}`);
     }
@@ -291,6 +295,43 @@ async function applyUnseal({ pb, bar, op }: Ctx & { op: UnsealOp }): Promise<Syn
             closureData,
         },
     } satisfies Pick<UnsealEvent, 'type' | 'target' | 'data'> & { occurredAt: string; clientId: string });
+
+    return { clientId: op.clientId, status: 'applied' };
+}
+
+/**
+ * The tablet's own settings, as the barman left them.
+ *
+ * The only handler that updates a record instead of appending to history, so the `events`
+ * row beside it is both the audit trail and — as everywhere else here — the idempotency
+ * key. It earns its place twice over: without it a re-delivered op would undo a backstage
+ * edit made in between, which is the one way this can lose a change nobody meant to lose.
+ *
+ * Which device is being configured is never the payload's business: a tablet can only
+ * ever configure itself, and `resolveDevice` has already said which one is asking.
+ */
+async function applyDeviceConfig(
+    { pb, bar, device, op }: Ctx & { op: DeviceConfigOp },
+): Promise<SyncOpResult> {
+    if (await eventExists(pb, op.clientId)) {
+        return { clientId: op.clientId, status: 'duplicate' };
+    }
+
+    // Never the tablet's JSON as it arrived: an op queued by an older build, or a field
+    // since renamed, still has to resolve to a config the kiosk can run on.
+    const config = readPosConfig(op.config);
+
+    // The record first. If the audit row fails the op stays in the outbox and comes back,
+    // and writing the same settings twice is the same settings.
+    await pb.collection('pos_devices').update(device.id, { config });
+
+    await pb.collection('events').create({
+        type: 'device-config',
+        target: `bar:${bar.slug}`,
+        occurredAt: op.occurredAt,
+        clientId: op.clientId,
+        data: { device: device.id, config },
+    });
 
     return { clientId: op.clientId, status: 'applied' };
 }

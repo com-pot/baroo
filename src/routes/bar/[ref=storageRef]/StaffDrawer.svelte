@@ -12,7 +12,7 @@
     import SnapshotDebugWidget from "./SnapshotDebugWidget.svelte";
     import CacheResetWidget from "./CacheResetWidget.svelte";
     import { kioskPrefs } from "$lib/pos/kioskPrefs.svelte";
-    import { getUiLayers } from "$lib/ui/uiLayers.svelte";
+    import { getUiLayers, type UiLayerCtrl } from "$lib/ui/uiLayers.svelte";
     import DevicePreferences from "./DevicePreferences.svelte";
 
     const uiLayers = getUiLayers()
@@ -28,10 +28,23 @@
      */
     let { bar }: { bar: OfflineBar } = $props();
 
+    /**
+     * `DrawerStack` spreads only the layer's props, so the ctrl never reaches the
+     * component — the drawer closes itself through this closure instead, which reads
+     * `prefsCtrl` long after it has been assigned. One at a time, so a second tap on the
+     * button doesn't stack a second copy of the form over the first.
+     */
+    let prefsCtrl = $state<UiLayerCtrl | null>(null)
     function openPreferences() {
-        uiLayers.pushComponent(DevicePreferences, {config: bar.config}, {
-            heading: "Předvolby zařízení " + bar.deviceLabel,
-        })
+        if (prefsCtrl) return
+
+        prefsCtrl = uiLayers.pushComponent(DevicePreferences, {
+            bar,
+            onDone: () => prefsCtrl?.close(),
+        }, {
+            heading: m["baroo.staff.device_prefs_title"]({ label: bar.deviceLabel }),
+            onDestroyed: () => { prefsCtrl = null },
+        }).ctrl
     }
 </script>
 
@@ -52,7 +65,7 @@
 
     <div class="actions">
         <button class="btn btn-outline-secondary btn-sm" onclick={() => openPreferences()}>
-            <span>Předvolby zařízení</span>
+            <span>{m["baroo.staff.device_prefs"]()}</span>
         </button>
 
     </div>

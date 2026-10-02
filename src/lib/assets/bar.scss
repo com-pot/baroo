@@ -269,6 +269,8 @@ form[name="selectBadgeForm"] {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-height: 6rem;
+    justify-content: stretch;
 
     .form-section {
         display: flex;

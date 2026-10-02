@@ -61,7 +61,13 @@ export async function pullSnapshot(barSlug?: string): Promise<BarSnapshot> {
 
     await writeSnapshot(snapshot);
     await refreshDeviceToken(token);
-    if (config) await writeDeviceConfig(config);
+
+    // Settings edited at the tablet outrank the server's copy until the op carrying them
+    // has been accepted. Without this the pull that follows a save hands the barman back
+    // the very setting they just changed — and a pull can happen with no push before it,
+    // or after a push the server refused.
+    const unpushedEdit = (await listOps(slug)).some(op => op.kind === 'device-config');
+    if (config && !unpushedEdit) await writeDeviceConfig(config);
 
     return snapshot;
 }

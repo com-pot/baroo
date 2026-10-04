@@ -1,4 +1,4 @@
-import type { Bar, BarOfferItem, BarOrderItem } from "../BarModel";
+import type { Bar, BarOfferItem, BarOrderItemRecord } from "../BarModel";
 import { computeTotalPrice } from "./memberSummaries";
 
 export async function getMemberOrders(
@@ -10,7 +10,7 @@ export async function getMemberOrders(
         sort: 'nickName'
     });
 
-    // Get all offer items for this bar to calculate prices and volumes
+    // Get all offer items for this bar to calculate prices and quantities
     const offerItems = await pb.collection<BarOfferItem>('bar_offer_items').getFullList({
         filter: `bar.slug = "${bar.slug}"`,
     });
@@ -21,7 +21,7 @@ export async function getMemberOrders(
         orderCount: number,
     }[] = [];
 
-    const barOrderItems = await pb.collection<BarOrderItem & Record<string, unknown>>('bar_order_items')
+    const barOrderItems = await pb.collection<BarOrderItemRecord>('bar_order_items')
         .getFullList({
             filter: `customer.bar.slug = "${bar.slug}"`,
         })

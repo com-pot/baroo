@@ -2,6 +2,7 @@
     position: fixed;
     bottom: 1rem;
     right: 1rem;
+    z-index: 1000;
 
     width: min(30ch, 90vw);
 
@@ -19,10 +20,6 @@
         visibility: none;
     }
 
-    >button {
-        width: 100%;
-    }
-
     .caption {
         flex: 1;
     }
@@ -32,7 +29,7 @@
         margin: 0;
         padding: 0;
 
-        :is(.status, .caption, code) {
+        :is(.status, .caption, code, button) {
             display: inline-block;
             padding: 0.5em;
             background-color: #ddd;
@@ -47,6 +44,36 @@
             gap: 0rem 0.5rem;
             align-items: center;
             font-family: monospace;
+
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+
+            &[data-boot-row="queued"] {
+                opacity: 0;
+                transform: translateY(-0.35rem);
+            }
+
+            &[data-boot-row="working"] :is(.status, .caption) {
+                background-color: #cfe2ff;
+            }
+
+            &[data-boot-row="ok"] .status {
+                background-color: #d1e7dd;
+            }
+
+            &[data-boot-row="error"] :is(.status, .caption) {
+                background-color: #f8d7da;
+            }
+
+            &.summary .caption {
+                flex: 1;
+                font-weight: bold;
+            }
+
+            .close {
+                border: 0;
+                font: inherit;
+                cursor: pointer;
+            }
 
             &:has(code) {
                 :is(.status, .caption) {
@@ -77,6 +104,9 @@
 [data-boot-init] {
     transition: opacity 0.3s ease-in-out;
     opacity: 0;
+
+    background: #eeea;
+    backdrop-filter: blur(1px);
 }
 
 

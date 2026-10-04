@@ -10,7 +10,9 @@ declare global {
                 name?: string;
                 roles?: string[];
             };
-            pb?: import('pocketbase').default;
+            pb: import('pocketbase').default;
+
+            device?: import('$lib/pos/device').PosDevice;
 
             acl: {
                 hasRole: (role: string) => boolean;
@@ -20,6 +22,9 @@ declare global {
         // interface PageState {}
         // interface Platform {}
     }
+
+    const __APP_VERSION__: string;
+    const __BUILD_DATE__: string;
 }
 
 export {};

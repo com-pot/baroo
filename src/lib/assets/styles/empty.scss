@@ -1,0 +1,21 @@
+.empty-notice {
+    min-height: 100%;
+    display: grid;
+    place-content: center;
+    gap: 1rem;
+    text-align: center;
+    padding: 2rem;
+
+    > .actions {
+        place-self: center;
+    }
+
+    .error {
+        color: #b00;
+        font-family: monospace;
+    }
+
+    &.-full {
+        min-height: 80dvh;
+    }
+}

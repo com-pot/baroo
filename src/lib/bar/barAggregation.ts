@@ -1,37 +1,37 @@
-import type { BarOfferItem, BarOrderItem } from "./BarModel";
+import type { BarOrderItem } from "./BarModel";
+import { type Serving } from "./servings";
 
-export function computeCountsByVariant(pricing: BarOfferItem["pricing"], orderItems: BarOrderItem[]) {
-    const variantCounts: Record<string, number> & { _other_?: number } = {};
+export function computeCountsByVariant(
+    servings: Readonly<Serving[]>,
+    orderItems: Pick<BarOrderItem, "variant">[],
+): Record<string, number> & { _other_?: number } {
+    const variantCounts: Record<Serving["key"], number> & { _other_?: number } = {};
 
-    for (let key of Object.keys(pricing)) {
-        variantCounts[key] = 0;
+    for (const serving of servings) {
+        variantCounts[serving.key] = 0;
     }
 
-    orderItems.forEach((item: BarOrderItem) => {
-        const variant = item.variant;
-        if (variant in variantCounts) {
-            variantCounts[variant]++;
-            return
+    for (const orderItem of orderItems) {
+        if (orderItem.variant in variantCounts) {
+            variantCounts[orderItem.variant]++;
+            continue;
         }
         variantCounts['_other_'] = (variantCounts['_other_'] || 0) + 1;
-    });
+    }
 
     return variantCounts;
 }
 
-export function computeTotalVolume(
+export function computeTotalQuantity(
+    servings: Readonly<Serving[]>,
     variantCounts: Record<string, number>,
-    variantVolumes?: Record<string, number>
 ) {
-    let totalVolume = 0;
+    let total = 0;
 
     for (const [variant, count] of Object.entries(variantCounts)) {
-        const volumeInLiters = variantVolumes?.[variant]
-            ? variantVolumes[variant] / 1000
-            : 0;
-
-        totalVolume += volumeInLiters * count;
+        const serving = servings.find((serving) => serving.key === variant)
+        total += serving?.quantity ?? 0 * count;
     }
 
-    return totalVolume;
+    return total;
 }

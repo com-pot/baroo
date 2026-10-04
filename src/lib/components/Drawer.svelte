@@ -1,33 +1,40 @@
 <script lang="ts">
-    import type { Snippet } from "svelte";
+    import type { LayerComponentProps } from "$lib/ui/uiLayers.svelte";
 
     let {
-        isOpen = $bindable(false),
+        ctrl,
         heading,
         children,
-    }: {
-        isOpen?: boolean,
-        heading?: Snippet,
-        children: Snippet
-    } = $props()
+
+        wrapperStyle,
+        onClose,
+
+        ...rest
+    }: LayerComponentProps = $props()
 </script>
 
-<aside class="drawer">
+<button class="drawer-overlay" tabindex="-1" onclick={() => onClose?.('backdrop')} aria-label="Close drawer"></button>
+<aside class="drawer{rest.closing ? ' closing' : ''}" id={ctrl.id} style={wrapperStyle}
+    ontransitionend={() => rest.closing && onClose?.("destroy")}
+>
     <header class="drawer-header">
-        {#if heading}
+        {#if typeof heading === "string"}
+        <h3>{heading}</h3>
+        {:else if heading}
         <h3>{@render heading()}</h3>
         {/if}
+
+        {#if onClose}
         <button
             type="button"
             class="btn-close"
             aria-label="Close"
-            onclick={() => isOpen = false}
+            onclick={() => onClose?.('close')}
         ></button>
+        {/if}
+
     </header>
     <div class="drawer-body">
         {@render children()}
     </div>
 </aside>
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="drawer-overlay" onclick={() => isOpen = false}></div>

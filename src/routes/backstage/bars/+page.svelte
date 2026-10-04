@@ -16,7 +16,7 @@
     </header>
 
     {#if data.bars.length === 0}
-        <div class="empty-state">
+        <div class="card empty-state">
             <p>{m["baroo.backstage.bars.no_bars"]()}</p>
         </div>
     {:else}

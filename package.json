@@ -1,11 +1,12 @@
 {
     "name": "baroo",
     "private": true,
-    "version": "0.0.1",
+    "version": "0.2.0-beta.2",
     "type": "module",
+    "homepage": "https://github.com/com-pot/baroo",
     "scripts": {
         "dev": "vite dev",
-        "build": "vite build",
+        "build": "vite build && cp package*.json build/ && cd build && npm ci --omit dev",
         "preview": "vite preview",
         "prepare": "svelte-kit sync || echo ''",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -21,8 +22,8 @@
         "bootstrap": "^5.3.8",
         "modern-normalize": "^3.0.1",
         "sass": "^1.93.2",
-        "svelte": "^5.39.5",
-        "svelte-check": "^4.3.2",
+        "svelte": "^5.57.1",
+        "svelte-check": "^4.7.6",
         "typescript": "^5.9.2",
         "vite": "^7.1.7",
         "vite-plugin-devtools-json": "^1.0.0"
@@ -32,8 +33,10 @@
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
         "html-to-image": "^1.11.13",
-        "nfc-pcsc": "^0.8.1",
+        "idb": "^8.0.3",
+        "pino": "^10.4.0",
         "pocketbase": "^0.26.3",
-        "sveltekit-sse": "^0.14.3"
+        "sveltekit-sse": "^0.14.3",
+        "zod": "^4.6.5"
     }
 }

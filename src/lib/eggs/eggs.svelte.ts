@@ -129,29 +129,60 @@ export class CpsCounter {
     }
 }
 
-type TotalCounterStorage = {
-    get: () => Promise<number>,
-    set: (value: number) => Promise<unknown>,
+export type CounterState = {
+    total: number,
+    mine: number,
 }
+
+type TotalCounterStorage = {
+    load: () => Promise<CounterState>,
+    push: (delta: number) => Promise<CounterState>,
+}
+
 export class TotalCounter {
-    public constructor(private storage: TotalCounterStorage) {
+    public constructor(private storage: TotalCounterStorage) {}
 
-    }
+    public total = $state(0);
+    public mine = $state(0);
 
-    public value = $state(0);
+    private pending = 0;
+    private draining = false;
 
     public trigger(n: number = 1) {
-        this.value += n;
+        this.pending += n;
+        // Optimistic: the bubble has to move on the click, not a network round trip later.
+        this.total += n;
+        this.mine += n;
     }
 
     public async load() {
-        this.value = await this.storage.get();
+        this.reconcile(await this.storage.load());
     }
+
     public async commit() {
-        const result = await this.storage.set(this.value);
-        if (typeof result === 'number') {
-            this.value = result;
+        if (this.draining) return;
+
+        this.draining = true;
+        try {
+            while (this.pending > 0) {
+                const delta = this.pending;
+                this.pending = 0;
+
+                try {
+                    this.reconcile(await this.storage.push(delta));
+                } catch (err) {
+                    this.pending += delta;
+                    throw err;
+                }
+            }
+        } finally {
+            this.draining = false;
         }
+    }
+
+    private reconcile(state: CounterState) {
+        this.total = state.total + this.pending;
+        this.mine = state.mine + this.pending;
     }
 }
 

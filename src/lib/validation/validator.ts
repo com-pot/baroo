@@ -1,4 +1,4 @@
-import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv';
+import Ajv, { type ErrorObject } from 'ajv';
 import addFormats from 'ajv-formats';
 
 import barSchema from './schemas/bar.schema.json';

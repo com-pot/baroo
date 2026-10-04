@@ -56,9 +56,39 @@
     align-items: center;
     justify-content: flex-end;
 
+    border: unset;
+
     transition: opacity 0.3s ease-in-out;
 
     @starting-style {
+        opacity: 0;
+    }
+}
+
+.layer-stack {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    pointer-events: none;
+
+    > * {
+        pointer-events: all;
+    }
+
+    :is(.drawer, .drawer-overlay) {
+        z-index: unset;
+    }
+
+    .drawer {
+        transition: right 0.3s ease-out;
+        right: calc(var(--depth) * 4rem);
+
+        &.closing {
+            right: calc(-1 * min(90vw, 600px));
+        }
+    }
+
+    .drawer-overlay:has(+ .closing) {
         opacity: 0;
     }
 }

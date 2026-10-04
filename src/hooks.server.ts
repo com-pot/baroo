@@ -1,29 +1,36 @@
 import type { Handle } from '@sveltejs/kit';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { sequence } from '@sveltejs/kit/hooks';
-import { FIXME_DEBUGGING_CREATE_DB_FROM_ENV } from '$lib/db.server';
+import { createAnonymousDb, readRoles } from '$lib/db.server';
+import pino from 'pino';
+
+export const AUTH_COOKIE = 'pb_auth';
+
+const logger = pino()
+
+const handleLogger: Handle = async ({ event, resolve }) => {
+    const reqId = crypto.randomUUID()
+    event.locals.logger = logger.child({ reqId })
+
+    return resolve(event)
+}
 
 const handlePocketBase: Handle = async ({ event, resolve }) => {
-    const pb = event.locals.pb = await FIXME_DEBUGGING_CREATE_DB_FROM_ENV();
+    const pb = event.locals.pb = createAnonymousDb();
+
+    const cookie = event.request.headers.get('cookie');
+    if (cookie) {
+        pb.authStore.loadFromCookie(cookie);
+    }
 
     if (pb.authStore.isValid && pb.authStore.record) {
-        const user = await pb.collection(pb.authStore.record.collectionName)
-            .getOne<{
-                email: string,
-                name: string,
-                id: string,
-                expand: {
-                    roles: { name: string }[],
-                },
-            }>(pb.authStore.record.id, { expand: 'roles', fields: '*,roles.*' });
-
+        const record = pb.authStore.record;
         event.locals.user = {
-            email: user.email,
-            name: user.name,
-            id: user.id,
-
-            roles: (user.expand.roles).map(role => role.name)
-        }
+            id: record.id,
+            email: record.email,
+            name: record.name,
+            roles: readRoles(record),
+        };
     }
 
     event.locals.acl = {
@@ -43,6 +50,7 @@ const handleParaglide: Handle = ({ event, resolve }) => paraglideMiddleware(even
 });
 
 export const handle: Handle = sequence(
+    handleLogger,
     handlePocketBase,
     handleParaglide,
 );

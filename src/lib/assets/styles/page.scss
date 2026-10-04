@@ -34,15 +34,30 @@
 }
 
 .empty-state {
-    background: white;
-    padding: 3rem;
+    min-height: 100%;
+
+    padding: 2rem;
+    display: grid;
+    place-content: center;
+    gap: 1rem;
     text-align: center;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 
     p {
         color: #666;
         margin: 0;
+    }
+
+    > .actions {
+        place-self: center;
+    }
+
+    .error {
+        color: #b00;
+        font-family: monospace;
+    }
+
+    &.-full {
+        min-height: 80dvh;
     }
 }
 

@@ -1,30 +1,24 @@
 import type { Db } from "../db.server";
 import type { Bar, BarMember, BarOfferItem } from "./BarModel";
-import { parseStorageRef } from "./refs";
+import type { TagMapping } from "./tags";
 
-
-export async function loadBarData(pb: Db, ref: string|StorageRef) {
-    if (typeof ref === 'string') ref = parseStorageRef(ref);
-
-    if (ref.type === 'local') {
-        return {ref, offerItems: [], members: [], mappings: [], bar: null};
-    }
-
-    const bar = await pb.collection<Bar>('bars').getFirstListItem(`slug="${ref.key}"`);
+export async function loadBarData(pb: Db, ref: Bar["slug"], knownBar?: Bar) {
+    const bar: Bar = knownBar ?? await pb.collection<Bar>('bars').getFirstListItem(`slug="${ref}"`);
     const [
         offerItems,
         members,
         mappings,
     ] = await Promise.all([
         pb.collection<BarOfferItem>('bar_offer_items').getFullList({
-            filter: `bar.slug="${ref.key}"`,
+            filter: `bar.slug="${ref}"`,
             sort: 'seq',
         }),
         pb.collection<BarMember>('bar_members').getFullList({
-            filter: `bar.slug="${ref.key}"`,
+            filter: `bar.slug="${ref}"`,
         }),
         pb.collection('bar_member_mappings').getFullList({
-            filter: `member.bar.slug='${ref.key}'`,
+            filter: `member.bar.slug='${ref}'`,
+            expand: 'member',
         }),
     ])
 
@@ -33,9 +27,22 @@ export async function loadBarData(pb: Db, ref: string|StorageRef) {
         bar,
         offerItems,
         members,
-        mappings,
+        mappings: toTagMappings(mappings as any[]),
     };
 }
 
-export type StorageRef = { type: 'local', key: string } | { type: 'db', key: string };
-
+function toTagMappings(mappings: { serialId: string, expand?: { member?: any } }[]): TagMapping[] {
+    return mappings.map((mapping): TagMapping => ({
+        serialId: mapping.serialId,
+        member: {
+            id: String(mapping.expand?.member?.id || ''),
+            nickName: mapping.expand?.member?.nickName || '',
+            seq: mapping.expand?.member?.seq || 0,
+        },
+        extra: {
+            seq: String(mapping.expand?.member?.seq ?? ''),
+            greeting: mapping.expand?.member?.greeting,
+            avatar_1x1: String(mapping.expand?.member?.avatar_1x1 || ''),
+        },
+    }))
+}

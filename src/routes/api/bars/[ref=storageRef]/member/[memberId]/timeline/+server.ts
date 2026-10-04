@@ -1,17 +1,15 @@
-import { parseStorageRef } from "$lib/bar/refs";
 import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import type { Bar } from "$lib/bar/BarModel";
 import { getMemberTimeline } from "$lib/bar/stats/memberSummaries";
 import { json } from "@sveltejs/kit";
+import { ensureUser } from "$lib/acl.server";
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-    if (!locals.pb) {
-        return error(500, { message: 'PocketBase not initialized' });
-    }
+    ensureUser(locals, ['bar-manager']);
 
-    const ref = parseStorageRef(params.ref);
-    if (ref.type === 'local' || ref.key === 'new') {
+    const ref = params.ref;
+    if (ref === 'new') {
         return error(400, { message: 'Cannot get timeline for this bar' });
     }
 
@@ -22,7 +20,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     }
 
     const bar = await locals.pb.collection<Bar>('bars')
-        .getFirstListItem(`slug="${ref.key}"`);
+        .getFirstListItem(`slug="${ref}"`);
 
     const timeline = await getMemberTimeline(locals.pb, { slug: bar.slug }, memberId);
 

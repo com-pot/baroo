@@ -1,0 +1,13 @@
+{
+    "$schema": "https://inlang.com/schema/inlang-message-format",
+    "auth": {
+        "login": {
+            "title": "Sign in",
+            "who": "Who?",
+            "password": "Password",
+            "submit": "Sign in",
+            "logout": "Sign out",
+            "error_invalid": "Wrong e-mail or password."
+        }
+    }
+}

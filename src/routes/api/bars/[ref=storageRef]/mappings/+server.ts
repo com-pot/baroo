@@ -1,77 +1,38 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { parseStorageRef } from '$lib/bar/refs';
-import { isValidMapping, type TagMapping } from '$lib/bar/tags';
-import { validate } from '$lib/validation/validator';
+import { type TagMapping } from '$lib/bar/tags';
+import { ensureUser } from '$lib/acl.server';
+import { barMemberMappingSchema } from '$lib/model/bar';
+import { loadBarTagMappings } from '$lib/bar/storage.server';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-    const ref = parseStorageRef(params.ref);
-
-    if (ref.type === 'local') {
-        return json({ error: 'unsupported-type' }, { status: 400 });
-    }
-
-    if (!locals.pb) {
-        throw error(500, 'PocketBase not initialized');
-    }
-
-    try {
-        const bar = await locals.pb
-            .collection('bars')
-            .getFirstListItem(`slug="${ref.key}"`);
-
-        const mappings = await locals.pb.collection('bar_member_mappings').getFullList({
-            filter: `member.bar="${bar.id}"`,
-            expand: 'member',
-            sort: 'member.seq',
-        });
-
-        const result = mappings
-            .map((mapping): TagMapping => ({
-                serialId: mapping.serialId,
-                userId: String(mapping.expand?.member?.id || ''),
-                nickName: mapping.expand?.member?.nickName || '',
-                extra: {
-                    seq: String(mapping.expand?.member?.seq || ''),
-                    greeting: mapping.expand?.member?.greeting,
-                    avatar_1x1: String(mapping.expand?.member?.avatar_1x1 || ''),
-                },
-            }))
-            .filter((mapping) => isValidMapping(mapping))
-
-        return json(result);
-    } catch (err: any) {
-        if (err.status === 404) {
-            throw error(404, 'Bar not found');
-        }
-        throw error(500, 'Failed to load mappings');
-    }
+    ensureUser(locals, ['bar-manager']);
+    const mappings = await loadBarTagMappings(locals, params.ref)
+    return json(mappings);
 };
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
-    const ref = parseStorageRef(params.ref);
+    ensureUser(locals, ['bar-manager']);
+    const ref = params.ref;
 
-    if (ref.type === 'local') {
-        throw error(400, 'Cannot create mappings for local bars via API');
+    const validationResult = barMemberMappingSchema.safeParse(await request.json());
+
+    if (!validationResult.success) {
+        throw error(400, {
+            message: `Validation failed`,
+            details: {
+                issues: validationResult.error.issues,
+            }
+        });
     }
 
-    if (!locals.pb) {
-        throw error(500, 'PocketBase not initialized');
-    }
-
-    const validationResult = validate<TagMapping>('barMemberMapping', await request.json());
-
-    if (!validationResult.valid) {
-        const errorMessages = validationResult.errors?.map(e => `${e.field}: ${e.message}`).join(', ');
-        throw error(400, `Validation failed: ${errorMessages}`);
-    }
-
-    const { serialId, userId, nickName } = validationResult.data;
+    const { serialId } = validationResult.data;
+    const { nickName } = validationResult.data;
 
     try {
         const bar = await locals.pb
             .collection('bars')
-            .getFirstListItem(`slug="${ref.key}" || id="${ref.key}"`);
+            .getFirstListItem(`slug="${ref}" || id="${ref}"`);
 
         let member;
         try {
@@ -109,8 +70,11 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 
             return json({
                 serialId,
-                userId: member.id,
-                nickName: member.nickName
+                member: {
+                    id: member.id,
+                    nickName: member.nickName,
+                    seq: member.seq,
+                },
             } satisfies TagMapping);
         } catch (err: any) {
             if (err.status === 404) {
@@ -133,4 +97,32 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
         }
         throw error(500, 'Failed to create mapping');
     }
+};
+
+export const DELETE: RequestHandler = async ({ url, params, locals }) => {
+    ensureUser(locals, ['bar-manager']);
+    const ref = params.ref;
+
+    const serialId = url.searchParams.get('serialId');
+    if (!serialId) {
+        throw error(400, 'serialId is required');
+    }
+
+    const mapping = await locals.pb
+        .collection('bar_member_mappings')
+        .getFirstListItem(
+            locals.pb.filter('member.bar.slug = {:bar} && serialId = {:serialId}', {
+                bar: ref,
+                serialId,
+            }),
+        )
+        .catch(() => null);
+
+    if (!mapping) {
+        throw error(404, 'Mapping not found');
+    }
+
+    await locals.pb.collection('bar_member_mappings').delete(mapping.id);
+
+    return json({ serialId });
 };

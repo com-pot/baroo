@@ -1,92 +1,40 @@
-import type { Bar } from '$lib/bar/BarModel';
-import { parseStorageRef } from '$lib/bar/refs';
-import { getBarOfferItems, collectKegClosureData, type PackageOpenEvent } from '$lib/bar/stats/barOfferItems';
-import { getMemberOrders } from '$lib/bar/stats/memberOrders';
+import { barDoUnseal } from '$lib/bar/ops/unseal';
 import { formatPbError } from '$lib/db.server';
-import { validate, getFieldErrors } from '$lib/validation/validator';
+import { barSchema } from '$lib/model/bar';
+import { getFieldErrors } from '$lib/validation/validator';
+import z from 'zod';
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
+import { zFromForm } from '$lib/zchem/schema';
+import getSnapshot from '$lib/bar/snapshot/getSnapshot';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
-    if (!locals.pb) {
-        throw new Error('PocketBase not initialized');
-    }
+export const load: PageServerLoad = async ({ parent, locals }) => {
+    const { bar } = await parent();
+    const snapshot = bar ? await getSnapshot(locals, bar.slug) : null
 
-    const ref = parseStorageRef(params.ref);
-
-    if (ref.key === 'new') {
-        return { ref, bar: null, stats: null, offerItems: [] };
-    }
-
-    if (ref.type === 'local') {
-        return { ref, bar: null, stats: null, offerItems: [] };
-    }
-
-    const bar = await locals.pb.collection<Bar>('bars')
-        .getFirstListItem(`slug="${ref.key}"`)
-
-    const memberStats = await getMemberOrders(locals.pb, { slug: bar.slug });
-
-    const offerItems = await getBarOfferItems(locals.pb, bar);
-
-    // Get all closure events for each offer item
-    const closureEvents: Record<string, any[]> = {};
-    for (const offerItem of offerItems) {
-        const closureList = await locals.pb.collection('events')
-            .getFullList({
-                filter: `type = "keg-uncork" && target = "bar:${bar.slug}" && data.offerItemKey = "${offerItem.data.key}"`,
-                sort: '-created'
-            });
-        closureEvents[offerItem.data.key] = closureList;
-    }
-
-    const stats = {
-        memberStats,
-        offerItems,
-        closureEvents,
-    };
-
-    return { ref, bar, stats };
+    return { snapshot };
 };
 
+const unsealDataSchema = z.object({
+    eventType: z.literal("unseal"),
+    offerItemKey: z.string().min(1),
+    quantity: z.number().gt(0),
+})
 export const actions: Actions = {
     createEvent: async ({ request, params, locals }) => {
-        if (!locals.pb) {
-            return fail(500, { error: 'PocketBase not initialized' });
-        }
-
-        const ref = parseStorageRef(params.ref);
-        if (ref.type === 'local' || ref.key === 'new') {
+        const ref = params.ref;
+        if (ref === 'new') {
             return fail(400, { error: 'Cannot create events for this bar' });
         }
 
-        const formData = await request.formData();
-        const eventType = formData.get('eventType')?.toString();
-        const offerItemKey = formData.get('offerItemKey')?.toString();
+        const input = unsealDataSchema.safeParse(zFromForm(unsealDataSchema, await request.formData()));
 
-        if (eventType !== 'keg-uncork') {
-            return fail(400, { error: 'Invalid event type' });
-        }
-
-        if (!offerItemKey) {
-            return fail(400, { error: 'Offer item is required' });
+        if (!input.success) {
+            return fail(400, { error: 'Invalid data', issues: input.error.issues });
         }
 
         try {
-            // First, collect the statistics from the current keg (before uncorking the new one)
-            // This saves data about how much was consumed, who consumed what, etc.
-            const closureData = await collectKegClosureData(locals.pb, { slug: ref.key }, offerItemKey);
-
-            // Now create the new uncork event
-            await locals.pb.collection('events')
-                .create({
-                    type: 'keg-uncork',
-                    target: `bar:${ref.key}`,
-                    data: {
-                        offerItemKey,
-                        closureData,
-                    },
-                } satisfies Omit<PackageOpenEvent, "id">)
+            await barDoUnseal(locals, ref, input.data)
 
             return { success: true, action: 'createEvent' };
         } catch (err) {
@@ -96,30 +44,22 @@ export const actions: Actions = {
     },
 
     save: async ({ request, params, locals }) => {
-        if (!locals.pb) {
-            return fail(500, { error: 'PocketBase not initialized' });
-        }
-
         const formData = await request.formData();
         const data = {
             slug: formData.get('slug')?.toString() || '',
             name: formData.get('name')?.toString() || ''
         };
 
-        const validationResult = validate<Record<string, unknown>>('bar', data);
+        const validationResult = barSchema.safeParse(data);
 
-        if (!validationResult.valid) {
+        if (!validationResult.success) {
             return fail(400, {
                 data,
-                errors: getFieldErrors(validationResult.errors || [])
+                errors: getFieldErrors(validationResult.error.issues)
             });
         }
 
-        const ref = parseStorageRef(params.ref);
-
-        if (ref.type === 'local') {
-            return fail(400, { error: 'Cannot edit local bars through backstage' });
-        }
+        const ref = params.ref;
 
         try {
             if (params.ref === 'new') {
@@ -127,7 +67,7 @@ export const actions: Actions = {
                 return redirect(303, `/backstage/bars/${bar.slug}`);
             }
 
-            const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref.key}"`);
+            const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref}"`);
             const updatedBar = await locals.pb.collection('bars').update(bar.id, validationResult.data);
             return { success: true, data: { slug: updatedBar.slug, name: updatedBar.name } };
         } catch (err) {
@@ -139,21 +79,13 @@ export const actions: Actions = {
     },
 
     delete: async ({ params, locals }) => {
-        if (!locals.pb) {
-            return fail(500, { error: 'PocketBase not initialized' });
-        }
-
-        const ref = parseStorageRef(params.ref);
-        if (ref.type === 'local') {
-            return fail(400, { error: 'Cannot delete local bars' });
-        }
-
-        if (ref.key === 'new') {
+        const ref = params.ref;
+        if (ref === 'new') {
             return fail(400, { error: 'Cannot delete a new bar' });
         }
 
         try {
-            await locals.pb.collection('bars').delete(ref.key);
+            await locals.pb.collection('bars').delete(ref);
         } catch (error) {
             return fail(500, { error: 'Failed to delete bar' });
         }

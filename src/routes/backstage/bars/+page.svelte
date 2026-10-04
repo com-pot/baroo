@@ -9,14 +9,14 @@
     <a href="/backstage/bars">{m["baroo.backstage.bars.breadcrumb"]()}</a>
 </nav>
 
-<main class="backstage-content bars-page">
+<main class="backstage-content">
     <header class="page-header">
         <h2>{m["baroo.backstage.bars.list_title"]()}</h2>
         <a href="/backstage/bars/new" class="btn btn-primary">{m["baroo.backstage.bars.create_new"]()}</a>
     </header>
 
     {#if data.bars.length === 0}
-        <div class="empty-state">
+        <div class="card empty-state">
             <p>{m["baroo.backstage.bars.no_bars"]()}</p>
         </div>
     {:else}

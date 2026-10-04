@@ -1,38 +1,17 @@
+import pino from 'pino';
 import type { Handle } from '@sveltejs/kit';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { sequence } from '@sveltejs/kit/hooks';
-import { FIXME_DEBUGGING_CREATE_DB_FROM_ENV } from '$lib/db.server';
+import { handlePocketBase } from '$lib/auth/client';
 
-const handlePocketBase: Handle = async ({ event, resolve }) => {
-    const pb = event.locals.pb = await FIXME_DEBUGGING_CREATE_DB_FROM_ENV();
+const logger = pino()
 
-    if (pb.authStore.isValid && pb.authStore.record) {
-        const user = await pb.collection(pb.authStore.record.collectionName)
-            .getOne<{
-                email: string,
-                name: string,
-                id: string,
-                expand: {
-                    roles: { name: string }[],
-                },
-            }>(pb.authStore.record.id, { expand: 'roles', fields: '*,roles.*' });
+const handleLogger: Handle = async ({ event, resolve }) => {
+    const reqId = crypto.randomUUID()
+    event.locals.logger = logger.child({ reqId })
 
-        event.locals.user = {
-            email: user.email,
-            name: user.name,
-            id: user.id,
-
-            roles: (user.expand.roles).map(role => role.name)
-        }
-    }
-
-    event.locals.acl = {
-        hasRole: (role: string) => event.locals.user?.roles?.includes(role) || false
-    }
-
-    const response = await resolve(event);
-    return response;
-};
+    return resolve(event)
+}
 
 const handleParaglide: Handle = ({ event, resolve }) => paraglideMiddleware(event.request, ({ request, locale }) => {
     event.request = request;
@@ -43,6 +22,7 @@ const handleParaglide: Handle = ({ event, resolve }) => paraglideMiddleware(even
 });
 
 export const handle: Handle = sequence(
+    handleLogger,
     handlePocketBase,
     handleParaglide,
 );

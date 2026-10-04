@@ -3,7 +3,7 @@ import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
     if (!locals.user) {
-        return error(401, 'unauthenticated');
+        return redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
     }
 
     if (!locals.acl.hasRole('bar-manager')) {

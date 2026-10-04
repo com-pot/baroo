@@ -1,0 +1,56 @@
+<script lang="ts">
+    import * as m from "$lib/paraglide/messages.js";
+
+    let {
+        isOnline,
+    }: {
+        isOnline: () => boolean,
+    } = $props();
+
+    let busy = $state(false);
+    let error = $state<string>();
+
+    async function reset() {
+        if (!isOnline()) return;
+        if (!confirm(m["baroo.staff.cache_reset_confirm"]())) return;
+
+        busy = true;
+        error = undefined;
+
+        try {
+            if (typeof caches !== "undefined") {
+                const keys = await caches.keys();
+                await Promise.all(keys.map((key) => caches.delete(key)));
+            }
+
+            const registrations = await navigator.serviceWorker?.getRegistrations() ?? [];
+            await Promise.all((registrations).map((reg) => reg.unregister()));
+
+            location.reload();
+        } catch (err) {
+            busy = false;
+            error = m["baroo.staff.cache_reset_failed"]({
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
+    }
+</script>
+
+<div class="actions">
+    <button
+        type="button"
+        class="btn btn-outline-danger btn-sm"
+        disabled={busy || !isOnline()}
+        onclick={reset}
+    >
+        {m["baroo.staff.cache_reset"]()}
+    </button>
+</div>
+
+{#if !isOnline()}
+    <p class="text-meta">{m["baroo.staff.cache_reset_offline"]()}</p>
+{/if}
+
+{#if error}
+    <p class="alert alert-danger">{error}</p>
+{/if}

@@ -1,0 +1,93 @@
+.card-body.-flush {
+    padding: 0;
+}
+
+.table.-sticky {
+    thead {
+        position: sticky;
+        top: 0;
+    }
+    tfoot {
+        position: sticky;
+        bottom: 0;
+
+        container: sticky-tfoot;
+        container-type: scroll-state;
+    }
+}
+
+@container sticky-tfoot scroll-state(stuck: bottom) {
+    tr {
+        box-shadow: 0px -4px 12px #dddd !important;
+    }
+}
+
+.inline-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.75rem;
+
+    label {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+        // Pair up in the drawer's ~550px instead of stacking one per row.
+        flex: 1 1 14rem;
+    }
+}
+.form-check-label small {
+    display: block;
+    color: #666;
+}
+
+.btn-text {
+    padding: 0;
+}
+.btn-icon {
+    line-height: 1;
+    padding: var(--bs-btn-padding-y);
+}
+
+.card {
+    &:has(> .bg) {
+        position: relative;
+        overflow: clip;
+
+        > * {
+            z-index: 2;
+        }
+        > .bg {
+            z-index: 1;
+            position: absolute;
+            opacity: 0.2;
+        }
+
+    }
+}
+
+.text-meta {
+    opacity: 0.7;
+    font-size: 0.9rem;
+}
+
+.alert .detail {
+    display: block;
+    font-family: monospace;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.btn-outline-subtle {
+    color: #6b7280;
+    background: transparent;
+    border: 1px solid transparent;
+
+    &:hover,
+    &:focus-visible {
+        background: #fff;
+        border-color: #dee2e6;
+    }
+}

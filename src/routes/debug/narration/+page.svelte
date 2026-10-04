@@ -51,10 +51,12 @@
                     >🗣️</button>
                 </td>
                 <td data-excluded={exclVoice}>
+                    <!-- svelte-ignore a11y_consider_explicit_label -->
                     <button onclick={() => toggleExclusion('langs', voice.lang)}></button>
                     <span>{voice.lang}</span>
                 </td>
                 <td data-excluded={exclLang}>
+                    <!-- svelte-ignore a11y_consider_explicit_label -->
                     <button onclick={() => toggleExclusion('voices', voice.lang + ":" + voice.name)}></button>
                     <span>{voice.name}</span>
                 </td>

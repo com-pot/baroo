@@ -17,6 +17,22 @@ export class Renderer {
         return this.dateFormatter.format(date);
     }
 
+    formatBytes(bytes: number): string {
+        if (bytes < 1000) return `${bytes} B`;
+
+        const units = ['kB', 'MB', 'GB'];
+        let value = bytes / 1000;
+        let unit = 0;
+
+        while (value >= 1000 && unit < units.length - 1) {
+            value /= 1000;
+            unit++;
+        }
+
+        return `${new Intl.NumberFormat(this.opts.locale, { maximumFractionDigits: 1 }).format(value)} ${units[unit]}`;
+    }
+
+
     public print(s: Printable) {
         if (!s) return ""
         if (typeof s === "string") return s

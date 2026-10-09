@@ -1,24 +1,17 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { parseStorageRef } from '$lib/bar/refs';
 import { isValidMapping, type TagMapping } from '$lib/bar/tags';
 import { validate } from '$lib/validation/validator';
+import { ensureUser } from '$lib/acl.server';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-    const ref = parseStorageRef(params.ref);
-
-    if (ref.type === 'local') {
-        return json({ error: 'unsupported-type' }, { status: 400 });
-    }
-
-    if (!locals.pb) {
-        throw error(500, 'PocketBase not initialized');
-    }
+    ensureUser(locals, ['bar-manager']);
+    const ref = params.ref;
 
     try {
         const bar = await locals.pb
             .collection('bars')
-            .getFirstListItem(`slug="${ref.key}"`);
+            .getFirstListItem(`slug="${ref}"`);
 
         const mappings = await locals.pb.collection('bar_member_mappings').getFullList({
             filter: `member.bar="${bar.id}"`,
@@ -29,8 +22,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         const result = mappings
             .map((mapping): TagMapping => ({
                 serialId: mapping.serialId,
-                userId: String(mapping.expand?.member?.id || ''),
-                nickName: mapping.expand?.member?.nickName || '',
+                member: {
+                    id: String(mapping.expand?.member?.id || ''),
+                    nickName: mapping.expand?.member?.nickName || '',
+                    seq: mapping.expand?.member?.seq || 0,
+                },
                 extra: {
                     seq: String(mapping.expand?.member?.seq || ''),
                     greeting: mapping.expand?.member?.greeting,
@@ -49,15 +45,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 };
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
-    const ref = parseStorageRef(params.ref);
-
-    if (ref.type === 'local') {
-        throw error(400, 'Cannot create mappings for local bars via API');
-    }
-
-    if (!locals.pb) {
-        throw error(500, 'PocketBase not initialized');
-    }
+    ensureUser(locals, ['bar-manager']);
+    const ref = params.ref;
 
     const validationResult = validate<TagMapping>('barMemberMapping', await request.json());
 
@@ -66,12 +55,13 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
         throw error(400, `Validation failed: ${errorMessages}`);
     }
 
-    const { serialId, userId, nickName } = validationResult.data;
+    const { serialId } = validationResult.data;
+    const { nickName } = validationResult.data.member;
 
     try {
         const bar = await locals.pb
             .collection('bars')
-            .getFirstListItem(`slug="${ref.key}" || id="${ref.key}"`);
+            .getFirstListItem(`slug="${ref}" || id="${ref}"`);
 
         let member;
         try {
@@ -109,8 +99,11 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 
             return json({
                 serialId,
-                userId: member.id,
-                nickName: member.nickName
+                member: {
+                    id: member.id,
+                    nickName: member.nickName,
+                    seq: member.seq,
+                },
             } satisfies TagMapping);
         } catch (err: any) {
             if (err.status === 404) {
@@ -133,4 +126,47 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
         }
         throw error(500, 'Failed to create mapping');
     }
+};
+
+/**
+ * Unmaps one card. The member stays — a lost card is not a lost tab, and the person it
+ * belonged to still has a history and a badge number.
+ */
+export const DELETE: RequestHandler = async ({ url, params, locals }) => {
+    ensureUser(locals, ['bar-manager']);
+    const ref = params.ref;
+
+    const serialId = url.searchParams.get('serialId');
+    if (!serialId) {
+        throw error(400, 'serialId is required');
+    }
+
+    let bar;
+    try {
+        bar = await locals.pb
+            .collection('bars')
+            .getFirstListItem(`slug="${ref}" || id="${ref}"`);
+    } catch (err: any) {
+        if (err.status === 404) throw error(404, 'Bar not found');
+        throw error(500, 'Failed to delete mapping');
+    }
+
+    // Scoped through the member so one bar's manager cannot unmap another bar's card.
+    const mapping = await locals.pb
+        .collection('bar_member_mappings')
+        .getFirstListItem(
+            locals.pb.filter('member.bar = {:bar} && serialId = {:serialId}', {
+                bar: bar.id,
+                serialId,
+            }),
+        )
+        .catch(() => null);
+
+    if (!mapping) {
+        throw error(404, 'Mapping not found');
+    }
+
+    await locals.pb.collection('bar_member_mappings').delete(mapping.id);
+
+    return json({ serialId });
 };

@@ -21,30 +21,44 @@
       "minLength": 1,
       "description": "Display name of the offer item"
     },
+    "servingPreset": {
+      "type": "string",
+      "enum": ["tap", "unit"],
+      "description": "Which set of portions the item is served in: 'tap' pours 0.3/0.5 l, 'unit' sells single pieces"
+    },
     "pricing": {
       "type": "object",
       "additionalProperties": {
         "type": "number",
         "minimum": 0
       },
-      "description": "Pricing variants for the item (e.g., {'x': 50, '1': 100})"
-    },
-    "variantLabels": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "string"
-      },
-      "description": "Display labels for variant keys (e.g., {'male': 'Malé', 'stredni': 'Střední'})"
-    },
-    "variantVolumes": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "number",
-        "minimum": 0
-      },
-      "description": "Volume in milliliters (ML) for each variant (e.g., {'male': 300, 'stredni': 500})"
+      "description": "Price per serving, keyed by the serving keys of servingPreset (e.g. {'0_3': 44, '0_5': 62})"
     }
   },
-  "required": ["bar", "key", "name"],
+  "allOf": [
+    {
+      "if": {
+        "properties": { "servingPreset": { "const": "tap" } },
+        "required": ["servingPreset"]
+      },
+      "then": {
+        "properties": {
+          "pricing": { "propertyNames": { "enum": ["0_3", "0_5"] } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "servingPreset": { "const": "unit" } },
+        "required": ["servingPreset"]
+      },
+      "then": {
+        "properties": {
+          "pricing": { "propertyNames": { "enum": ["1"] } }
+        }
+      }
+    }
+  ],
+  "required": ["bar", "key", "name", "servingPreset"],
   "additionalProperties": false
 }

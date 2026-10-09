@@ -10,12 +10,12 @@ Here we put off tasks that ought to be addressed later in time.
 
 ### Data structure
 
-1. In bar_offer_items, the variants are broken up into columns pricing, variantLabels and variantVolumes. We'd better convert this into a singular dictionary of variants, each containing own price, label and ~~volume~~ content.
+1. ~~In bar_offer_items, the variants are broken up into columns pricing, variantLabels and variantVolumes.~~ Replaced by a hardcoded `servingPreset` (`tap` = 0.3/0.5 l, `unit` = 1 piece); `pricing` is keyed by the preset's serving keys.
 2. ~~Keg uncorking~~ Package unwrapping should not live merely in events but in its own table
 
 ### Design
 
-1. For now, we assume every offer item is measured in liters. We want to also allow for grams, pieces, etc..
+1. ~~For now, we assume every offer item is measured in liters.~~ Pieces are covered by the `unit` serving preset; grams would be a third preset in `src/lib/bar/servings.ts`.
 2. Make primary currency a parameter of the bar instead of a global setting / bunch of hardcoded strings
 3. Manual item order
 

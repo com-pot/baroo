@@ -11,6 +11,7 @@
     import { greetingFor, orderConfirmation } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
+    import type { Serving } from "$lib/bar/servings";
     import { Narrator } from "$lib/speech.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
     import Gzt from "$lib/eggs/Gzt.svelte";
@@ -20,6 +21,11 @@
     import StaffDrawer from "./StaffDrawer.svelte";
     import NewOrderDialogContent from "./NewOrderDialogContent.svelte";
     import UnsealWidget from "./UnsealWidget.svelte";
+    import type { BarOfferItem } from "$lib/bar/BarModel";
+    import { SpigotStream } from "$lib/spigots/spigotStream.svelte";
+    import type { SpigotEvent, SpigotPour } from "$lib/spigots/spigotEvents";
+    import PourQueue, { type PendingPour } from "./PourQueue.svelte";
+    import SpigotRoster from "./SpigotRoster.svelte";
 
     const uiLayers = getUiLayers()
 
@@ -106,24 +112,12 @@
         const mapping = store.findMapping(normalizeTag(raw), store.config.idInput.includes("member"));
 
         if (!mapping) {
-            if (narrationEnabled) narrator?.speak("Cožeto? Neznám!")
-
-            if (BADGE_NUMBER.test(raw)) {
-                setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: raw }));
-                return;
-            }
-
-            store.noteUnknownTag(raw);
-            setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId: raw }));
+            reportUnknown(raw);
             return;
         }
 
         const displayName = mapping.member.nickName || "???";
-        const greeting = greetingFor(store.config, {
-            nickName: displayName,
-            greeting: typeof mapping.extra?.greeting === "string" ? mapping.extra.greeting : undefined,
-        });
-        if (greeting) narrator?.speak(greeting);
+        greet(mapping, displayName);
 
         userIdInput = ""
         if (action === "summary") {
@@ -138,6 +132,96 @@
             layer: startOrder(mapping, () => currentDialog = null),
             id: mapping.member.id
         }
+    }
+
+    function reportUnknown(raw: string) {
+        if (narrationEnabled) narrator?.speak("Cožeto? Neznám!")
+
+        if (BADGE_NUMBER.test(raw)) {
+            setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: raw }));
+            return;
+        }
+
+        store.noteUnknownTag(raw);
+        setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId: raw }));
+    }
+
+    function greet(mapping: TagMapping, displayName: string) {
+        const greeting = greetingFor(store.config, {
+            nickName: displayName,
+            greeting: typeof mapping.extra?.greeting === "string" ? mapping.extra.greeting : undefined,
+        });
+        if (greeting) narrator?.speak(greeting);
+    }
+
+    /** Kept apart from the dialog layers - several customers can wait at the spigots at once */
+    let pendingPours = $state<PendingPour[]>([]);
+    let spigotStream = $state<SpigotStream | undefined>();
+
+    function onSpigotEvent(event: SpigotEvent) {
+        switch (event.type) {
+            case "pour":
+                receivePour(event);
+                return;
+            case "spigot-assigned":
+                setStatus("ℹ️", m["baroo.bar.status.spigot_assigned"]({ spigot: event.spigot, name: event.name }));
+                return;
+            case "spigot-unset":
+                setStatus("⚠️", m["baroo.bar.status.spigot_unset"]({ spigot: event.spigot }));
+                return;
+        }
+    }
+
+    function receivePour(pour: SpigotPour) {
+        if (pendingPours.some((pending) => pending.id === pour.id)) return;
+
+        const mapping = store.findMapping(pour.serialId);
+        if (!mapping) {
+            reportUnknown(pour.serialId);
+            return;
+        }
+
+        const label = mapping.member.nickName || "???";
+        greet(mapping, label);
+
+        pendingPours = [...pendingPours, {
+            id: pour.id,
+            spigot: pour.spigot,
+            mapping,
+            label,
+            beverage: pour.beverage,
+        }];
+    }
+
+    async function servePour(pour: PendingPour, item: BarOfferItem, serving: Serving) {
+        // Removed before the outbox write so a double press can't pour twice
+        pendingPours = pendingPours.filter((pending) => pending.id !== pour.id);
+
+        try {
+            await store.process("order", {
+                // Kiosks answering the same pour land one order, sync dedupes on clientId
+                clientId: `spigot:${pour.id}`,
+                serialId: pour.mapping.serialId,
+                memberId: pour.mapping.member.id,
+                memberLabel: pour.label,
+                items: [{ key: item.key, variant: serving.key }],
+            });
+        } catch (error) {
+            console.error(error);
+            pendingPours = [pour, ...pendingPours];
+            setStatus("❌", m["baroo.bar.status.pour_failed"]({
+                name: pour.label,
+                error: error instanceof Error ? error.message : String(error),
+            }));
+            return;
+        }
+
+        setStatus("✅", m["baroo.offline.pending"]({ count: String(store.pending.length) }));
+        if (narrationEnabled) narrator?.speak(orderConfirmation());
+    }
+
+    function dismissPour(pour: PendingPour) {
+        pendingPours = pendingPours.filter((pending) => pending.id !== pour.id);
     }
 
     function submitSelectForm(e: SubmitEvent) {
@@ -206,6 +290,22 @@
                 globalThis.speak = (text: string) => narrator?.speak(text)
                 console.debug("Narrator initialized as the speak(\"\") function")
                 return narrator
+            },
+        },
+        {
+            name: "spigots",
+            // After the narrator, so the first pour already gets its greeting
+            isEnabled: () => !!store.device?.spigotTicket,
+            init: async () => {
+                const stream = new SpigotStream({
+                    barSlug: store.barSlug,
+                    ticket: () => store.device?.spigotTicket ?? null,
+                    onEvent: onSpigotEvent,
+                });
+                spigotStream = stream;
+
+                // Not awaiting the connection, it keeps retrying in the background
+                return stream.start();
             },
         },
     ], {
@@ -281,6 +381,10 @@
         </div>
 
         <div class="info-sections" data-boot>
+            {#if spigotStream}
+                <SpigotRoster stream={spigotStream} offerItems={store.offerItems} />
+            {/if}
+
             {#if status?.text}
                 <div class="form-status" data-level={status.level}>
                     <span class="level">{status.level}</span>
@@ -318,6 +422,13 @@
         {/if}
     </div>
 </main>
+
+<PourQueue
+    pours={pendingPours}
+    offerItems={store.offerItems}
+    onServe={servePour}
+    onDismiss={dismissPour}
+/>
 
 <style lang="scss">
 @property --hide-rate {

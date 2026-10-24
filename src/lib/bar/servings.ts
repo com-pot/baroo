@@ -9,6 +9,8 @@ export type Serving = {
     label: string;
     /** e.g.: 0.5 */
     quantity: number;
+    /** e.g.: { cs: "Velké", en: "Large" } */
+    name: Record<string, string>;
 };
 
 export type ServingPreset = {
@@ -27,8 +29,8 @@ export const SERVING_PRESETS = listIndex("key", [
             en: "On tap",
         },
         servings: [
-            { key: '0_3', label: '0.3', quantity: 0.3 },
-            { key: '0_5', label: '0.5', quantity: 0.5 },
+            { key: '0_3', label: '0.3', name: { cs: 'Malé', en: 'Small' }, quantity: 0.3 },
+            { key: '0_5', label: '0.5', name: { cs: 'Velké', en: 'Large' }, quantity: 0.5 },
         ],
     },
     {
@@ -39,7 +41,7 @@ export const SERVING_PRESETS = listIndex("key", [
             en: "By the piece",
         },
         servings: [
-            { key: '1', label: '1', quantity: 1 },
+            { key: '1', label: '1', name: { cs: 'Kus', en: 'Piece' }, quantity: 1 },
         ],
     },
 ] as const satisfies ServingPreset[]);

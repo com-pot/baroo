@@ -29,7 +29,17 @@
                 "unknown_tag": "Neznámý štítek {serialId}",
                 "tag_unreadable": "Z NFC tagu se nepodařilo přečíst data.",
                 "idle": "Nečinný",
-                "unknown_member_seq": "Nikdo nemá visačku číslo {seq}"
+                "unknown_member_seq": "Nikdo nemá visačku číslo {seq}",
+                "spigot_assigned": "Pípa {spigot} teď čepuje {name}",
+                "spigot_unset": "Pípa {spigot} nemá nastavený nápoj — přiložte k ní štítek nápoje.",
+                "pour_failed": "Objednávku pro {name} se nepodařilo uložit: {error}"
+            },
+            "spigot": {
+                "title": "Pípa {spigot}",
+                "dismiss": "Zahodit",
+                "unknown_item": "Nápoj „{key}“ není v nabídce. Přiložte k pípě znovu štítek nápoje.",
+                "disconnected": "Pípy nejsou připojené",
+                "no_beverage": "bez nápoje"
             },
             "nfc": "NFC",
             "stock": {
@@ -141,7 +151,11 @@
                 "serving_prices": "Ceny porcí",
                 "picture": "Obrázek",
                 "picture_hint": "Čtvercový, nejvýše {max}.",
-                "picture_current": "Současný obrázek"
+                "picture_current": "Současný obrázek",
+                "tag_serial": "NFC štítek nápoje",
+                "tag_serial_placeholder": "např. 04a1b2c3d4e5f6",
+                "tag_serial_help": "Přiložením na pípu ji přepne na tento nápoj. ID štítku zjistíte tak, že ho přiložíte k pípě — kiosek ho ukáže jako neznámý štítek.",
+                "tag_serial_taken": "Tenhle štítek už patří položce {name}."
             },
             "summaries": {
                 "title": "Přehledy Členů",

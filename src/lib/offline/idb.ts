@@ -64,6 +64,14 @@ export async function refreshDeviceToken(token: string): Promise<void> {
     await writeDevice({ ...identity, token });
 }
 
+export async function writeSpigotTicket(spigotTicket: string | null): Promise<void> {
+    const identity = await readDevice();
+    if (!identity || (identity.spigotTicket ?? null) === spigotTicket) return;
+
+    const { spigotTicket: _stale, ...rest } = identity;
+    await writeDevice(spigotTicket ? { ...rest, spigotTicket } : rest);
+}
+
 export async function patchDevice(device: Partial<PosDevice>): Promise<DeviceIdentity | null> {
     const identity = await readDevice();
     if (!identity) return null;

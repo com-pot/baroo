@@ -1,12 +1,14 @@
 import type { BarOfferItem } from '$lib/bar/BarModel';
-import { formatPbError } from '$lib/db.server';
+import { formatPbError, type Db } from '$lib/db.server';
 import { SERVING_PRESETS } from '$lib/bar/servings';
-import { getFieldErrors, type ValidationIssue } from '$lib/validation/validator';
+import { normalizeTag } from '$lib/bar/tags';
+import { getFieldErrors, type ValidationError, type ValidationIssue } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { PICTURE_MAX_BYTES } from './offerItem';
 import { isError, type AppError } from '$lib/errors';
 import { barOfferItemSchema } from '$lib/model/bar';
+import * as m from '$lib/paraglide/messages.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
     const items = await locals.pb.collection<BarOfferItem>('bar_offer_items').getFullList({
@@ -38,6 +40,15 @@ export const actions: Actions = {
             return fail(400, {
                 data,
                 errors: collectErrors(validationResult.error?.issues, picture),
+                action: 'create'
+            });
+        }
+
+        const tagSerialOwner = await findTagSerialOwner(locals.pb, bar.id, data.tagSerial);
+        if (tagSerialOwner) {
+            return fail(400, {
+                data,
+                errors: tagSerialTakenErrors(tagSerialOwner),
                 action: 'create'
             });
         }
@@ -82,6 +93,15 @@ export const actions: Actions = {
             return fail(400, {
                 data: { ...data, itemId },
                 errors: collectErrors(validationResult.error?.issues, picture),
+                action: 'update'
+            });
+        }
+
+        const tagSerialOwner = await findTagSerialOwner(locals.pb, bar.id, data.tagSerial, itemId);
+        if (tagSerialOwner) {
+            return fail(400, {
+                data: { ...data, itemId },
+                errors: tagSerialTakenErrors(tagSerialOwner),
                 action: 'update'
             });
         }
@@ -162,5 +182,33 @@ function parseOfferData(formData: FormData) {
         }
     }
 
-    return { servingPreset: preset.key, pricing };
+    return {
+        servingPreset: preset.key,
+        pricing,
+        tagSerial: normalizeTag((formData.get('tagSerial')?.toString() ?? '').replaceAll(/[\s-]/g, '')),
+    };
+}
+
+function tagSerialTakenErrors(owner: BarOfferItem): Record<string, ValidationError[]> {
+    return {
+        tagSerial: [{ field: 'tagSerial', message: m["baroo.backstage.offer.tag_serial_taken"]({ name: owner.name }) }],
+    };
+}
+
+/** One tag, one drink - otherwise a spigot would pour whichever item it read last */
+async function findTagSerialOwner(
+    pb: Db,
+    barId: string,
+    tagSerial: string,
+    exceptItemId?: string,
+): Promise<BarOfferItem | null> {
+    if (!tagSerial) return null;
+
+    return pb.collection<BarOfferItem>('bar_offer_items').getFirstListItem(
+        pb.filter('bar = {:bar} && tagSerial = {:tagSerial} && id != {:itemId}', {
+            bar: barId,
+            tagSerial,
+            itemId: exceptItemId ?? '',
+        }),
+    ).catch(() => null);
 }

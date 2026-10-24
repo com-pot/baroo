@@ -18,4 +18,6 @@ export type DeviceIdentity = {
     token: string;
     bar: Pick<Bar, "slug" | "name">,
     device: Pick<PosDevice, "id" | "kind" | "label" | "config">
+    /** Pass to the venue's spigot stream, absent when the server has no spigot stations */
+    spigotTicket?: string;
 };

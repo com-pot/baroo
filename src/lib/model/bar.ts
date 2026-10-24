@@ -14,6 +14,7 @@ export const barOfferItemSchema = z.object({
         z.string().regex(/^[a-z0-9_]+$/),
         z.number().min(0),
     ),
+    tagSerial: z.string().max(32).regex(/^[0-9a-f]*$/).describe("NFC tag that switches a spigot station to this item"),
 })
 
 export const barMemberMappingSchema = z.object({

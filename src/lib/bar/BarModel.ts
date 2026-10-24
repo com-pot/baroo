@@ -14,6 +14,8 @@ export type BarOfferItem = {
     servingPreset: ServingPreset["key"];
     pricing: Record<Serving["key"], number>;
     preview_1x1: string | null;
+    /** NFC tag that switches a spigot station to this item */
+    tagSerial?: string;
 }
 
 export type BarMember = {

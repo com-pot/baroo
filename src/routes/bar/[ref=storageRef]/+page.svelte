@@ -23,7 +23,7 @@
     import UnsealWidget from "./UnsealWidget.svelte";
     import type { BarOfferItem } from "$lib/bar/BarModel";
     import { SpigotStream } from "$lib/spigots/spigotStream.svelte";
-    import type { SpigotEvent, SpigotPour } from "$lib/spigots/spigotEvents";
+    import type { SpigotAssigned, SpigotEvent, SpigotPour } from "$lib/spigots/spigotEvents";
     import PourQueue, { type PendingPour } from "./PourQueue.svelte";
     import SpigotRoster from "./SpigotRoster.svelte";
 
@@ -164,12 +164,30 @@
                 receivePour(event);
                 return;
             case "spigot-assigned":
-                setStatus("ℹ️", m["baroo.bar.status.spigot_assigned"]({ spigot: event.spigot, name: event.name }));
+                unsealAtSpigot(event);
                 return;
             case "spigot-unset":
                 setStatus("⚠️", m["baroo.bar.status.spigot_unset"]({ spigot: event.spigot }));
                 return;
         }
+    }
+
+    /** Staff kiosks ask for the new package's size, prefilled with the previous one */
+    function unsealAtSpigot(event: SpigotAssigned) {
+        setStatus("ℹ️", m["baroo.bar.status.spigot_assigned"]({ spigot: event.spigot, name: event.name }));
+
+        const stock = store.stock.find((entry) => entry.item.key === event.beverage);
+        if (!store.isStaffDevice || !stock) return;
+
+        const layer = uiLayers.pushComponent(UnsealWidget, {
+            store,
+            lockedItemKey: stock.item.key,
+            clientId: `spigot-unseal:${event.id}`,
+            initialQuantity: stock.unsealedAt && stock.unsealQuantity > 0 ? stock.unsealQuantity : undefined,
+            onDone: () => layer.ctrl.close(),
+        }, {
+            heading: `${m["baroo.bar.stock.unseal_new"]()} — ${stock.item.name}`,
+        });
     }
 
     function receivePour(pour: SpigotPour) {

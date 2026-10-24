@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from "svelte";
     import * as m from "$lib/paraglide/messages.js";
     import type { BarOfflineStore } from "$lib/offline/store.svelte";
     import { servingPreset } from "$lib/bar/servings";
@@ -7,15 +8,20 @@
     let {
         store,
         lockedItemKey,
+        clientId,
+        initialQuantity,
         onDone,
     }: {
         store: Pick<BarOfflineStore, "barSlug" | "barOffer" | "process" | "offerItems">;
         lockedItemKey?: string;
+        /** Set by a spigot, so staff kiosks answering the same scan land one unseal */
+        clientId?: string;
+        initialQuantity?: number;
         onDone?: () => void;
     } = $props();
 
     let pickedKey = $state("");
-    let quantity = $state("");
+    let quantity = $state(untrack(() => (initialQuantity ? String(initialQuantity) : "")));
 
     const itemKey = $derived(lockedItemKey ?? pickedKey);
     const item = $derived(store.barOffer[itemKey]);
@@ -27,6 +33,7 @@
         if (!item) return;
 
         await store.process("unseal", {
+            clientId,
             offerItemKey: item.key,
             offerItemName: item.name,
             quantity: parseFloat(quantity) || 0,
@@ -63,6 +70,7 @@
             inputmode={measure === "volume" ? "decimal" : "numeric"}
             min="0"
             step={measure === "volume" ? 0.1 : 1}
+            onfocus={(e) => e.currentTarget.select()}
             bind:value={quantity}
             required
         />

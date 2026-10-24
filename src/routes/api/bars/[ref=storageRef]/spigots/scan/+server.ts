@@ -10,8 +10,9 @@ import { spigotScanSchema, type SpigotScanResult } from '$lib/spigots/spigotEven
 /**
  * Card tapped at a spigot station
  *
- * A beverage tag switches the station's drink, any other card goes to the kiosk as a pour.
- * Members are resolved by the kiosk. Must work without PocketBase.
+ * A beverage tag switches the station's drink and has the kiosk open a new package,
+ * any other card goes to the kiosk as a pour. Members are resolved by the kiosk.
+ * Must work without PocketBase.
  */
 export const POST: RequestHandler = async (event) => {
     requireStation(event);
@@ -28,7 +29,14 @@ export const POST: RequestHandler = async (event) => {
     const beverageTag = await lookupBeverageTag(locals, barSlug, serialId);
     if (beverageTag) {
         touchStation(locals, barSlug, spigot, beverageTag.key);
-        emit(locals, barSlug, { type: 'spigot-assigned', spigot, beverage: beverageTag.key, name: beverageTag.name, at });
+        emit(locals, barSlug, {
+            type: 'spigot-assigned',
+            id: randomUUID(),
+            spigot,
+            beverage: beverageTag.key,
+            name: beverageTag.name,
+            at,
+        });
 
         return reply({ result: 'beverage', beverage: beverageTag });
     }

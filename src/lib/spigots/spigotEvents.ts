@@ -28,6 +28,19 @@ export type SpigotPour = {
 };
 
 /**
+ * Beverage tag tapped at a station - the spigot pours this drink now, from a freshly put on package
+ */
+export type SpigotAssigned = {
+    type: 'spigot-assigned';
+    /** Minted by the venue server, the unseal's clientId derives from it */
+    id: string;
+    spigot: string;
+    beverage: string;
+    name: string;
+    at: string;
+};
+
+/**
  * Each event carries a unique id or `at` - the kiosk reads them through a svelte store
  * which drops values equal to the previous one.
  */
@@ -35,7 +48,7 @@ export type SpigotEvent =
     /** `at` is the server clock the `lastSeenAt`s are measured against */
     | { type: 'spigots'; spigots: SpigotStatus[]; at: string }
     | SpigotPour
-    | { type: 'spigot-assigned'; spigot: string; beverage: string; name: string; at: string }
+    | SpigotAssigned
     | { type: 'spigot-unset'; spigot: string; serialId: string; at: string };
 
 export type SpigotScanResult =

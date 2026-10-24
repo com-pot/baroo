@@ -41,7 +41,16 @@
                 "error_processing": "Chyba při zpracování štítku {serialId}: {error}",
                 "idle": "Nečinný",
                 "user_not_mapped": "Uživatel {userId} není namapován. Přidejte prosím mapování v sekci Správa členů.",
-                "unknown_member_seq": "Nikdo nemá visačku číslo {seq}"
+                "unknown_member_seq": "Nikdo nemá visačku číslo {seq}",
+                "spigot_assigned": "Pípa {spigot} teď čepuje {name}",
+                "spigot_unset": "Pípa {spigot} nemá nastavený nápoj — přiložte k ní štítek nápoje."
+            },
+            "spigot": {
+                "title": "Pípa {spigot}",
+                "dismiss": "Zahodit",
+                "unknown_item": "Nápoj „{key}“ není v nabídce. Přiložte k pípě znovu štítek nápoje.",
+                "disconnected": "Pípy nejsou připojené",
+                "no_beverage": "bez nápoje"
             },
             "reset_reader": "Přepojit čtečku",
             "reset_reader_failed": "Přepojení se nepovedlo: {detail}",
@@ -171,7 +180,11 @@
                 "picture": "Obrázek",
                 "picture_hint": "Čtvercový, nejvýše {max}.",
                 "picture_current": "Současný obrázek",
-                "picture_pending": "Nahraje se po uložení."
+                "picture_pending": "Nahraje se po uložení.",
+                "tag_serial": "NFC štítek nápoje",
+                "tag_serial_placeholder": "např. 04a1b2c3d4e5f6",
+                "tag_serial_help": "Přiložením na pípu ji přepne na tento nápoj. ID štítku zjistíte tak, že ho přiložíte k pípě — kiosek ho ukáže jako neznámý štítek.",
+                "tag_serial_taken": "Tenhle štítek už patří položce {name}."
             },
             "summaries": {
                 "title": "Přehledy Členů",

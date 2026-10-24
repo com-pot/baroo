@@ -15,6 +15,11 @@ export type BarOfferItem = {
     /** Which set of portions this item is poured in. See `./servings`. */
     servingPreset: ServingPresetKey;
     preview_1x1: string | null; // Path to 1x1 preview image
+    /**
+     * Serial of the NFC tag that stands for this drink at the spigot stations — tapping it
+     * on one switches that spigot to pouring this. Empty when the item has none.
+     */
+    tagSerial?: string;
 }
 
 export type BarMember = {

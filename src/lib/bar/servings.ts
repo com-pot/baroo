@@ -18,6 +18,8 @@ export type Serving = {
     key: string;
     /** The bare token as a human reads it: "0.3", "0.5", "1". */
     label: string;
+    /** What the serving is called at the bar — the word on the big kiosk buttons. */
+    name: Record<string, string>;
     /** How much of a package one serving draws, in the preset's measure. */
     quantity: number;
 };
@@ -41,8 +43,8 @@ export const SERVING_PRESETS = {
             en: "On tap (0.3 / 0.5 L)",
         },
         servings: [
-            { key: '0_3', label: '0.3', quantity: 0.3 },
-            { key: '0_5', label: '0.5', quantity: 0.5 },
+            { key: '0_3', label: '0.3', name: { cs: 'Malé', en: 'Small' }, quantity: 0.3 },
+            { key: '0_5', label: '0.5', name: { cs: 'Velké', en: 'Large' }, quantity: 0.5 },
         ],
     },
     unit: {
@@ -53,7 +55,7 @@ export const SERVING_PRESETS = {
             en: "By the piece (1×)",
         },
         servings: [
-            { key: '1', label: '1', quantity: 1 },
+            { key: '1', label: '1', name: { cs: 'Kus', en: 'Piece' }, quantity: 1 },
         ],
     },
 } as const satisfies Record<ServingPresetKey, ServingPreset>;

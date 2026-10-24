@@ -12,15 +12,19 @@
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import { kioskPrefs } from "$lib/pos/kioskPrefs.svelte";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
-    import { servingsOf } from "$lib/bar/servings";
+    import { servingsOf, type Serving } from "$lib/bar/servings";
     import { Narrator } from "$lib/speech.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
     import Gzt from "$lib/eggs/Gzt.svelte";
     import WallClock from "./WallClock.svelte";
-    import type { BarOrderItem } from "$lib/bar/BarModel";
+    import type { BarOfferItem, BarOrderItem } from "$lib/bar/BarModel";
     import MemberSummary from "./MemberSummary.svelte";
     import { getUiLayers } from "$lib/ui/uiLayers.svelte";
     import StaffDrawer from "./StaffDrawer.svelte";
+    import { SpigotStream } from "$lib/spigots/spigotStream.svelte";
+    import type { SpigotEvent, SpigotPour } from "$lib/spigots/spigotEvents";
+    import PourQueue, { type PendingPour } from "./PourQueue.svelte";
+    import SpigotRoster from "./SpigotRoster.svelte";
 
     const layerManager = getUiLayers()
 
@@ -217,27 +221,12 @@
         const mapping = resolveEntry(raw);
 
         if (!mapping) {
-            if (narrationEnabled) narrator?.speak("Cožeto? Neznám!")
-
-            // A mistyped badge number is not a card — putting it on the staff console's
-            // to-do list would only give them a phantom to chase.
-            if (BADGE_NUMBER.test(raw)) {
-                setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: raw }));
-                return;
-            }
-
-            store.noteUnknownTag(raw);
-            setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId: raw }));
+            reportUnknown(raw);
             return;
         }
 
         const displayName = mapping.member.nickName || "???";
-        // `null` when this device has no greeting template — narration is off entirely.
-        const greeting = greetingFor(store.config, {
-            nickName: displayName,
-            greeting: typeof mapping.extra?.greeting === "string" ? mapping.extra.greeting : undefined,
-        });
-        if (greeting) narrator?.speak(greeting);
+        greet(mapping, displayName);
 
         if (action === "summary") {
             balanceCtrl.showSummary(mapping, displayName);
@@ -245,6 +234,118 @@
         }
 
         balanceCtrl.startOrder(mapping, displayName);
+    }
+
+    /** Nobody answers to `raw` — said out loud, and left for the staff console to map. */
+    function reportUnknown(raw: string) {
+        if (narrationEnabled) narrator?.speak("Cožeto? Neznám!")
+
+        // A mistyped badge number is not a card — putting it on the staff console's
+        // to-do list would only give them a phantom to chase.
+        if (BADGE_NUMBER.test(raw)) {
+            setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: raw }));
+            return;
+        }
+
+        store.noteUnknownTag(raw);
+        setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId: raw }));
+    }
+
+    function greet(mapping: TagMapping, displayName: string) {
+        // `null` when this device has no greeting template — narration is off entirely.
+        const greeting = greetingFor(store.config, {
+            nickName: displayName,
+            greeting: typeof mapping.extra?.greeting === "string" ? mapping.extra.greeting : undefined,
+        });
+        if (greeting) narrator?.speak(greeting);
+    }
+
+    /**
+     * Cards tapped at the spigots, each waiting for the barman to press a size. Kept apart
+     * from the order dialog's state: several customers can be at the taps at once, and a
+     * pour must never disturb an order someone is in the middle of building.
+     */
+    let pendingPours = $state<PendingPour[]>([]);
+    let spigotStream = $state<SpigotStream | undefined>();
+
+    function onSpigotEvent(event: SpigotEvent) {
+        switch (event.type) {
+            case "pour":
+                receivePour(event);
+                return;
+            case "spigot-assigned":
+                setStatus("ℹ️", m["baroo.bar.status.spigot_assigned"]({ spigot: event.spigot, name: event.name }));
+                return;
+            case "spigot-unset":
+                setStatus("⚠️", m["baroo.bar.status.spigot_unset"]({ spigot: event.spigot }));
+                return;
+        }
+    }
+
+    /**
+     * The member is looked up here, from the snapshot and the outbox, exactly as for a
+     * card on any other reader — the venue server never knows who anybody is.
+     */
+    function receivePour(pour: SpigotPour) {
+        if (pendingPours.some((pending) => pending.id === pour.id)) return;
+
+        try {
+            const mapping = resolveEntry(pour.serialId);
+            if (!mapping) {
+                reportUnknown(pour.serialId);
+                return;
+            }
+
+            const label = mapping.member.nickName || "???";
+            greet(mapping, label);
+
+            pendingPours = [...pendingPours, {
+                id: pour.id,
+                spigot: pour.spigot,
+                mapping,
+                label,
+                beverage: pour.beverage,
+            }];
+        } catch (error) {
+            console.error(error);
+            setStatus("❌", m["baroo.bar.status.error_processing"]({
+                serialId: pour.serialId,
+                error: error instanceof Error ? error.message : String(error),
+            }));
+        }
+    }
+
+    async function servePour(pour: PendingPour, item: BarOfferItem, serving: Serving) {
+        // Off the screen before the outbox write: a second press on a slow tablet must
+        // not get the chance to pour twice.
+        pendingPours = pendingPours.filter((pending) => pending.id !== pour.id);
+
+        try {
+            await store.process("order", {
+                // Derived from the pour rather than fresh, so two kiosks answering the
+                // same pour still land one order — the sync endpoint dedupes on it.
+                clientId: `spigot:${pour.id}`,
+                serialId: pour.mapping.serialId,
+                memberId: pour.mapping.member.id,
+                memberLabel: pour.label,
+                items: [{ key: item.key, variant: serving.key }],
+            });
+        } catch (error) {
+            console.error(error);
+            pendingPours = [pour, ...pendingPours];
+            setStatus("❌", m["baroo.bar.status.error_processing"]({
+                serialId: pour.mapping.serialId,
+                error: error instanceof Error ? error.message : String(error),
+            }));
+            return;
+        }
+
+        setStatus("✅", m["baroo.offline.pending"]({ count: String(store.pending.length) }));
+        if (narrationEnabled) narrator?.speak(orderConfirmation());
+    }
+
+    function dismissPour(pour: PendingPour) {
+        pendingPours = pendingPours.filter((pending) => pending.id !== pour.id);
     }
 
     function submitSelectForm(e: SubmitEvent) {
@@ -347,6 +448,25 @@
                 return instance
             },
         },
+        {
+            name: "spigots",
+            // The ticket comes with the snapshot, and only from a server that has spigot
+            // stations — no ticket, nothing to listen to. After the narrator, so the very
+            // first pour already gets its greeting.
+            isEnabled: () => !!store.device?.spigotTicket,
+            init: async () => {
+                const stream = new SpigotStream({
+                    barSlug: store.barSlug,
+                    ticket: () => store.device?.spigotTicket ?? null,
+                    onEvent: onSpigotEvent,
+                });
+                spigotStream = stream;
+
+                // Not waiting for the connection: a venue server that is down right now
+                // is retried in the background, and the till has to come up regardless.
+                return stream.start();
+            },
+        },
     ], {
         stepInitMinMs: 137,
     });
@@ -433,6 +553,10 @@
 
 
         <div class="info-sections" data-boot>
+            {#if spigotStream}
+                <SpigotRoster stream={spigotStream} offerItems={store.offerItems} />
+            {/if}
+
             {#if status?.text}
                 <div class="form-status" data-level={status.level}>
                     <span class="level">{status.level}</span>
@@ -551,6 +675,13 @@
     ???
     {/if}
 </dialog>
+
+<PourQueue
+    pours={pendingPours}
+    offerItems={store.offerItems}
+    onServe={servePour}
+    onDismiss={dismissPour}
+/>
 {/if}
 
 <style lang="scss">

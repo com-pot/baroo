@@ -22,6 +22,9 @@ data/_*
 !.env.example
 !.env.test
 
+# Spigot station credentials (wifi password, SPIGOT_SECRET)
+firmware/spigot/config.py
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

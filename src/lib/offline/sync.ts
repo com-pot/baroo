@@ -8,6 +8,7 @@ import {
     writeDeviceConfig,
     writeLastSyncAt,
     writeSnapshot,
+    writeSpigotTicket,
 } from './idb';
 import type { StoredOp } from './op';
 import type { BarSnapshot, DeviceIdentity } from './types';
@@ -53,14 +54,16 @@ export async function pullSnapshot(barSlug?: string): Promise<BarSnapshot> {
         throw new Error(`snapshot failed: ${response.status} ${await response.text()}`);
     }
 
-    const { snapshot, token, config } = (await response.json()) as {
+    const { snapshot, token, config, spigotTicket } = (await response.json()) as {
         snapshot: BarSnapshot;
         token: string;
         config?: PosDeviceConfig;
+        spigotTicket?: string | null;
     };
 
     await writeSnapshot(snapshot);
     await refreshDeviceToken(token);
+    await writeSpigotTicket(spigotTicket ?? null);
 
     // Settings edited at the tablet outrank the server's copy until the op carrying them
     // has been accepted. Without this the pull that follows a save hands the barman back

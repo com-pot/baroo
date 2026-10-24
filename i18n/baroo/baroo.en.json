@@ -41,7 +41,16 @@
                 "error_processing": "Error processing tag {serialId}: {error}",
                 "idle": "Idle",
                 "user_not_mapped": "User {userId} is not mapped. Please add a mapping in the Member Management section.",
-                "unknown_member_seq": "Nobody holds badge number {seq}"
+                "unknown_member_seq": "Nobody holds badge number {seq}",
+                "spigot_assigned": "Spigot {spigot} now pours {name}",
+                "spigot_unset": "Spigot {spigot} has no drink set — tap a beverage tag on it."
+            },
+            "spigot": {
+                "title": "Spigot {spigot}",
+                "dismiss": "Discard",
+                "unknown_item": "“{key}” is not on the offer. Tap the beverage tag on the spigot again.",
+                "disconnected": "Not connected to the spigots",
+                "no_beverage": "no drink"
             },
             "reset_reader": "Re-plug reader",
             "reset_reader_failed": "Could not re-plug: {detail}",
@@ -171,7 +180,11 @@
                 "picture": "Picture",
                 "picture_hint": "Square, {max} at most.",
                 "picture_current": "Current picture",
-                "picture_pending": "Uploads when you save."
+                "picture_pending": "Uploads when you save.",
+                "tag_serial": "Beverage NFC tag",
+                "tag_serial_placeholder": "e.g. 04a1b2c3d4e5f6",
+                "tag_serial_help": "Tapping it on a spigot switches the spigot to this drink. To find the tag's id, tap it on a spigot — the kiosk shows it as an unknown tag.",
+                "tag_serial_taken": "This tag already belongs to {name}."
             },
             "summaries": {
                 "title": "Member Summaries",

@@ -6,6 +6,8 @@ import { loadBarData, toTagMappings } from '$lib/bar/storage.server';
 import { effectiveDate, type BarEventRecord, type BarOrderItemRecord } from '$lib/bar/BarModel';
 import { buildMemberTimeline, type MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
 import type { BarSnapshot, SnapshotUnseal } from '$lib/offline/types';
+import { issueSpigotTicket, spigotsEnabled } from '$lib/spigots/spigotAuth.server';
+import { rememberOfferItems } from '$lib/spigots/beverageTags.server';
 
 /**
  * Everything a tablet needs to run this bar with no network.
@@ -19,6 +21,10 @@ export const GET: RequestHandler = async (event) => {
     const { pb, token, device } = await resolveDevice(event, barSlug);
 
     const { bar, offerItems, members, mappings } = await loadBarData(pb, barSlug);
+
+    // The spigot stations need to know which tags are drinks while PocketBase is out of
+    // reach, and this is the request that reliably has the offer in hand.
+    if (spigotsEnabled()) void rememberOfferItems(barSlug, offerItems);
 
     const [orderItems, events, unsealEvents] = await Promise.all([
         pb.collection<BarOrderItemRecord>('bar_order_items').getFullList({
@@ -95,6 +101,13 @@ export const GET: RequestHandler = async (event) => {
         unseals,
     };
 
-    // The tablet stores this next to its token, so the kiosk can read it offline.
-    return json({ snapshot, token, config: readPosConfig(device.config) });
+    // The tablet stores this next to its token, so the kiosk can read it offline. The
+    // spigot ticket travels the same way: it is what lets the kiosk hear the stations
+    // when there is no PocketBase to vouch for it.
+    return json({
+        snapshot,
+        token,
+        config: readPosConfig(device.config),
+        spigotTicket: issueSpigotTicket(device.id, barSlug),
+    });
 };

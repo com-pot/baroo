@@ -28,6 +28,14 @@
 
     const presetMeasure = $derived(servingPreset({ servingPreset: preset }).measure);
 
+    // What a failed save handed back, typed for reading. Not every failure carries the
+    // fields — a PocketBase error does not — so they are all optional here.
+    const failure: {
+        data?: Partial<Record<'key' | 'name' | 'tagSerial', string>>;
+        errors?: Record<string, string>;
+        tagSerialOwner?: string;
+    } | null = $derived(form);
+
     let formLayerCtrl = $state<UiLayerCtrl | null>(null);
     function openItemForm(item: BarOfferItem | null) {
         if (formLayerCtrl) return;
@@ -94,7 +102,12 @@
                                         />
                                     {/if}
                                 </td>
-                                <td><code>{item.key}</code></td>
+                                <td>
+                                    <code>{item.key}</code>
+                                    {#if item.tagSerial}
+                                        <small class="tag-serial" title={m["baroo.backstage.offer.tag_serial"]()}>📶 {item.tagSerial}</small>
+                                    {/if}
+                                </td>
                                 <td>{item.name}</td>
                                 <td>
                                     <div class="pricing-display">
@@ -167,7 +180,7 @@
                 id="key"
                 name="key"
                 class="form-control"
-                value={form?.data?.key ?? item?.key ?? ''}
+                value={failure?.data?.key ?? item?.key ?? ''}
                 required
                 pattern="[a-z0-9\-]+"
                 placeholder={m["baroo.backstage.offer.placeholder_key"]()}
@@ -185,7 +198,7 @@
                 id="name"
                 name="name"
                 class="form-control"
-                value={form?.data?.name ?? item?.name ?? ''}
+                value={failure?.data?.name ?? item?.name ?? ''}
                 required
                 placeholder={m["baroo.backstage.offer.placeholder_name"]()}
                 class:error={form?.errors?.name}
@@ -254,6 +267,26 @@
                 <span class="error-message">{form.errors.servingPreset}</span>
             {/if}
         </div>
+        <div class="input-pair col-md-7">
+            <label for="tagSerial" class="form-label">{m["baroo.backstage.offer.tag_serial"]()}</label>
+            <input
+                type="text"
+                id="tagSerial"
+                name="tagSerial"
+                class="form-control font-monospace"
+                value={failure?.data?.tagSerial ?? item?.tagSerial ?? ''}
+                autocomplete="off"
+                spellcheck="false"
+                placeholder={m["baroo.backstage.offer.tag_serial_placeholder"]()}
+                class:error={form?.errors?.tagSerial}
+            />
+            {#if failure?.tagSerialOwner}
+                <span class="error-message">{m["baroo.backstage.offer.tag_serial_taken"]({ name: failure.tagSerialOwner })}</span>
+            {:else if form?.errors?.tagSerial}
+                <span class="error-message">{form.errors.tagSerial}</span>
+            {/if}
+            <small>{m["baroo.backstage.offer.tag_serial_help"]()}</small>
+        </div>
         <div class="col-12 actions">
             <button type="submit" class="btn btn-primary">
                 {item ? m["baroo.backstage.offer.update"]() : m["baroo.backstage.offer.create"]()}
@@ -277,6 +310,12 @@
     object-fit: contain;
     border-radius: 0.25rem;
     background: #fff;
+}
+
+.tag-serial {
+    display: block;
+    color: #6b7280;
+    font-family: monospace;
 }
 
 .serving-prices {

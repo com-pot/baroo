@@ -33,6 +33,12 @@
         "minimum": 0
       },
       "description": "Price per serving, keyed by the serving keys of servingPreset (e.g. {'0_3': 44, '0_5': 62})"
+    },
+    "tagSerial": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^[0-9a-f]*$",
+      "description": "Serial of the NFC tag that switches a spigot station to this drink, as normalizeTag leaves it (lowercase hex). Empty for none."
     }
   },
   "allOf": [

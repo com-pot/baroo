@@ -71,6 +71,18 @@ export async function refreshDeviceToken(token: string): Promise<void> {
     await writeDevice({ ...identity, token });
 }
 
+/**
+ * Stores the spigot ticket the server just handed us — or forgets the old one when it
+ * handed none, because then the venue has no spigot stations to listen to any more.
+ */
+export async function writeSpigotTicket(spigotTicket: string | null): Promise<void> {
+    const identity = await readDevice();
+    if (!identity || (identity.spigotTicket ?? null) === spigotTicket) return;
+
+    const { spigotTicket: _stale, ...rest } = identity;
+    await writeDevice(spigotTicket ? { ...rest, spigotTicket } : rest);
+}
+
 /** Stores the kiosk settings the server just handed us, so they survive going offline. */
 export async function writeDeviceConfig(config: PosDeviceConfig): Promise<void> {
     const identity = await readDevice();

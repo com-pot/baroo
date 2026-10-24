@@ -499,6 +499,20 @@
         "type": "text"
       },
       {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text1946358214",
+        "max": 32,
+        "min": 0,
+        "name": "tagSerial",
+        "pattern": "^[0-9a-f]*$",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
         "hidden": false,
         "id": "file382214865",
         "maxSelect": 1,

@@ -1,6 +1,7 @@
 import type { BarOfferItem } from '$lib/bar/BarModel';
-import { formatPbError } from '$lib/db.server';
+import { formatPbError, type Db } from '$lib/db.server';
 import { SERVING_PRESETS, DEFAULT_SERVING_PRESET, type ServingPresetKey } from '$lib/bar/servings';
+import { normalizeTag } from '$lib/bar/tags';
 import { validate, getFieldErrors, type ValidationError } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
@@ -38,6 +39,16 @@ export const actions: Actions = {
             return fail(400, {
                 data,
                 errors: collectErrors(validationResult.errors, picture),
+                action: 'create'
+            });
+        }
+
+        const tagSerialOwner = await findTagSerialOwner(locals.pb, bar.id, data.tagSerial);
+        if (tagSerialOwner) {
+            return fail(400, {
+                data,
+                errors: TAG_SERIAL_TAKEN,
+                tagSerialOwner: tagSerialOwner.name,
                 action: 'create'
             });
         }
@@ -82,6 +93,16 @@ export const actions: Actions = {
             return fail(400, {
                 data: { ...data, itemId },
                 errors: collectErrors(validationResult.errors, picture),
+                action: 'update'
+            });
+        }
+
+        const tagSerialOwner = await findTagSerialOwner(locals.pb, bar.id, data.tagSerial, itemId);
+        if (tagSerialOwner) {
+            return fail(400, {
+                data: { ...data, itemId },
+                errors: TAG_SERIAL_TAKEN,
+                tagSerialOwner: tagSerialOwner.name,
                 action: 'update'
             });
         }
@@ -174,5 +195,39 @@ function parseOfferData(formData: FormData) {
         }
     }
 
-    return { servingPreset: preset.key, pricing };
+    return {
+        servingPreset: preset.key,
+        pricing,
+        // Pasted from wherever the serial was seen — the kiosk, a phone app, a station's
+        // console — so separators and case are whatever that place happened to use.
+        tagSerial: normalizeTag((formData.get('tagSerial')?.toString() ?? '').replaceAll(/[\s-]/g, '')),
+    };
+}
+
+/**
+ * The field error for a tag that already stands for another drink. The page words it,
+ * naming the owner from `tagSerialOwner`. Typed as the other error maps are, so the form's
+ * `errors.<field>` lookups keep working across every branch.
+ */
+const TAG_SERIAL_TAKEN: Record<string, string> = { tagSerial: 'tag-serial-taken' };
+
+/**
+ * The other item already standing for this tag, if any. One tag, one drink: with two, the
+ * spigots would pour whichever of them the venue server happened to read last.
+ */
+async function findTagSerialOwner(
+    pb: Db,
+    barId: string,
+    tagSerial: string,
+    exceptItemId?: string,
+): Promise<BarOfferItem | null> {
+    if (!tagSerial) return null;
+
+    return pb.collection<BarOfferItem>('bar_offer_items').getFirstListItem(
+        pb.filter('bar = {:bar} && tagSerial = {:tagSerial} && id != {:itemId}', {
+            bar: barId,
+            tagSerial,
+            itemId: exceptItemId ?? '',
+        }),
+    ).catch(() => null);
 }

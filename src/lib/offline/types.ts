@@ -40,4 +40,9 @@ export type DeviceIdentity = {
     enrolledAt: string;
     /** Kiosk settings from backstage, refreshed on every snapshot pull. */
     config?: PosDeviceConfig;
+    /**
+     * Pass to the venue's spigot stream, refreshed on every snapshot pull. Absent when the
+     * server has no spigot stations — and then the kiosk does not listen for any.
+     */
+    spigotTicket?: string;
 };

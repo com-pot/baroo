@@ -1,12 +1,27 @@
 {
     "$schema": "https://inlang.com/schema/inlang-message-format",
     "generic": {
+        "loading": "Loading",
+        "close": "Close",
         "action": {
             "open": "Open",
-            "copy": "copy"
+            "copy": "copy",
+            "save": "Save"
         },
         "list": {
             "no_items": "No items to display."
+        },
+        "measure": {
+            "volume": "l",
+            "count": "pcs"
+        },
+        "file_drop": {
+            "prompt": "Drop a file here, or click to pick one",
+            "clear": "Discard pick",
+            "not_accepted": "“{name}” is not a supported file type.",
+            "too_large": "That file is {size}; the limit is {max}.",
+            "bad_aspect": "Aspect ratio must be {ratio}; this image is {width}×{height}.",
+            "unreadable": "That file could not be read as an image."
         }
     }
 }

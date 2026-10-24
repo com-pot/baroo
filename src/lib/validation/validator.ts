@@ -1,20 +1,20 @@
 import Ajv, { type ErrorObject } from 'ajv';
 import addFormats from 'ajv-formats';
 
-import barSchema from './schemas/bar.schema.json';
+import barSchema from './schemas/bar.schema';
 import barOfferItemSchema from './schemas/bar_offer_item.schema.json';
 import barMemberMappingSchema from './schemas/bar_member_mapping.schema.json';
+import type { ZodType } from 'zod/v3';
+import z from 'zod';
 
 const ajv = new Ajv({ allErrors: true, removeAdditional: false });
 addFormats(ajv);
 
 const validators = {
-    bar: ajv.compile(barSchema),
+    bar: z.fromJSONSchema(barSchema as any),
     barOfferItem: ajv.compile(barOfferItemSchema),
     barMemberMapping: ajv.compile(barMemberMappingSchema),
 } as const;
-
-export type SchemaType = keyof typeof validators;
 
 export type ValidationResult<T = unknown> =
     { valid: true; data: T; errors?: never }
@@ -26,16 +26,15 @@ export interface ValidationError {
 }
 
 export function validate<T = unknown>(
-    schemaType: SchemaType,
+    schema: ZodType<T>,
     data: unknown
 ): ValidationResult<T> {
-    const validator = validators[schemaType];
-    const valid = validator(data);
+    const valid = schema.safeParse(data);
 
-    if (valid) {
+    if (valid.success) {
         return {
             valid: true,
-            data: data as T
+            data: valid.data as T
         };
     }
 

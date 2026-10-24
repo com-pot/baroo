@@ -1,38 +1,27 @@
-import type { Bar } from '$lib/bar/BarModel';
-import { parseStorageRef } from '$lib/bar/refs';
+import type { Bar, BarMember } from '$lib/bar/BarModel';
+import { plannedRowCount, planMemberImport, type MemberImportIssue, executeImportPlan } from '$lib/bar/memberImport';
 import { getBarOfferIndex } from '$lib/bar/stats/barOfferItems';
 import { getMemberStanding, getMemberSummaries } from '$lib/bar/stats/memberSummaries';
+import { pbResponseErrorMessage } from '$lib/pocketbase';
 import type { PageServerLoad, Actions } from './$types';
-import { fail } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
-    if (!locals.pb) {
-        throw new Error('PocketBase not initialized');
+export const load: PageServerLoad = async ({ parent, locals }) => {
+    const { bar } = await parent();
+    if (!bar) {
+        return error(404)
     }
 
-    const ref = parseStorageRef(params.ref);
-
-    if (ref.type === 'local' || ref.key === 'new') {
-        throw new Error('Cannot view summaries for this bar');
-    }
-
-    const bar = await locals.pb.collection<Bar>('bars')
-        .getFirstListItem(`slug="${ref.key}"`);
     const barOffer = await getBarOfferIndex(locals.pb, bar)
+    const summaries = await getMemberSummaries(locals.pb, bar, { barOffer });
 
-    const summaries = await getMemberSummaries(locals.pb, { slug: bar.slug });
-
-    return { ref, bar, barOffer, summaries };
+    return { bar, barOffer, summaries };
 };
 
 export const actions: Actions = {
     settleMember: async ({ request, params, locals }) => {
-        if (!locals.pb) {
-            return fail(500, { error: 'PocketBase not initialized' });
-        }
-
-        const ref = parseStorageRef(params.ref);
-        if (ref.type === 'local' || ref.key === 'new') {
+        const ref = params.ref;
+        if (ref === 'new') {
             return fail(400, { error: 'Cannot create events for this bar' });
         }
 
@@ -48,7 +37,7 @@ export const actions: Actions = {
             return fail(400, { error: 'Valid amount is required' });
         }
 
-        const memberStanding = await getMemberStanding(locals.pb, { slug: ref.key }, { id: memberId });
+        const memberStanding = await getMemberStanding(locals.pb, { slug: ref }, { id: memberId });
         const amountDue = memberStanding.amountDue;
 
         if (amountPaid < amountDue) {
@@ -60,7 +49,8 @@ export const actions: Actions = {
         try {
             await locals.pb.collection('events').create({
                 type: 'member-settled',
-                target: `bar:${ref.key}`,
+                target: `bar:${ref}`,
+                occurredAt: new Date().toISOString(),
                 data: {
                     member: memberId,
                     amountDue: amountDue,
@@ -73,4 +63,39 @@ export const actions: Actions = {
             return fail(500, { error: 'Failed to create settlement event' });
         }
     },
+
+    importMembers: async ({ request, params, locals }) => {
+        const ref = params.ref;
+        if (ref === 'new') {
+            return fail(400, { action: 'importMembers' as const, issues: [] });
+        }
+
+        const formData = await request.formData();
+        const pasted = formData.get('members')?.toString() ?? '';
+
+        const bar = await locals.pb.collection<Bar>('bars').getFirstListItem(`slug="${ref}"`);
+        const members = await locals.pb.collection<BarMember>('bar_members').getFullList({
+            filter: locals.pb.filter('bar = {:bar}', { bar: bar.id }),
+        });
+
+        const plan = planMemberImport(pasted, members);
+
+        if (plan.issues.length > 0 || plannedRowCount(plan) === 0) {
+            return fail(400, { action: 'importMembers' as const, issues: plan.issues });
+        }
+        const planResult = await executeImportPlan(locals, bar, plan)
+
+        if (planResult.issues.length > 0) {
+            return fail(409, { action: 'importMembers' as const, ...planResult });
+        }
+
+        return {
+            success: true,
+            action: 'importMembers' as const,
+            created: planResult.created,
+            renamed: planResult.renamed,
+            unchanged: plan.unchanged,
+        };
+    },
 };
+

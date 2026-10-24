@@ -1,100 +1,119 @@
 import type { BarMember } from "./BarModel"
-import type { StorageRef } from "./storage.server"
 
+export type TagMapping = {
+    serialId: string,
+    member: Pick<BarMember, "id" | "nickName" | "seq">
+    extra?: Record<string, unknown>,
+}
+
+/**
+ * Server-backed tag mapping, used by the backstage mapper where there is always a
+ * connection. The kiosk does not use this — it reads mappings from its offline
+ * snapshot and queues new ones as `tag-mapping` ops through `BarOfflineStore.process`.
+ */
 export class TagMapper {
+    private cache: TagMapping[] = []
+
+    constructor(private readonly barSlug: string) { }
+
     public get mappings(): Readonly<TagMapping[]> {
-        return this.ctrl.getMappings()
-    }
-
-    private ctrl: MapperStorage
-
-    constructor(private readonly ref: StorageRef) {
-        this.ctrl = typeCtrls[this.ref.type](ref)
+        return this.cache
     }
 
     public isValid(data: unknown): data is TagMapping {
         return isValidMapping(data)
     }
 
-    public async put(item: TagMapping) {
-        await this.ctrl.put(item);
+    public async load() {
+        const response = await fetch(`/api/bars/${this.barSlug}/mappings`);
+        if (!response.ok) {
+            throw new Error(`Failed to load mappings: ${response.status} ${response.statusText}`);
+        }
+        this.cache = await response.json();
     }
 
-    public async load() {
-        await this.ctrl.load()
+    public async put(item: TagMapping) {
+        const response = await fetch(`/api/bars/${this.barSlug}/mappings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to save mapping: ${response.status} ${response.statusText}`);
+        }
+
+        const saved: TagMapping = await response.json();
+        this.cache = [...this.cache.filter(m => m.serialId !== saved.serialId), saved];
+
+        return saved;
+    }
+
+    /** Unmaps a card. The member it pointed at is left alone. */
+    public async remove(serialId: TagMapping['serialId']) {
+        const response = await fetch(
+            `/api/bars/${this.barSlug}/mappings?serialId=${encodeURIComponent(serialId)}`,
+            { method: 'DELETE' },
+        );
+        if (!response.ok) {
+            throw new Error(`Failed to remove mapping: ${response.status} ${response.statusText}`);
+        }
+
+        this.cache = this.cache.filter(m => m.serialId !== serialId);
     }
 
     async get(serialId: TagMapping['serialId']) {
         return this.mappings.find(m => m.serialId === serialId)
     }
 
-    public async bulkImport(csvData: string): Promise<{ success: number, errors: string[] }> {
-        const errors: string[] = [];
+    public async bulkImport(result: BulkImportData<TagMapping> ): Promise<{ success: number, errors: LineError[] }> {
+        const errors: LineError[] = [];
         let success = 0;
-
-        const lines = csvData.trim().split('\n').filter(line => line.trim());
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-
-            try {
-                const mapping = this.parseImportLine(line);
-                if (mapping) {
-                    // Convert ImportMapping to TagMapping (seq becomes userId for now)
-                    const tagMapping: TagMapping = {
-                        serialId: mapping.serialId,
-                        userId: mapping.seq, // Using seq as userId as per requirements
-                        nickName: mapping.nickName
-                    };
-
-                    await this.put(tagMapping);
-                    success++;
-                } else {
-                    errors.push(`Line ${i + 1}: Invalid format`);
-                }
-            } catch (error) {
-                errors.push(`Line ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            }
+        for (let i = 0; i < result.items.length; i++ ) {
+            const mapping = result.items[i]
+            await this.put({
+                serialId: mapping.serialId,
+                member: {
+                    id: mapping.member.id || `${mapping.member.seq}`,
+                    nickName: mapping.member.nickName,
+                    seq: mapping.member.seq,
+                },
+            })
+                .then(() => success++)
+                .catch((err) => errors.push({line: i, error: `${err instanceof Error ? err.message : String(err)}`}))
         }
 
         return { success, errors };
     }
+}
 
-    private parseImportLine(line: string): ImportMapping | null {
-        const parts = line.split('\t');
-        if (parts.length !== 3) {
-            return null;
-        }
+type LineError = { line: number, error: string }
+export type BulkImportData<T> = {
+    items: T[],
+    errors: LineError[],
+}
 
-        const [seq, nickName, serialId] = parts.map(p => p.trim());
+export function parseMappingFromCsv<T>(csvData: string, parseImportLine: (line: string) => T | null): BulkImportData<T> {
+    const lines = csvData.trim().split('\n')
+        .map((line, i) => ({line: i, data: line.trim()}))
+        .filter(({ data }) => data.length);
 
-        if (!seq || !nickName || !serialId) {
-            return null;
-        }
-
-        return {
-            seq,
-            userId: seq, // seq is used as userId
-            nickName,
-            serialId
-        };
+    const result: BulkImportData<T> = {
+        items: [],
+        errors: [],
     }
+
+    for (const entry of lines) {
+        const mapping = parseImportLine(entry.data)
+        if (mapping) {
+            result.items.push(mapping)
+        } else {
+            result.errors.push({line: entry.line, error: `Invalid format`});
+        }
+    }
+
+    return result
 }
 
-export type TagMapping = {
-    serialId: string,
-    userId: BarMember["id"],
-    nickName: BarMember["nickName"],
-    extra?: Record<string, unknown>,
-}
-
-export type ImportMapping = {
-    seq: string,
-    userId: BarMember["id"],
-    nickName: BarMember["nickName"],
-    serialId: string,
-}
 export function isValidMapping(data: unknown): data is TagMapping {
     if (typeof data !== 'object' || data === null) return false
     const d = data as Record<string, unknown>
@@ -103,65 +122,8 @@ export function isValidMapping(data: unknown): data is TagMapping {
         && typeof d.nickName === 'string' && d.nickName.length > 0
 }
 
-interface MapperStorage {
-    put(mapping: TagMapping): Promise<void>;
-    load(): Promise<void>;
-
-    getMappings(): Readonly<TagMapping[]>;
-
-}
-const typeCtrls: Record<StorageRef["key"], (ref: StorageRef) => MapperStorage> = {
-    local: ((ref) => {
-        const key = `mappings.${ref.key}`
-        let mappings = [] as TagMapping[]
-        return ({
-            async load() {
-                const stored = localStorage.getItem(key)
-                mappings = ((stored ? JSON.parse(stored) : []) as TagMapping[])
-                    .filter(m => isValidMapping(m))
-            },
-            async put(mapping) {
-                mappings = [
-                    ...mappings.filter(m => m.serialId !== mapping.serialId),
-                    mapping,
-                ]
-                localStorage.setItem(key, JSON.stringify(mappings))
-            },
-            getMappings() {
-                return mappings
-            },
-        })
-    }),
-    db: (ref) => {
-        let mappings = [] as TagMapping[]
-
-        return {
-            getMappings: () => mappings,
-
-            async load() {
-                try {
-                    const response = await fetch(`/api/bars/${ref.key}/mappings`);
-                    if (!response.ok) {
-                        throw new Error(`Failed to load mappings: ${response.status} ${response.statusText}`);
-                    }
-                    mappings = await response.json();
-                } catch (error) {
-                    console.error('Failed to load mappings from API:', error);
-                    mappings = [];
-                }
-            },
-            async put(mapping) {
-                await fetch(`/api/bars/${ref.key}/mappings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(mapping)
-                });
-            }
-        }
-    },
-}
-
 export function normalizeTag(serialId: string): string {
     return serialId.trim()
         .replaceAll(/\:/g, '')
+        .toLowerCase()
 }

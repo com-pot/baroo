@@ -1,12 +1,27 @@
 {
     "$schema": "https://inlang.com/schema/inlang-message-format",
     "generic": {
+        "loading": "Načítání",
+        "close": "Zavřít",
         "action": {
             "open": "Otevřít",
-            "copy": "kopírovat"
+            "copy": "kopírovat",
+            "save": "Uložit"
         },
         "list": {
             "no_items": "Žádné položky k zobrazení."
+        },
+        "measure": {
+            "volume": "l",
+            "count": "ks"
+        },
+        "file_drop": {
+            "prompt": "Přetáhni sem soubor nebo klikni pro výběr",
+            "clear": "Zrušit výběr",
+            "not_accepted": "„{name}“ není podporovaný typ souboru.",
+            "too_large": "Soubor má {size}, povoleno je nejvýš {max}.",
+            "bad_aspect": "Poměr stran musí být {ratio}; tenhle obrázek je {width}×{height}.",
+            "unreadable": "Soubor se nepodařilo načíst jako obrázek."
         }
     }
 }

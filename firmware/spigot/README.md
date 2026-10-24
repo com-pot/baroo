@@ -69,11 +69,43 @@ anticlockwise from pin 1 by the USB socket.
    Only `SPIGOT_ID` differs between stations.
 5. **Program.** Save `main.py` to the Pico. It starts on its own at every power-up.
 
-Or, with [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html):
+Or, with [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html)
+(`pip install mpremote`), from this folder:
 
 ```bash
 mpremote mip install github:danjperron/micropython-mfrc522/mfrc522.py
 mpremote cp config.py :config.py + cp main.py :main.py + reset
+```
+
+## Updating a station
+
+After changing `config.py` or `main.py`, copy the file to the Pico again. Close anything
+else using the Pico's COM port first: only one program can talk to it at a time.
+
+**With Thonny:**
+
+1. In the bottom-right corner, pick *MicroPython (Raspberry Pi Pico)* and the Pico's port.
+2. Press the red **Stop** button. That interrupts the running station and gives you a `>>>`
+   prompt.
+3. Turn on *View → Files*. In the top pane (your computer), open this folder.
+4. Right-click the file, choose **Upload to /**, and confirm overwriting it.
+5. Restart the station: press **Ctrl+D** in the shell (soft reboot), or replug the USB.
+
+Edit the files here, in the repo, and upload them. Thonny's *Save as → Raspberry Pi Pico*
+changes only the Pico's copy, and the next upload from the repo would quietly undo it.
+
+**With mpremote:** run from this folder. It copies the file and restarts the Pico in one
+go, interrupting the station by itself. Swap `COM3` for the Pico's port:
+
+```bash
+mpremote connect COM3 cp config.py :config.py + reset
+```
+
+The same works for `main.py`, or for both at once with `+ cp main.py :main.py` before the
+`+ reset`. To watch the station's console afterwards (Ctrl+] quits):
+
+```bash
+mpremote connect COM3 repl
 ```
 
 ## What the station says

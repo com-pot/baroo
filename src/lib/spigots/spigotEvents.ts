@@ -34,6 +34,20 @@ export type SpigotPour = {
 };
 
 /**
+ * A beverage tag tapped at a station: the spigot pours this drink now, and a fresh package
+ * of it has just been put on. The staff kiosk records the unseal.
+ */
+export type SpigotAssigned = {
+    type: 'spigot-assigned';
+    /** Minted by the venue server. The unseal the kiosk files for it is keyed off this. */
+    id: string;
+    spigot: string;
+    beverage: string;
+    name: string;
+    at: string;
+};
+
+/**
  * Every event carries something that differs from the last one — an id, or `at`. The
  * kiosk reads the stream through a Svelte store, and a store passes a value equal to the
  * previous one on to nobody: the same beverage tag tapped twice would vanish the second time.
@@ -42,7 +56,7 @@ export type SpigotEvent =
     /** The roster. `at` is the server's clock, which the `lastSeenAt`s are measured against. */
     | { type: 'spigots'; spigots: SpigotStatus[]; at: string }
     | SpigotPour
-    | { type: 'spigot-assigned'; spigot: string; beverage: string; name: string; at: string }
+    | SpigotAssigned
     /** A member card at a station that has not been told its drink yet. */
     | { type: 'spigot-unset'; spigot: string; serialId: string; at: string };
 

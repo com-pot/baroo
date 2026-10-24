@@ -22,9 +22,10 @@
     import { getUiLayers } from "$lib/ui/uiLayers.svelte";
     import StaffDrawer from "./StaffDrawer.svelte";
     import { SpigotStream } from "$lib/spigots/spigotStream.svelte";
-    import type { SpigotEvent, SpigotPour } from "$lib/spigots/spigotEvents";
+    import type { SpigotAssigned, SpigotEvent, SpigotPour } from "$lib/spigots/spigotEvents";
     import PourQueue, { type PendingPour } from "./PourQueue.svelte";
     import SpigotRoster from "./SpigotRoster.svelte";
+    import UnsealWidget from "./UnsealWidget.svelte";
 
     const layerManager = getUiLayers()
 
@@ -274,12 +275,38 @@
                 receivePour(event);
                 return;
             case "spigot-assigned":
-                setStatus("ℹ️", m["baroo.bar.status.spigot_assigned"]({ spigot: event.spigot, name: event.name }));
+                unsealAtSpigot(event);
                 return;
             case "spigot-unset":
                 setStatus("⚠️", m["baroo.bar.status.spigot_unset"]({ spigot: event.spigot }));
                 return;
         }
+    }
+
+    /**
+     * A beverage tag at a spigot means a fresh package of that drink was just put on, so
+     * the staff kiosk asks for it to be opened, as the stock board would.
+     *
+     * Only on a staff kiosk — a guest one would queue an op the server refuses. Always
+     * asked, never assumed: kegs do not come in one size. The previous package's size is
+     * filled in as a starting point. Keyed off the event, so every staff kiosk listening
+     * still lands one package.
+     */
+    function unsealAtSpigot(event: SpigotAssigned) {
+        setStatus("ℹ️", m["baroo.bar.status.spigot_assigned"]({ spigot: event.spigot, name: event.name }));
+
+        const stock = store.stock.find((entry) => entry.item.key === event.beverage);
+        if (!store.isStaffDevice || !stock) return;
+
+        const layer = layerManager.pushComponent(UnsealWidget, {
+            bar: store,
+            lockedItemKey: stock.item.key,
+            clientId: `spigot-unseal:${event.id}`,
+            initialQuantity: stock.unsealedAt && stock.unsealQuantity > 0 ? stock.unsealQuantity : undefined,
+            onDone: () => layerManager.close(layer.id),
+        }, {
+            heading: `${m["baroo.bar.stock.unseal_new"]()} — ${stock.item.name}`,
+        });
     }
 
     /**

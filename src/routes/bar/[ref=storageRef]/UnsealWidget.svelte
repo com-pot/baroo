@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from "svelte";
     import * as m from "$lib/paraglide/messages.js";
     import type { OfflineBar } from "$lib/offline/store.svelte";
     import { servingPreset } from "$lib/bar/servings";
@@ -10,20 +11,29 @@
      * `lockedItemKey` is what the stock board opens it with: the barman got here by
      * tapping one card, so re-picking the item from a list of everything the bar sells
      * would only be a chance to pick the wrong one.
+     *
+     * `clientId` is set when the unseal answers a spigot: every staff kiosk listening asks,
+     * and whichever of them fill it in still land one package. `initialQuantity` is only
+     * a suggestion — the previous package's size, for the barman to keep or overwrite.
      */
     let {
         bar,
         lockedItemKey,
+        clientId,
+        initialQuantity,
         onDone,
     }: {
         bar: OfflineBar;
         lockedItemKey?: string;
+        clientId?: string;
+        initialQuantity?: number;
         onDone?: () => void;
     } = $props();
     const store = bar;
 
     let pickedKey = $state("");
-    let quantity = $state("");
+    // Read once: a suggestion seeds the field, it does not chase the prop afterwards.
+    let quantity = $state(untrack(() => (initialQuantity ? String(initialQuantity) : "")));
 
     const itemKey = $derived(lockedItemKey ?? pickedKey);
     const item = $derived(store.offerItems.find((offer) => offer.key === itemKey));
@@ -37,6 +47,7 @@
         if (!item) return;
 
         await store.process("unseal", {
+            clientId,
             offerItemKey: item.key,
             offerItemName: item.name,
             quantity: parseFloat(quantity) || 0,
@@ -74,6 +85,7 @@
                 min="0"
                 step={measure === "count" ? 1 : 0.1}
                 autofocus={!!lockedItemKey}
+                onfocus={(e) => e.currentTarget.select()}
                 bind:value={quantity}
                 required
             />

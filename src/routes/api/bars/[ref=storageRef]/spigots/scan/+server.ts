@@ -10,10 +10,11 @@ import { spigotScanSchema, type SpigotScanResult } from '$lib/spigots/spigotEven
 /**
  * A card on a spigot station's reader.
  *
- * Either a beverage tag, which switches the station to that drink, or anybody else's
- * card, which goes to the kiosk as a pour waiting for a size. Who the card belongs to is
- * the kiosk's question, not ours: it answers from its snapshot and outbox, so a member
- * enrolled on the tablet ten minutes ago pours like anyone else.
+ * Either a beverage tag, which switches the station to that drink and has the kiosk open
+ * a new package of it, or anybody else's card, which goes to the kiosk as a pour waiting
+ * for a size. Who the card belongs to is the kiosk's question, not ours: it answers from
+ * its snapshot and outbox, so a member enrolled on the tablet ten minutes ago pours like
+ * anyone else.
  *
  * Nothing here touches PocketBase. This has to work with the venue's uplink down.
  */
@@ -31,7 +32,14 @@ export const POST: RequestHandler = async (event) => {
     const beverageTag = await lookupBeverageTag(barSlug, serialId);
     if (beverageTag) {
         touchStation(barSlug, spigot, beverageTag.key);
-        emit(barSlug, { type: 'spigot-assigned', spigot, beverage: beverageTag.key, name: beverageTag.name, at });
+        emit(barSlug, {
+            type: 'spigot-assigned',
+            id: randomUUID(),
+            spigot,
+            beverage: beverageTag.key,
+            name: beverageTag.name,
+            at,
+        });
 
         return reply({ result: 'beverage', beverage: beverageTag });
     }

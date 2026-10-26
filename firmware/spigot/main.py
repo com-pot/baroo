@@ -6,6 +6,9 @@ to the kiosk tablet as a pour waiting for the barman to pick a size. The station
 very little on purpose: the venue server says which tags are drinks, and only the kiosk
 knows who anybody is.
 
+With a display, it shows the drink on tap and, when someone taps, their name and photo —
+screens the venue server draws (display.py).
+
 Wiring, setup and what the beeps mean: README.md next to this file.
 """
 
@@ -41,6 +44,8 @@ READER_RESET_INTERVAL_MS = 60000
 READER_RESET_IDLE_MS = 10000
 HTTP_TIMEOUT_S = 5
 WIFI_CONNECT_TIMEOUT_MS = 20000
+# How long a scan's screen stays up when the server did not say.
+SCREEN_HOLD_MS = 5000
 # The RP2040 watchdog tops out at about 8.3 s; everything slow below stays under it.
 WATCHDOG_MS = 8000
 
@@ -53,6 +58,8 @@ if BUZZER_PIN is not None:
     buzzer = Pin(BUZZER_PIN, Pin.OUT, value=1 if BUZZER_ACTIVE_LOW else 0)
 
 wlan = network.WLAN(network.STA_IF)
+
+AUTH = {"Authorization": "Bearer " + config.SPIGOT_SECRET}
 
 
 # --- signals ---------------------------------------------------------------------------
@@ -139,12 +146,7 @@ def connect_wifi(watchdog=None):
 
 def post(path, payload):
     url = "{}/api/bars/{}/spigots/{}".format(config.SERVER.rstrip("/"), config.BAR, path)
-    response = requests.post(
-        url,
-        json=payload,
-        headers={"Authorization": "Bearer " + config.SPIGOT_SECRET},
-        timeout=HTTP_TIMEOUT_S,
-    )
+    response = requests.post(url, json=payload, headers=AUTH, timeout=HTTP_TIMEOUT_S)
     try:
         if response.status_code != 200:
             raise RuntimeError("HTTP {} {}".format(response.status_code, response.text[:120]))
@@ -154,14 +156,18 @@ def post(path, payload):
 
 
 def handle_scan(uid, beverage):
-    """Reports a card to the server. Returns the drink the spigot pours afterwards."""
+    """Reports a card to the server.
+
+    Returns the drink the spigot pours afterwards, and the server's reply — None when
+    there was none.
+    """
     print("card", uid)
     try:
         reply = post("scan", {"spigot": config.SPIGOT_ID, "uid": uid, "beverage": beverage})
     except Exception as e:
         print("scan failed:", repr(e))
         signal(FAILED)
-        return beverage
+        return beverage, None
 
     if reply.get("result") == "beverage":
         drink = reply["beverage"]
@@ -169,19 +175,19 @@ def handle_scan(uid, beverage):
         if drink["key"] != beverage:
             save_beverage(drink["key"])
         signal(BEVERAGE_SET)
-        return drink["key"]
+        return drink["key"], reply
 
     if reply.get("result") == "pour" and reply.get("delivered", 0) > 0:
         signal(POURED)
     else:
         # No drink set yet, or no kiosk listening: either way nobody got this pour.
-        print("not poured:", reply)
+        print("not poured:", reply.get("result"), "- delivered to", reply.get("delivered"))
         signal(FAILED)
-    return beverage
+    return beverage, reply
 
 
 def say_hello(beverage, listeners):
-    """The heartbeat. Returns how many kiosks are listening, as far as it could tell."""
+    """The heartbeat. Returns the server's reply, or None when there was none."""
     try:
         reply = post("hello", {"spigot": config.SPIGOT_ID, "beverage": beverage})
     except Exception as e:
@@ -190,7 +196,42 @@ def say_hello(beverage, listeners):
 
     if reply.get("listeners") != listeners:
         print("hello:", reply.get("listeners"), "kiosk(s) listening")
-    return reply.get("listeners")
+    return reply
+
+
+# --- the display ------------------------------------------------------------------------
+
+class _NoDisplay:
+    """Stands in for a station without a display, so nothing else has to ask."""
+
+    def show_remote(self, url, headers, timeout):
+        pass
+
+    def message(self, lines, tone="normal"):
+        pass
+
+
+def open_display():
+    if not getattr(config, "DISPLAY", False):
+        return _NoDisplay()
+    try:
+        from display import Display
+
+        return Display(madctl=getattr(config, "DISPLAY_MADCTL", 0x48))
+    except Exception as e:
+        # A missing display.py or a dead panel must not take the reader down with it.
+        print("display failed:", repr(e))
+        return _NoDisplay()
+
+
+def show_screen(display, path):
+    """Draws a screen the server rendered. False when it could not be had."""
+    try:
+        display.show_remote(config.SERVER.rstrip("/") + path, AUTH, HTTP_TIMEOUT_S)
+        return True
+    except Exception as e:
+        print("screen failed:", repr(e))
+        return False
 
 
 # --- the reader -------------------------------------------------------------------------
@@ -284,6 +325,10 @@ def main():
     beverage = load_beverage()
     print("spigot", config.SPIGOT_ID, "of bar", config.BAR, "- pours", beverage)
 
+    display = open_display()
+    label = "Pipa " + config.SPIGOT_ID
+    display.message([label, "Pripojuji..."])
+
     while not connect_wifi():
         signal(FAILED)
         time.sleep_ms(2000)
@@ -296,12 +341,41 @@ def main():
     reader = Reader(sck=PIN_SCK, mosi=PIN_MOSI, miso=PIN_MISO, rst=PIN_RST, cs=PIN_CS, spi_id=0)
     reader.init()
 
-    listeners = say_hello(beverage, None)
-    signal(READY if listeners is not None else FAILED)
+    reply = say_hello(beverage, None)
+    listeners = reply.get("listeners") if reply else None
+    signal(READY if reply else FAILED)
+
+    # The idle screen's path as the server last gave it, and the one on the panel now —
+    # None while something else is showing. A changed path means a changed screen.
+    idle = reply.get("idle") if reply else None
+    shown = None
+    # When a scan's screen gives way to the idle screen again.
+    idle_at = None
 
     now = time.ticks_ms()
     last_uid, last_seen = None, now
     last_hello, last_reset = now, now
+
+    def show_idle():
+        nonlocal shown
+        if idle and show_screen(display, idle):
+            shown = idle
+        else:
+            display.message([label, beverage or "bez napoje", "", "Server nedostupny"], tone="muted")
+            shown = None
+
+    def blocking(work):
+        # Nothing polls the reader during `work`, which takes longer than CARD_GONE_MS:
+        # a card lying there before it is still there after, not a new tap.
+        nonlocal last_seen
+        present = time.ticks_diff(time.ticks_ms(), last_seen) < CARD_GONE_MS
+        result = work()
+        watchdog.feed()
+        if present:
+            last_seen = time.ticks_ms()
+        return result
+
+    blocking(show_idle)
 
     while True:
         watchdog.feed()
@@ -313,8 +387,19 @@ def main():
         uid = read_card(reader)
         if uid:
             if uid != last_uid or time.ticks_diff(time.ticks_ms(), last_seen) > CARD_GONE_MS:
-                beverage = handle_scan(uid, beverage)
+                beverage, reply = handle_scan(uid, beverage)
                 watchdog.feed()
+                if reply:
+                    idle = reply.get("idle") or idle
+                    if reply.get("screen"):
+                        show_screen(display, reply["screen"])
+                    hold = reply.get("hold", SCREEN_HOLD_MS)
+                else:
+                    display.message(["Server", "nedostupny"], tone="error")
+                    hold = SCREEN_HOLD_MS
+                watchdog.feed()
+                shown = None
+                idle_at = time.ticks_add(time.ticks_ms(), hold)
             last_uid = uid
             # Taken after the scan, which may have spent seconds on the network: a card
             # still lying there is seen again at once and must not count as new.
@@ -322,14 +407,20 @@ def main():
 
         now = time.ticks_ms()
 
+        if idle_at is not None and time.ticks_diff(now, idle_at) >= 0:
+            idle_at = None
+            blocking(show_idle)
+
         if time.ticks_diff(now, last_hello) >= HELLO_INTERVAL_MS:
             last_hello = now
-            card_present = time.ticks_diff(now, last_seen) < CARD_GONE_MS
-            listeners = say_hello(beverage, listeners)
-            # The hello takes longer than CARD_GONE_MS, and nothing polls meanwhile. A card
-            # lying there before it is still there after, not a new tap.
-            if card_present:
-                last_seen = time.ticks_ms()
+            reply = blocking(lambda: say_hello(beverage, listeners))
+            if reply:
+                listeners = reply.get("listeners")
+                idle = reply.get("idle") or idle
+                # Back on the idle screen, and it changed — or the server is back after
+                # the station had to make do without it.
+                if idle_at is None and idle != shown:
+                    blocking(show_idle)
 
         if (time.ticks_diff(now, last_reset) >= READER_RESET_INTERVAL_MS
                 and time.ticks_diff(now, last_seen) >= READER_RESET_IDLE_MS):

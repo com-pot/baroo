@@ -3,15 +3,17 @@ import { randomUUID } from 'node:crypto';
 import type { RequestHandler } from './$types';
 import { normalizeTag } from '$lib/bar/tags';
 import { requireStation } from '$lib/spigots/spigotAuth.server';
-import { lookupBeverageTag } from '$lib/spigots/beverageTags.server';
+import { lookupBeverageTag } from '$lib/spigots/spigotDirectory.server';
 import { emit, touchStation } from '$lib/spigots/spigotHub.server';
-import { spigotScanSchema, type SpigotScanResult } from '$lib/spigots/spigotEvents';
+import { SCREEN_HOLD_MS, screenPath, type ScreenSpec } from '$lib/spigots/spigotScreens.server';
+import { spigotScanSchema, type SpigotScanResult, type SpigotScreens } from '$lib/spigots/spigotEvents';
 
 /**
  * Card tapped at a spigot station
  *
  * A beverage tag switches the station's drink and has the kiosk open a new package,
- * any other card goes to the kiosk as a pour. Members are resolved by the kiosk.
+ * any other card goes to the kiosk as a pour. Members are resolved by the kiosk,
+ * the display shows only cards known from the last snapshot pull.
  * Must work without PocketBase.
  */
 export const POST: RequestHandler = async (event) => {
@@ -26,19 +28,23 @@ export const POST: RequestHandler = async (event) => {
     const serialId = normalizeTag(body.data.uid);
     const at = new Date().toISOString();
 
-    const beverageTag = await lookupBeverageTag(locals, barSlug, serialId);
-    if (beverageTag) {
-        touchStation(locals, barSlug, spigot, beverageTag.key);
+    const drink = await lookupBeverageTag(locals, barSlug, serialId);
+    if (drink) {
+        touchStation(locals, barSlug, spigot, drink.key);
         emit(locals, barSlug, {
             type: 'spigot-assigned',
             id: randomUUID(),
             spigot,
-            beverage: beverageTag.key,
-            name: beverageTag.name,
+            beverage: drink.key,
+            name: drink.name,
             at,
         });
 
-        return reply({ result: 'beverage', beverage: beverageTag });
+        return reply({
+            result: 'beverage',
+            beverage: { key: drink.key, name: drink.name },
+            ...screens(barSlug, spigot, drink.key, { view: 'assigned', spigot, beverage: drink.key }),
+        });
     }
 
     const beverage = body.data.beverage || null;
@@ -46,12 +52,30 @@ export const POST: RequestHandler = async (event) => {
 
     if (!beverage) {
         emit(locals, barSlug, { type: 'spigot-unset', spigot, serialId, at });
-        return reply({ result: 'no-beverage' });
+        return reply({ result: 'no-beverage', ...screens(barSlug, spigot, null, { view: 'unset', spigot }) });
     }
 
     const delivered = emit(locals, barSlug, { type: 'pour', id: randomUUID(), spigot, serialId, beverage, at });
 
-    return reply({ result: 'pour', delivered });
+    return reply({
+        result: 'pour',
+        delivered,
+        ...screens(barSlug, spigot, beverage, {
+            view: 'pour',
+            spigot,
+            beverage,
+            serial: serialId,
+            warn: delivered ? undefined : 'no-kiosk',
+        }),
+    });
 };
 
 const reply = (result: SpigotScanResult) => json(result);
+
+function screens(barSlug: string, spigot: string, beverage: string | null, now: ScreenSpec): SpigotScreens {
+    return {
+        screen: screenPath(barSlug, now),
+        idle: screenPath(barSlug, { view: 'idle', spigot, beverage: beverage ?? undefined }),
+        hold: SCREEN_HOLD_MS,
+    };
+}

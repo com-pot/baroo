@@ -3,7 +3,8 @@
 One NFC station at each tap. Tap a **drink's tag** on it and that spigot now pours that
 drink. Tap a **member card** and the kiosk tablet shows who it is and what they're getting,
 with two big buttons — *Malé 0,3 l* and *Velké 0,5 l*. The barman's press files an ordinary
-order, which syncs like any other.
+order, which syncs like any other. A station with a display shows the drink on tap, and the
+customer's name and photo when they tap.
 
 ```
 Pico (spigot 1..4) ── POST /api/bars/<bar>/spigots/scan|hello ──►  baroo on the RPi
@@ -14,7 +15,9 @@ Kiosk tablet ◄──────── SSE /api/bars/<bar>/spigots/events ─�
 
 Nothing between the tap and the order needs PocketBase or the internet: the venue server
 remembers which tags are drinks on its own disk, and the kiosk resolves members from its
-offline snapshot, exactly as for any other reader.
+offline snapshot, exactly as for any other reader. For the displays the server also keeps
+the drinks' and members' names and pictures on disk, learned from the kiosks' data pulls,
+and draws every screen itself; the station only streams the pixels to its panel.
 
 ## Parts, per spigot
 
@@ -23,6 +26,8 @@ offline snapshot, exactly as for any other reader.
 - 8 jumper wires, female–female (or solder them)
 - 5 V micro-USB power supply
 - optional: a 3-pin buzzer *module* (one with its own transistor)
+- optional: a 2.8" 240×320 SPI TFT with an ILI9341 controller — the common red module with
+  touch and an SD slot, 9 more wires
 - one NFC tag per drink — any ISO 14443A tag: NTAG213 stickers, MIFARE fobs, the white card
   that comes with the RC522
 
@@ -54,6 +59,42 @@ anticlockwise from pin 1 by the USB socket.
 - The RC522 only reads ISO 14443A cards (MIFARE Classic/Ultralight, NTAG, DESFire's UID).
   Phones and bank cards present a random UID every time and cannot be anyone's card.
 
+## Display
+
+The 2.8" ILI9341 module gets its own SPI bus (SPI1): the reader runs at 1 MHz, the display
+at 40 MHz, and sharing a bus would slow the display down. None of these pins clash with
+the reader or the buzzer.
+
+| Display | Pico W | Pin |
+|---|---|---|
+| VCC | VBUS (5 V) | 40 |
+| GND | GND | 28 |
+| CS | GP13 | 17 |
+| RESET | GP9 | 12 |
+| DC | GP8 | 11 |
+| SDI (MOSI) | GP11 | 15 |
+| SCK | GP10 | 14 |
+| LED | GP14 | 19 |
+| SDO (MISO) | — not connected | |
+| T_CLK · T_DIN · T_DO · T_CS · T_IRQ | *(touch, unused for now)* GP10 · GP11 · GP12 · GP7 · GP6 | 14 · 15 · 16 · 10 · 9 |
+
+- **VCC from VBUS (5 V)**: the backlight draws 50–80 mA, and the module's own regulator
+  keeps that off the Pico's 3.3 V supply, which already feeds the wifi and the reader.
+  Leave the solder jumper **J1 open**. Bridge it only to feed the module 3.3 V — and never
+  feed 5 V with it bridged.
+- **LED → GP14** lets the station switch the backlight. That assumes the board drives the
+  backlight through a small transistor (a 3-pin part, usually *Q1*). Without one, wire LED
+  to 3V3(OUT), pin 36, for always-on instead.
+- **SDO** stays unconnected: nothing reads the panel, and on these modules it fights the
+  touch chip over a shared MISO.
+- Set `DISPLAY = True` in `config.py` and copy `display.py` to the Pico.
+- Red and blue swapped: `DISPLAY_MADCTL = 0x40`. Mirrored: `0x88`.
+
+The display shows the drink on tap until someone taps; then their name and photo, or a
+drink being set, or what went wrong, for five seconds. The screens come from the venue
+server, compressed to a few KB each. When the server cannot be reached, the station falls
+back to plain text of its own.
+
 ## Flashing a station
 
 1. **MicroPython.** Download the `RPI_PICO_W` firmware (`.uf2`, 1.24 or newer) from
@@ -67,20 +108,22 @@ anticlockwise from pin 1 by the USB socket.
    folder).
 4. **Config.** Copy `config.example.py` to `config.py`, fill it in, and save it to the Pico.
    Only `SPIGOT_ID` differs between stations.
-5. **Program.** Save `main.py` to the Pico. It starts on its own at every power-up.
+5. **Program.** Save `main.py` to the Pico — and `display.py` too, for a station with a
+   display. `main.py` starts on its own at every power-up.
 
 Or, with [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html)
 (`pip install mpremote`), from this folder:
 
 ```bash
 mpremote mip install github:danjperron/micropython-mfrc522/mfrc522.py
-mpremote cp config.py :config.py + cp main.py :main.py + reset
+mpremote cp config.py :config.py + cp main.py :main.py + cp display.py :display.py + reset
 ```
 
 ## Updating a station
 
-After changing `config.py` or `main.py`, copy the file to the Pico again. Close anything
-else using the Pico's COM port first: only one program can talk to it at a time.
+After changing `config.py`, `main.py` or `display.py`, copy the file to the Pico again.
+Close anything else using the Pico's COM port first: only one program can talk to it at a
+time.
 
 **With Thonny:**
 
@@ -101,7 +144,7 @@ go, interrupting the station by itself. Swap `COM3` for the Pico's port:
 mpremote connect COM3 cp config.py :config.py + reset
 ```
 
-The same works for `main.py`, or for both at once with `+ cp main.py :main.py` before the
+The same works for the other files, or for several at once with more `+ cp …` before the
 `+ reset`. To watch the station's console afterwards (Ctrl+] quits):
 
 ```bash
@@ -133,6 +176,10 @@ The console (Thonny's shell, or `mpremote`) prints every card's UID as it is rea
    split them between workers. If Caddy sits in front, allow `/api/bars/*/spigots/*`.
 4. Give the RPi a fixed address (a DHCP reservation in the router). The stations' `SERVER`
    is an IP address.
+5. For the displays, the RPi needs a font to draw the screens' text with:
+   `sudo apt install fonts-dejavu-core`. Names and photos reach the server with the kiosk's
+   data pulls, like the drink tags — a card handed out on the tablet shows by name at the
+   spigots after the next pull, and as *Ahoj!* until then.
 
 **The drinks:**
 
@@ -174,7 +221,8 @@ npm run spigot-sim -- scan <another member's serial> --spigot 2 --beverage <drin
 
 The first sets spigot 1's drink, the second puts a pour card on the kiosk, the third a
 second card from spigot 2. `hello` makes a station show up in the kiosk's strip without
-scanning anything.
+scanning anything. Add `--out screen.png` to any of them to see what the station's display
+would show.
 
 ### With a Pico on the desk
 
@@ -199,8 +247,13 @@ New-NetFirewallRule -DisplayName "baroo dev server" -Direction Inbound -Protocol
 | `HTTP 503` | The server has no `SPIGOT_SECRET` set. |
 | `HTTP 404` | Wrong `BAR` slug, or a server without this feature. |
 | `OSError` / `ETIMEDOUT` / `ECONNREFUSED` | Wrong `SERVER`, the firewall, or the dev server started without `--host`. |
-| `not poured: {'result': 'no-beverage'}` | Tap a drink's tag on this spigot first. |
-| `not poured: {'result': 'pour', 'delivered': 0}` | No kiosk is listening. Open the kiosk and start it; its strip should list the station. |
+| `not poured: no-beverage …` | Tap a drink's tag on this spigot first. |
+| `not poured: pour - delivered to 0` | No kiosk is listening. Open the kiosk and start it; its strip should list the station. |
+| `display failed: …` | `display.py` is missing on the Pico, or the panel is not answering. The station carries on without it. |
+| `screen failed: …` | A screen could not be fetched; the station shows plain text instead. Same causes as the HTTP rows above. |
+
+A display that stays white has power but no data: check CS, DC, RESET, SCK and SDI. One that
+stays dark: check LED (or wire it to 3.3 V).
 
 On the kiosk, *Pípy nejsou připojené* means the tablet cannot reach the stream. Check that
 it is opened from the venue server and has pulled since `SPIGOT_SECRET` was set.

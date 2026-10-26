@@ -51,11 +51,20 @@ export type SpigotEvent =
     | SpigotAssigned
     | { type: 'spigot-unset'; spigot: string; serialId: string; at: string };
 
-export type SpigotScanResult =
+/** Screen paths for the station display, ignored by stations without one */
+export type SpigotScreens = {
+    screen: string;
+    /** Returned to after `hold` ms */
+    idle: string;
+    hold: number;
+};
+
+export type SpigotScanResult = SpigotScreens & (
     | { result: 'beverage'; beverage: { key: string; name: string } }
     | { result: 'no-beverage' }
     /** `delivered` - number of kiosks listening */
-    | { result: 'pour'; delivered: number };
+    | { result: 'pour'; delivered: number }
+);
 
 export const SPIGOT_TICKET_HEADER = 'x-spigot-ticket';
 

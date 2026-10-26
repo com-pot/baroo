@@ -60,12 +60,25 @@ export type SpigotEvent =
     /** A member card at a station that has not been told its drink yet. */
     | { type: 'spigot-unset'; spigot: string; serialId: string; at: string };
 
+/**
+ * Where a station's display goes next. Paths on the venue server, fetched as they are —
+ * see `spigotScreens.server.ts`. A station without a display ignores them.
+ */
+export type SpigotScreens = {
+    /** What to show right now. */
+    screen: string;
+    /** What to go back to once `hold` milliseconds have passed. */
+    idle: string;
+    hold: number;
+};
+
 /** What a station hears back from a scan. The firmware turns each into a signal. */
-export type SpigotScanResult =
+export type SpigotScanResult = SpigotScreens & (
     | { result: 'beverage'; beverage: { key: string; name: string } }
     | { result: 'no-beverage' }
     /** `delivered` is how many kiosks were listening. Zero means the pour went nowhere. */
-    | { result: 'pour'; delivered: number };
+    | { result: 'pour'; delivered: number }
+);
 
 /** Where the kiosk presents its ticket to the spigot stream — see `spigotAuth.server.ts`. */
 export const SPIGOT_TICKET_HEADER = 'x-spigot-ticket';

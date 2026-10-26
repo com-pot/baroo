@@ -7,6 +7,9 @@
  * Like a real station it remembers the drink a beverage tag gave it — per bar and spigot,
  * in node_modules/.cache — and sends it with every scan. `--beverage` overrides that.
  *
+ * `--out screen.png` saves what the station's display would show: the screen a scan
+ * produced, or the idle screen a hello handed back.
+ *
  * Reads SPIGOT_SECRET from .env, plus SPIGOT_SIM_URL and SPIGOT_SIM_BAR as the defaults
  * for --url and --bar.
  */
@@ -20,7 +23,8 @@ const USAGE = `usage: npm run spigot-sim -- <scan <uid> | hello> [options]
   --spigot <id>       which station to be (default: 1)
   --beverage <key>    drink to report instead of the remembered one
   --url <origin>      baroo server (default: SPIGOT_SIM_URL or https://localhost:5173)
-  --secret <secret>   (default: SPIGOT_SECRET)`;
+  --secret <secret>   (default: SPIGOT_SECRET)
+  --out <file.png>    save the station display's screen as a picture`;
 
 try {
     process.loadEnvFile('.env');
@@ -36,6 +40,7 @@ const { values: flags, positionals } = parseArgs({
         spigot: { type: 'string', default: '1' },
         beverage: { type: 'string' },
         secret: { type: 'string', default: process.env.SPIGOT_SECRET },
+        out: { type: 'string' },
     },
 });
 
@@ -87,6 +92,32 @@ if (reply.result === 'beverage') {
 }
 
 console.log(describe(reply));
+
+if (flags.out) await saveScreen(reply.screen ?? reply.idle, flags.out);
+
+/** Fetches a station screen and writes it out as a PNG, the way the display would show it. */
+async function saveScreen(path, file) {
+    const screen = await fetch(new URL(path, origin), { headers: { authorization: `Bearer ${flags.secret}` } });
+    if (!screen.ok) {
+        console.error(`screen ${path}: ${screen.status} ${await screen.text()}`);
+        process.exit(1);
+    }
+
+    const [width, height] = screen.headers.get('x-screen').split(' ')[0].split('x').map(Number);
+    const rgb565 = Buffer.from(await screen.arrayBuffer());
+
+    const rgb = Buffer.alloc(width * height * 3);
+    for (let i = 0, o = 0; i < rgb565.length; i += 2, o += 3) {
+        const value = (rgb565[i] << 8) | rgb565[i + 1];
+        rgb[o] = ((value >> 11) & 0x1f) << 3;
+        rgb[o + 1] = ((value >> 5) & 0x3f) << 2;
+        rgb[o + 2] = (value & 0x1f) << 3;
+    }
+
+    const { default: sharp } = await import('sharp');
+    await sharp(rgb, { raw: { width, height, channels: 3 } }).png().toFile(file);
+    console.log(`screen saved to ${file}`);
+}
 
 /** What a real station would signal, in words. */
 function describe(reply) {

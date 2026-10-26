@@ -288,6 +288,17 @@
                 "customGreetings.help": "A member's own greeting replaces the template when they have one."
             }
         },
+        "spigot_screen": {
+            "tap_card": "Tap your card",
+            "no_drink": "No drink",
+            "tap_drink_tag": "Tap a drink tag",
+            "assigned": "Set",
+            "greeting_unknown": "Hi!",
+            "pick_size": "Pick the size on the tablet",
+            "no_kiosk": "No tablet listening",
+            "no_kiosk_hint": "Tell the barman",
+            "unset_title": "No drink on this spigot"
+        },
         "enroll": {
             "title": "Pair this device",
             "intro": "Type the four-digit code backstage showed you.",

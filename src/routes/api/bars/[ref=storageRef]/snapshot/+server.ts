@@ -7,7 +7,8 @@ import { effectiveDate, type BarEventRecord, type BarOrderItemRecord } from '$li
 import { buildMemberTimeline, type MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
 import type { BarSnapshot, SnapshotUnseal } from '$lib/offline/types';
 import { issueSpigotTicket, spigotsEnabled } from '$lib/spigots/spigotAuth.server';
-import { rememberOfferItems } from '$lib/spigots/beverageTags.server';
+import { directoryImages, rememberSnapshot } from '$lib/spigots/spigotDirectory.server';
+import { warmImages } from '$lib/spigots/spigotImages.server';
 
 /**
  * Everything a tablet needs to run this bar with no network.
@@ -21,10 +22,17 @@ export const GET: RequestHandler = async (event) => {
     const { pb, token, device } = await resolveDevice(event, barSlug);
 
     const { bar, offerItems, members, mappings } = await loadBarData(pb, barSlug);
+    const tagMappings = toTagMappings(mappings as any);
 
-    // The spigot stations need to know which tags are drinks while PocketBase is out of
-    // reach, and this is the request that reliably has the offer in hand.
-    if (spigotsEnabled()) void rememberOfferItems(barSlug, offerItems);
+    // The spigot stations need the bar — which tags are drinks, whose cards are whose, and
+    // their pictures — while PocketBase is out of reach, and this is the request that
+    // reliably has it in hand. Never awaited: the tablet is not waiting on the stations.
+    if (spigotsEnabled()) {
+        void rememberSnapshot(barSlug, { offerItems, mappings: tagMappings })
+            .then(() => directoryImages(barSlug))
+            .then(warmImages)
+            .catch((err) => console.error('[spigots] could not learn the bar:', err));
+    }
 
     const [orderItems, events, unsealEvents] = await Promise.all([
         pb.collection<BarOrderItemRecord>('bar_order_items').getFullList({
@@ -95,7 +103,7 @@ export const GET: RequestHandler = async (event) => {
         bar,
         offerItems,
         members,
-        mappings: toTagMappings(mappings as any),
+        mappings: tagMappings,
         timelines,
         lastSettlements,
         unseals,

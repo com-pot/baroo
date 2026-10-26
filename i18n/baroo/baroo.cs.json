@@ -288,6 +288,17 @@
                 "customGreetings.help": "Má-li člen vlastní pozdrav, použije se místo šablony."
             }
         },
+        "spigot_screen": {
+            "tap_card": "Přilož kartu",
+            "no_drink": "Bez nápoje",
+            "tap_drink_tag": "Přilož štítek nápoje",
+            "assigned": "Nastaveno",
+            "greeting_unknown": "Ahoj!",
+            "pick_size": "Velikost vyber na tabletu",
+            "no_kiosk": "Tablet neposlouchá",
+            "no_kiosk_hint": "Řekni to barmanovi",
+            "unset_title": "Pípa nemá nápoj"
+        },
         "enroll": {
             "title": "Spárovat zařízení",
             "intro": "Zadej čtyřmístný kód, který ti ukázal backstage.",

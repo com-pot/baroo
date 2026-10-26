@@ -25,6 +25,12 @@ BUZZER_PIN = 15
 # Some 3-pin buzzer modules sound while their input is LOW.
 BUZZER_ACTIVE_LOW = False
 
+# A 2.8" ILI9341 display on SPI1 (README.md, "Display"). False for a station without one.
+DISPLAY = True
+# How the panel is driven: 0x48 suits most of these modules. Red and blue swapped: 0x40.
+# Mirrored: 0x88.
+DISPLAY_MADCTL = 0x48
+
 # Reboots the station if it ever hangs. Set to False while working in Thonny: once
 # started the watchdog cannot be stopped, and it would reboot the Pico under the REPL.
 WATCHDOG = True

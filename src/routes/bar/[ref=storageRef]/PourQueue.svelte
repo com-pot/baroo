@@ -1,4 +1,6 @@
 <script lang="ts" module>
+    import type { BarOfferItem } from "$lib/bar/BarModel";
+    import { servingPreset, type Serving } from "$lib/bar/servings";
     import type { TagMapping } from "$lib/bar/tags";
 
     export type PendingPour = {
@@ -10,12 +12,18 @@
         /** Offer item key reported by the spigot */
         beverage: string;
     };
+
+    /** Priced servings, or all of them when the item has no prices */
+    export function pourServings(item: BarOfferItem): readonly Serving[] {
+        const all = servingPreset(item.servingPreset).servings;
+        const priced = all.filter((serving) => item.pricing?.[serving.key] != null);
+        return priced.length ? priced : all;
+    }
 </script>
 
 <script lang="ts">
     import * as m from "$lib/paraglide/messages.js";
-    import type { BarOfferItem } from "$lib/bar/BarModel";
-    import { servingPreset, servingText, type Serving } from "$lib/bar/servings";
+    import { servingText } from "$lib/bar/servings";
     import { getRenderer } from "$lib/rendering.svelte";
     import { barMemberAvatar, entityFileHref } from "$lib/ui/pbFiles";
 
@@ -45,13 +53,6 @@
     /** Browsers may close a modal despite the refused cancel */
     function keepOpen() {
         if (pours.length) dialog?.showModal();
-    }
-
-    /** Priced servings, or all of them when the item has no prices */
-    function servingsFor(item: BarOfferItem): readonly Serving[] {
-        const all = servingPreset(item.servingPreset).servings;
-        const priced = all.filter((serving) => item.pricing?.[serving.key] != null);
-        return priced.length ? priced : all;
     }
 </script>
 
@@ -90,7 +91,7 @@
                             <span class="name">{item.name}</span>
                         </div>
                         <div class="servings">
-                            {#each servingsFor(item) as serving (serving.key)}
+                            {#each pourServings(item) as serving (serving.key)}
                                 <button
                                     type="button"
                                     class="btn btn-primary serving"

@@ -14,7 +14,7 @@ export type SpigotStatus = {
     lastSeenAt: string;
 };
 
-/** Member card tapped at a station, waits on the kiosk for a serving */
+/** Member card tapped at a station, waits for a serving from the kiosk or the station's buttons */
 export type SpigotPour = {
     type: 'pour';
     /** Minted by the venue server, the order's clientId derives from it */
@@ -41,6 +41,19 @@ export type SpigotAssigned = {
 };
 
 /**
+ * Serving picked on the station's buttons for a waiting pour
+ */
+export type SpigotServed = {
+    type: 'pour-served';
+    /** The pour's id */
+    id: string;
+    spigot: string;
+    /** Serving key */
+    variant: string;
+    at: string;
+};
+
+/**
  * Each event carries a unique id or `at` - the kiosk reads them through a svelte store
  * which drops values equal to the previous one.
  */
@@ -48,6 +61,7 @@ export type SpigotEvent =
     /** `at` is the server clock the `lastSeenAt`s are measured against */
     | { type: 'spigots'; spigots: SpigotStatus[]; at: string }
     | SpigotPour
+    | SpigotServed
     | SpigotAssigned
     | { type: 'spigot-unset'; spigot: string; serialId: string; at: string };
 
@@ -63,8 +77,10 @@ export type SpigotScanResult = SpigotScreens & (
     | { result: 'beverage'; beverage: { key: string; name: string } }
     | { result: 'no-beverage' }
     /** `delivered` - number of kiosks listening */
-    | { result: 'pour'; delivered: number }
+    | { result: 'pour'; pour: string; delivered: number }
 );
+
+export type SpigotServeResult = SpigotScreens & { delivered: number };
 
 export const SPIGOT_TICKET_HEADER = 'x-spigot-ticket';
 
@@ -74,10 +90,24 @@ export const SPIGOT_STALE_MS = 90_000;
 const spigotId = z.string().regex(/^[a-z0-9-]{1,16}$/);
 const beverageKey = z.string().regex(/^[a-z0-9-]{0,32}$/).nullish();
 
+const cardUid = z.string().regex(/^[0-9a-f:]{4,40}$/i);
+
 export const spigotScanSchema = z.object({
     spigot: spigotId,
-    uid: z.string().regex(/^[0-9a-f:]{4,40}$/i),
+    uid: cardUid,
     beverage: beverageKey,
+    /** The station has size buttons */
+    buttons: z.boolean().optional(),
+});
+
+export const spigotServeSchema = z.object({
+    spigot: spigotId,
+    /** `pour` from the scan reply */
+    pour: z.uuid(),
+    uid: cardUid,
+    beverage: z.string().regex(/^[a-z0-9-]{1,32}$/),
+    /** Serving key */
+    size: z.string().regex(/^[0-9a-z_]{1,8}$/),
 });
 
 export const spigotHelloSchema = z.object({

@@ -1,11 +1,15 @@
 /**
  * Pretends to be a spigot station, so the kiosk side can be tried without a Pico.
  *
- *   npm run spigot-sim -- scan <uid> [--spigot 1] [--beverage <key>]
+ *   npm run spigot-sim -- scan <uid> [--spigot 1] [--beverage <key>] [--buttons]
+ *   npm run spigot-sim -- serve <size> [--spigot 1]
  *   npm run spigot-sim -- hello [--spigot 1] [--beverage <key>]
  *
  * Like a real station it remembers the drink a beverage tag gave it — per bar and spigot,
  * in node_modules/.cache — and sends it with every scan. `--beverage` overrides that.
+ *
+ * `--buttons` scans as a station with size buttons, and `serve 0_3` (or `0_5`) presses
+ * one of them for that spigot's last pour.
  *
  * `--out screen.png` saves what the station's display would show: the screen a scan
  * produced, or the idle screen a hello handed back.
@@ -17,11 +21,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { parseArgs } from 'node:util';
 
-const USAGE = `usage: npm run spigot-sim -- <scan <uid> | hello> [options]
+const USAGE = `usage: npm run spigot-sim -- <scan <uid> | serve <size> | hello> [options]
 
   --bar <slug>        bar slug (default: SPIGOT_SIM_BAR)
   --spigot <id>       which station to be (default: 1)
   --beverage <key>    drink to report instead of the remembered one
+  --buttons           scan as a station with size buttons
   --url <origin>      baroo server (default: SPIGOT_SIM_URL or https://localhost:5173)
   --secret <secret>   (default: SPIGOT_SECRET)
   --out <file.png>    save the station display's screen as a picture`;
@@ -39,14 +44,16 @@ const { values: flags, positionals } = parseArgs({
         bar: { type: 'string', default: process.env.SPIGOT_SIM_BAR },
         spigot: { type: 'string', default: '1' },
         beverage: { type: 'string' },
+        buttons: { type: 'boolean', default: false },
         secret: { type: 'string', default: process.env.SPIGOT_SECRET },
         out: { type: 'string' },
     },
 });
 
-const [command, uid] = positionals;
+// The uid to scan, or the size to serve.
+const [command, argument] = positionals;
 
-if (!['scan', 'hello'].includes(command) || (command === 'scan' && !uid) || !flags.bar || !flags.secret) {
+if (!['scan', 'serve', 'hello'].includes(command) || (command !== 'hello' && !argument) || !flags.bar || !flags.secret) {
     console.error(USAGE);
     process.exit(2);
 }
@@ -62,11 +69,26 @@ if (origin.protocol === 'https:' && isLocal(origin.hostname)) {
 const MEMORY_FILE = 'node_modules/.cache/spigot-sim.json';
 const memory = await readFile(MEMORY_FILE, 'utf8').then(JSON.parse).catch(() => ({}));
 const memoryKey = `${flags.bar}/${flags.spigot}`;
+const pourKey = `${memoryKey}/pour`;
 const beverage = flags.beverage ?? memory[memoryKey] ?? null;
 
-const body = command === 'scan'
-    ? { spigot: flags.spigot, uid, beverage }
-    : { spigot: flags.spigot, beverage };
+let body;
+switch (command) {
+    case 'scan':
+        body = { spigot: flags.spigot, uid: argument, beverage, buttons: flags.buttons };
+        break;
+    case 'serve': {
+        const pour = memory[pourKey];
+        if (!pour) {
+            console.error(`spigot ${flags.spigot} has no pour to serve: scan a member card with --buttons first`);
+            process.exit(1);
+        }
+        body = { spigot: flags.spigot, pour: pour.id, uid: pour.uid, beverage: pour.beverage, size: argument };
+        break;
+    }
+    default:
+        body = { spigot: flags.spigot, beverage };
+}
 
 const response = await fetch(new URL(`/api/bars/${encodeURIComponent(flags.bar)}/spigots/${command}`, origin), {
     method: 'POST',
@@ -85,8 +107,12 @@ if (!response.ok) {
 
 const reply = JSON.parse(text);
 
-if (reply.result === 'beverage') {
-    memory[memoryKey] = reply.beverage.key;
+if (reply.result === 'beverage') memory[memoryKey] = reply.beverage.key;
+// Like a station, a size answers only the last pour, and only once.
+if (reply.result === 'pour' && flags.buttons) memory[pourKey] = { id: reply.pour, uid: argument, beverage };
+if (command === 'serve') delete memory[pourKey];
+
+if (command !== 'hello') {
     await mkdir(dirname(MEMORY_FILE), { recursive: true });
     await writeFile(MEMORY_FILE, JSON.stringify(memory, null, 2));
 }
@@ -122,6 +148,11 @@ async function saveScreen(path, file) {
 /** What a real station would signal, in words. */
 function describe(reply) {
     if (command === 'hello') return `hello from spigot ${flags.spigot} — ${reply.listeners} kiosk(s) listening`;
+    if (command === 'serve') {
+        return reply.delivered > 0
+            ? `beep — size ${argument} sent to ${reply.delivered} kiosk(s)`
+            : 'beeeeep — nobody listening: the size went nowhere';
+    }
 
     switch (reply.result) {
         case 'beverage':

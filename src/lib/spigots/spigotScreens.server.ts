@@ -2,7 +2,9 @@ import sharp from 'sharp';
 import z from 'zod';
 import * as m from '$lib/paraglide/messages.js';
 import { getLocale } from '$lib/paraglide/runtime.js';
+import { SERVING_PRESETS, servingText } from '$lib/bar/servings';
 import { directoryVersion, lookupCard, lookupDrink, type StoredImage } from './spigotDirectory.server';
+import type { SpigotScreens } from './spigotEvents';
 import { imagesVersion, readImage } from './spigotImages.server';
 
 /**
@@ -15,9 +17,12 @@ export const SCREEN_HEIGHT = 320;
 
 /** How long a scan's screen stays before returning to idle */
 export const SCREEN_HOLD_MS = 5000;
+/** How long the station's size buttons wait, the kiosk keeps the pour regardless */
+export const SIZE_WAIT_MS = 15000;
 
 const spigotId = z.string().regex(/^[a-z0-9-]{1,16}$/);
 const beverageKey = z.string().regex(/^[a-z0-9-]{1,32}$/);
+const cardSerial = z.string().regex(/^[0-9a-f]{4,40}$/);
 
 export const screenSpecSchema = z.discriminatedUnion('view', [
     z.object({ view: z.enum(['idle', 'assigned']), spigot: spigotId, beverage: beverageKey.optional() }),
@@ -25,11 +30,26 @@ export const screenSpecSchema = z.discriminatedUnion('view', [
         view: z.literal('pour'),
         spigot: spigotId,
         beverage: beverageKey,
-        serial: z.string().regex(/^[0-9a-f]{4,40}$/),
+        serial: cardSerial,
+        pick: z.literal('buttons').optional(),
+        warn: z.literal('no-kiosk').optional(),
+    }),
+    z.object({
+        view: z.literal('served'),
+        spigot: spigotId,
+        beverage: beverageKey,
+        serial: cardSerial,
+        size: z.string().regex(/^[0-9a-z_]{1,8}$/),
         warn: z.literal('no-kiosk').optional(),
     }),
     z.object({ view: z.literal('unset'), spigot: spigotId }),
 ]);
+
+/** Station's size buttons left to right, must match `SIZE_BUTTONS` in config.py */
+const BUTTONS = [
+    { size: '0_5', fill: '#dc2626', text: '#f9fafb' },
+    { size: '0_3', fill: '#facc15', text: '#111827' },
+];
 
 export type ScreenSpec = z.infer<typeof screenSpecSchema>;
 
@@ -41,6 +61,20 @@ export function screenPath(barSlug: string, spec: ScreenSpec): string {
     }
     query.set('v', `${directoryVersion()}.${imagesVersion()}`);
     return `/api/bars/${encodeURIComponent(barSlug)}/spigots/screen?${query}`;
+}
+
+export function stationScreens(
+    barSlug: string,
+    spigot: string,
+    beverage: string | null,
+    now: ScreenSpec,
+    hold = SCREEN_HOLD_MS,
+): SpigotScreens {
+    return {
+        screen: screenPath(barSlug, now),
+        idle: screenPath(barSlug, { view: 'idle', spigot, beverage: beverage ?? undefined }),
+        hold,
+    };
 }
 
 const CACHE_SIZE = 24;
@@ -105,27 +139,45 @@ async function draw(ctx: Pick<App.Locals, "logger">, barSlug: string, spec: Scre
             break;
         }
 
-        case 'pour': {
+        case 'pour':
+        case 'served': {
             const [holder, drink] = await Promise.all([
                 lookupCard(ctx, barSlug, spec.serial),
                 lookupDrink(ctx, barSlug, spec.beverage),
             ]);
             // Cards mapped on the tablet since the last pull are unknown here
             const name = holder?.nickName || m['baroo.spigot_screen.greeting_unknown']();
+            const drinkName = drink?.name ?? spec.beverage;
 
             svg.push(text(spigotLabel, { y: 26, size: 16, fill: COLORS.muted }));
             await picture(ctx, svg, layers, holder?.image ?? null, holder?.nickName || '?', { left: 45, top: 42, size: 150, shape: 'circle' });
 
+            if (spec.view === 'pour' && !spec.warn && !spec.pick) {
+                svg.push(text(name, { y: 236, size: 34, weight: 700, fill: COLORS.text }));
+                svg.push(text(drinkName, { y: 270, size: 22, fill: COLORS.accent }));
+                svg.push(text(m['baroo.spigot_screen.pick_size'](), { y: 306, size: 15, fill: COLORS.muted }));
+                break;
+            }
+
+            svg.push(text(name, { y: 228, size: 34, weight: 700, fill: COLORS.text }));
+            svg.push(text(drinkName, { y: 258, size: 22, fill: COLORS.accent }));
+
             if (spec.warn === 'no-kiosk') {
-                svg.push(text(name, { y: 228, size: 34, weight: 700, fill: COLORS.text }));
-                svg.push(text(drink?.name ?? spec.beverage, { y: 258, size: 22, fill: COLORS.accent }));
                 svg.push(rect(0, 270, SCREEN_WIDTH, 50, COLORS.error));
                 svg.push(text(m['baroo.spigot_screen.no_kiosk'](), { y: 291, size: 17, weight: 700, fill: COLORS.text }));
                 svg.push(text(m['baroo.spigot_screen.no_kiosk_hint'](), { y: 311, size: 14, fill: COLORS.text }));
+            } else if (spec.view === 'served') {
+                svg.push(rect(0, 270, SCREEN_WIDTH, 50, COLORS.ok));
+                svg.push(text(`✓ ${sizeName(spec.size)}`, { y: 303, size: 24, weight: 700, fill: COLORS.text }));
             } else {
-                svg.push(text(name, { y: 236, size: 34, weight: 700, fill: COLORS.text }));
-                svg.push(text(drink?.name ?? spec.beverage, { y: 270, size: 22, fill: COLORS.accent }));
-                svg.push(text(m['baroo.spigot_screen.pick_size'](), { y: 306, size: 15, fill: COLORS.muted }));
+                const width = (SCREEN_WIDTH - 36) / BUTTONS.length;
+                BUTTONS.forEach((button, i) => {
+                    const x = 12 + i * (width + 12);
+                    svg.push(`<rect x="${x}" y="274" width="${width}" height="38" rx="19" fill="${button.fill}"/>`);
+                    svg.push(text(sizeName(button.size, false), {
+                        x: x + width / 2, y: 300, size: 22, weight: 700, fill: button.text, maxWidth: width - 16,
+                    }));
+                });
             }
             break;
         }
@@ -189,16 +241,29 @@ async function cutOut(bytes: Buffer, size: number, shape: 'circle' | 'rounded'):
         .toBuffer();
 }
 
+/** e.g.: "Malé 0.3l" */
+function sizeName(key: string, withAmount = true): string {
+    for (const preset of SERVING_PRESETS.items) {
+        const serving = preset.servings.find(candidate => candidate.key === key);
+        if (!serving) continue;
+
+        const names: Record<string, string> = serving.name;
+        const name = names[getLocale()] ?? names.cs;
+        return withAmount ? `${name} ${servingText(serving, preset.measure)}` : name;
+    }
+    return key;
+}
+
 function rect(x: number, y: number, width: number, height: number, fill: string): string {
     return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}"/>`;
 }
 
-/** Centered line, shrunk to fit by estimated glyph widths and clipped as a last resort */
+/** Line centered on `x`, shrunk to fit by estimated glyph widths and clipped as a last resort */
 function text(
     content: string,
-    style: { y: number; size: number; fill: string; weight?: 400 | 700; maxWidth?: number },
+    style: { x?: number; y: number; size: number; fill: string; weight?: 400 | 700; maxWidth?: number },
 ): string {
-    const { y, fill, weight = 400, maxWidth = SCREEN_WIDTH - 20 } = style;
+    const { x = SCREEN_WIDTH / 2, y, fill, weight = 400, maxWidth = SCREEN_WIDTH - 20 } = style;
     const perChar = weight === 700 ? 0.62 : 0.56;
     const chars = [...content];
 
@@ -206,7 +271,7 @@ function text(
     const fits = Math.floor(maxWidth / (size * perChar));
     const shown = chars.length > fits ? chars.slice(0, Math.max(fits - 1, 1)).join('') + '…' : content;
 
-    return `<text x="${SCREEN_WIDTH / 2}" y="${y}" font-family="${FONT}" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="middle">${escapeXml(shown)}</text>`;
+    return `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="middle">${escapeXml(shown)}</text>`;
 }
 
 function escapeXml(value: string): string {

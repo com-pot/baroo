@@ -32,7 +32,8 @@
                 "unknown_member_seq": "Nikdo nemá visačku číslo {seq}",
                 "spigot_assigned": "Pípa {spigot} teď čepuje {name}",
                 "spigot_unset": "Pípa {spigot} nemá nastavený nápoj — přiložte k ní štítek nápoje.",
-                "pour_failed": "Objednávku pro {name} se nepodařilo uložit: {error}"
+                "pour_failed": "Objednávku pro {name} se nepodařilo uložit: {error}",
+                "spigot_size_unavailable": "Pípa {spigot}: tuhle velikost nejde zapsat — vyberte ji na tabletu."
             },
             "spigot": {
                 "title": "Pípa {spigot}",

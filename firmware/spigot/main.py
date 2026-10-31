@@ -2,9 +2,9 @@
 Baroo spigot station: a Raspberry Pi Pico W with an RC522 reader, one at each tap.
 
 A beverage tag sets the drink this spigot pours. Any other card is a customer, and goes
-to the kiosk tablet as a pour waiting for the barman to pick a size. The station knows
-very little on purpose: the venue server says which tags are drinks, and only the kiosk
-knows who anybody is.
+to the kiosk tablet as a pour waiting for a size: picked by the barman on the tablet, or
+on the station's own size buttons. The station knows very little on purpose: the venue
+server says which tags are drinks, and only the kiosk knows who anybody is.
 
 With a display, it shows the drink on tap and, when someone taps, their name and photo —
 screens the venue server draws (display.py).
@@ -56,6 +56,12 @@ led = Pin("LED", Pin.OUT, value=0)
 buzzer = None
 if BUZZER_PIN is not None:
     buzzer = Pin(BUZZER_PIN, Pin.OUT, value=1 if BUZZER_ACTIVE_LOW else 0)
+
+# Serving key -> its button, each between a pin and GND, so pressed reads 0.
+buttons = [
+    (size, Pin(pin, Pin.IN, Pin.PULL_UP))
+    for size, pin in (getattr(config, "SIZE_BUTTONS", None) or {}).items()
+]
 
 wlan = network.WLAN(network.STA_IF)
 
@@ -163,7 +169,12 @@ def handle_scan(uid, beverage):
     """
     print("card", uid)
     try:
-        reply = post("scan", {"spigot": config.SPIGOT_ID, "uid": uid, "beverage": beverage})
+        reply = post("scan", {
+            "spigot": config.SPIGOT_ID,
+            "uid": uid,
+            "beverage": beverage,
+            "buttons": bool(buttons),
+        })
     except Exception as e:
         print("scan failed:", repr(e))
         signal(FAILED)
@@ -184,6 +195,34 @@ def handle_scan(uid, beverage):
         print("not poured:", reply.get("result"), "- delivered to", reply.get("delivered"))
         signal(FAILED)
     return beverage, reply
+
+
+def handle_size(pour, size):
+    """Sends a size pressed on the buttons for the pour waiting on them.
+
+    `pour` is what the scan left: its id, the card and the drink. Returns the server's
+    reply, or None when there was none.
+    """
+    print("size", size)
+    try:
+        reply = post("serve", {
+            "spigot": config.SPIGOT_ID,
+            "pour": pour["id"],
+            "uid": pour["uid"],
+            "beverage": pour["beverage"],
+            "size": size,
+        })
+    except Exception as e:
+        print("serve failed:", repr(e))
+        signal(FAILED)
+        return None
+
+    if reply.get("delivered", 0) > 0:
+        signal(POURED)
+    else:
+        print("not served: delivered to", reply.get("delivered"))
+        signal(FAILED)
+    return reply
 
 
 def say_hello(beverage, listeners):
@@ -351,6 +390,10 @@ def main():
     shown = None
     # When a scan's screen gives way to the idle screen again.
     idle_at = None
+    # The pour the size buttons would answer: its id, the card and the drink.
+    waiting = None
+    # The buttons down at the last look, so one held down counts once.
+    held = set()
 
     now = time.ticks_ms()
     last_uid, last_seen = None, now
@@ -375,6 +418,32 @@ def main():
             last_seen = time.ticks_ms()
         return result
 
+    def show_reply(reply):
+        # What the server answered stays up for its `hold` — or, with no answer, the
+        # station's own word that the server is out of reach.
+        nonlocal idle, shown, idle_at
+        if reply:
+            idle = reply.get("idle") or idle
+            if reply.get("screen"):
+                show_screen(display, reply["screen"])
+            hold = reply.get("hold", SCREEN_HOLD_MS)
+        else:
+            display.message(["Server", "nedostupny"], tone="error")
+            hold = SCREEN_HOLD_MS
+        watchdog.feed()
+        shown = None
+        idle_at = time.ticks_add(time.ticks_ms(), hold)
+
+    def pressed():
+        # The size whose button has just gone down, or None.
+        nonlocal held
+        down = set(size for size, pin in buttons if not pin.value())
+        new = down - held
+        held = down
+        for size in new:
+            return size
+        return None
+
     blocking(show_idle)
 
     while True:
@@ -389,26 +458,27 @@ def main():
             if uid != last_uid or time.ticks_diff(time.ticks_ms(), last_seen) > CARD_GONE_MS:
                 beverage, reply = handle_scan(uid, beverage)
                 watchdog.feed()
-                if reply:
-                    idle = reply.get("idle") or idle
-                    if reply.get("screen"):
-                        show_screen(display, reply["screen"])
-                    hold = reply.get("hold", SCREEN_HOLD_MS)
-                else:
-                    display.message(["Server", "nedostupny"], tone="error")
-                    hold = SCREEN_HOLD_MS
-                watchdog.feed()
-                shown = None
-                idle_at = time.ticks_add(time.ticks_ms(), hold)
+                show_reply(reply)
+                # A pour waits on the buttons while its screen is up, and only when a
+                # kiosk heard of it — the kiosk is what files the size.
+                waiting = None
+                if buttons and reply and reply.get("pour") and reply.get("delivered", 0) > 0:
+                    waiting = {"id": reply["pour"], "uid": uid, "beverage": beverage}
             last_uid = uid
             # Taken after the scan, which may have spent seconds on the network: a card
             # still lying there is seen again at once and must not count as new.
             last_seen = time.ticks_ms()
 
+        size = pressed()
+        if size and waiting:
+            pour, waiting = waiting, None
+            blocking(lambda: show_reply(handle_size(pour, size)))
+
         now = time.ticks_ms()
 
         if idle_at is not None and time.ticks_diff(now, idle_at) >= 0:
             idle_at = None
+            waiting = None
             blocking(show_idle)
 
         if time.ticks_diff(now, last_hello) >= HELLO_INTERVAL_MS:

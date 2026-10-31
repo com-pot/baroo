@@ -23,8 +23,8 @@
     import UnsealWidget from "./UnsealWidget.svelte";
     import type { BarOfferItem } from "$lib/bar/BarModel";
     import { SpigotStream } from "$lib/spigots/spigotStream.svelte";
-    import type { SpigotAssigned, SpigotEvent, SpigotPour } from "$lib/spigots/spigotEvents";
-    import PourQueue, { type PendingPour } from "./PourQueue.svelte";
+    import type { SpigotAssigned, SpigotEvent, SpigotPour, SpigotServed } from "$lib/spigots/spigotEvents";
+    import PourQueue, { pourServings, type PendingPour } from "./PourQueue.svelte";
     import SpigotRoster from "./SpigotRoster.svelte";
 
     const uiLayers = getUiLayers()
@@ -163,6 +163,9 @@
             case "pour":
                 receivePour(event);
                 return;
+            case "pour-served":
+                serveAtSpigot(event);
+                return;
             case "spigot-assigned":
                 unsealAtSpigot(event);
                 return;
@@ -236,6 +239,21 @@
 
         setStatus("✅", m["baroo.offline.pending"]({ count: String(store.pending.length) }));
         if (narrationEnabled) narrator?.speak(orderConfirmation());
+    }
+
+    /** Pours no longer pending were served or dismissed on the kiosk already */
+    function serveAtSpigot(event: SpigotServed) {
+        const pour = pendingPours.find((pending) => pending.id === event.id);
+        if (!pour) return;
+
+        const item = store.offerItems.find((candidate) => candidate.key === pour.beverage);
+        const serving = item && pourServings(item).find((candidate) => candidate.key === event.variant);
+        if (!item || !serving) {
+            setStatus("⚠️", m["baroo.bar.status.spigot_size_unavailable"]({ spigot: event.spigot }));
+            return;
+        }
+
+        void servePour(pour, item, serving);
     }
 
     function dismissPour(pour: PendingPour) {

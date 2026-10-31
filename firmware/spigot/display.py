@@ -90,7 +90,8 @@ class Display:
         for command, data in _INIT:
             self._command(command, data)
         # Memory access order: portrait, 240 wide. 0x48 suits most of these modules; one
-        # showing red and blue swapped wants 0x40, one drawn mirrored wants 0x88.
+        # showing red and blue swapped wants 0x40, one mounted upside down 0x88, one drawn
+        # mirrored 0x08.
         self._command(0x36, bytes((madctl,)))
         self._command(0x11)  # wake up
         time.sleep_ms(120)

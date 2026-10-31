@@ -5,16 +5,16 @@ import { normalizeTag } from '$lib/bar/tags';
 import { requireStation } from '$lib/spigots/spigotAuth.server';
 import { lookupBeverageTag } from '$lib/spigots/spigotDirectory.server';
 import { emit, touchStation } from '$lib/spigots/spigotHub.server';
-import { SCREEN_HOLD_MS, screenPath, type ScreenSpec } from '$lib/spigots/spigotScreens.server';
-import { spigotScanSchema, type SpigotScanResult, type SpigotScreens } from '$lib/spigots/spigotEvents';
+import { SIZE_WAIT_MS, stationScreens } from '$lib/spigots/spigotScreens.server';
+import { spigotScanSchema, type SpigotScanResult } from '$lib/spigots/spigotEvents';
 
 /**
  * Card tapped at a spigot station
  *
  * A beverage tag switches the station's drink and has the kiosk open a new package,
- * any other card goes to the kiosk as a pour. Members are resolved by the kiosk,
- * the display shows only cards known from the last snapshot pull.
- * Must work without PocketBase.
+ * any other card goes to the kiosk as a pour waiting for a serving from the kiosk or
+ * the station's buttons (`../serve`). Members are resolved by the kiosk, the display
+ * shows only cards known from the last snapshot pull. Must work without PocketBase.
  */
 export const POST: RequestHandler = async (event) => {
     requireStation(event);
@@ -43,7 +43,7 @@ export const POST: RequestHandler = async (event) => {
         return reply({
             result: 'beverage',
             beverage: { key: drink.key, name: drink.name },
-            ...screens(barSlug, spigot, drink.key, { view: 'assigned', spigot, beverage: drink.key }),
+            ...stationScreens(barSlug, spigot, drink.key, { view: 'assigned', spigot, beverage: drink.key }),
         });
     }
 
@@ -52,30 +52,28 @@ export const POST: RequestHandler = async (event) => {
 
     if (!beverage) {
         emit(locals, barSlug, { type: 'spigot-unset', spigot, serialId, at });
-        return reply({ result: 'no-beverage', ...screens(barSlug, spigot, null, { view: 'unset', spigot }) });
+        return reply({ result: 'no-beverage', ...stationScreens(barSlug, spigot, null, { view: 'unset', spigot }) });
     }
 
-    const delivered = emit(locals, barSlug, { type: 'pour', id: randomUUID(), spigot, serialId, beverage, at });
+    const id = randomUUID();
+    const delivered = emit(locals, barSlug, { type: 'pour', id, spigot, serialId, beverage, at });
+    // Buttons are pointless with no kiosk to file the serving
+    const buttons = !!body.data.buttons && delivered > 0;
+
 
     return reply({
         result: 'pour',
+        pour: id,
         delivered,
-        ...screens(barSlug, spigot, beverage, {
+        ...stationScreens(barSlug, spigot, beverage, {
             view: 'pour',
             spigot,
             beverage,
             serial: serialId,
+            pick: buttons ? 'buttons' : undefined,
             warn: delivered ? undefined : 'no-kiosk',
-        }),
+        }, buttons ? SIZE_WAIT_MS : undefined),
     });
 };
 
 const reply = (result: SpigotScanResult) => json(result);
-
-function screens(barSlug: string, spigot: string, beverage: string | null, now: ScreenSpec): SpigotScreens {
-    return {
-        screen: screenPath(barSlug, now),
-        idle: screenPath(barSlug, { view: 'idle', spigot, beverage: beverage ?? undefined }),
-        hold: SCREEN_HOLD_MS,
-    };
-}

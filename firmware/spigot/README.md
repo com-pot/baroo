@@ -28,6 +28,7 @@ and draws every screen itself; the station only streams the pixels to its panel.
 - optional: a 3-pin buzzer *module* (one with its own transistor)
 - optional: a 2.8" 240×320 SPI TFT with an ILI9341 controller — the common red module with
   touch and an SD slot, 9 more wires
+- optional: a 2-key membrane keypad, red and yellow, to pick the size at the station
 - one NFC tag per drink — any ISO 14443A tag: NTAG213 stickers, MIFARE fobs, the white card
   that comes with the RC522
 
@@ -88,12 +89,82 @@ the reader or the buzzer.
 - **SDO** stays unconnected: nothing reads the panel, and on these modules it fights the
   touch chip over a shared MISO.
 - Set `DISPLAY = True` in `config.py` and copy `display.py` to the Pico.
-- Red and blue swapped: `DISPLAY_MADCTL = 0x40`. Mirrored: `0x88`.
+- Red and blue swapped: `DISPLAY_MADCTL = 0x40`. Upside down: `0x88`. Mirrored: `0x08`.
 
 The display shows the drink on tap until someone taps; then their name and photo, or a
 drink being set, or what went wrong, for five seconds. The screens come from the venue
 server, compressed to a few KB each. When the server cannot be reached, the station falls
 back to plain text of its own.
+
+## Size buttons
+
+A 2-key membrane keypad (red and yellow) lets the customer pick the size at the station:
+tap the card, then press **yellow for Malé, red for Velké** while the screen shows them.
+The kiosk files it exactly as if the barman had pressed that size on the tablet — the
+pour card there disappears, and the display says *✓ Malé 0.3l*. No press within 15 s, and
+the card waits on the tablet as before.
+
+| Keypad | Pico W | Pin |
+|---|---|---|
+| red (Velké) | GP0 | 1 |
+| yellow (Malé) | GP1 | 2 |
+| shared contact | GND | 3 |
+
+- Set `SIZE_BUTTONS = {"0_3": 1, "0_5": 0}` in `config.py` — serving → GPIO, so any free
+  pins will do. A station without the keypad leaves it out: the screen then tells the
+  customer to pick on the tablet.
+- The Pico's own pull-ups do the rest — no resistors, no power wire.
+- The tail's tabs fit a 3-pin 2.54 mm female header, or male header pins and the usual
+  jumper wires. **Do not solder to the tail**: its tracks are printed silver ink.
+- The shared contact is the track that reaches both buttons — usually the outer one, but
+  keypads differ. Wired wrong, a button does nothing or reads as the other one, and
+  nothing gets damaged. A colour that reads as the wrong size: swap the two numbers in
+  `SIZE_BUTTONS`.
+
+## Enclosure
+
+`enclosure/station.scad` is a box for one station: the display on top, a *tap here* mark
+below it with the reader right behind the front wall, the Pico inside, and a stand that
+holds it on the counter, leaning back 15°. The size buttons' keypad lies flat on a step
+at the front of the stand. The STL files next to it are ready to print:
+
+| File | Lies on the bed | |
+|---|---|---|
+| `station-fit_test.stl` | front down | Only the front 12 mm. Print it first: it checks the window and how the boards snap in. |
+| `station-shell.stl` | front down | |
+| `station-lid.stl` | outside down | |
+| `station-stand.stl` | as it comes | |
+
+PLA or PETG, 0.2 mm layers, no supports. The box takes four M3 × 10 screws, self-tapping or
+ordinary ones, which cut their own thread in the plastic.
+
+1. **Display:** glass first into the top pocket, pin header down, until the tabs along its
+   long edges click over the board.
+2. **Reader:** parts side to the front, pin header up, onto its two ledges until it clicks.
+3. **Pico:** upside down onto the lid's four pins, its USB socket at the hole in the side
+   wall. A dab of hot glue keeps it there. A buzzer can be glued behind the lid's grille.
+4. **Keypad tail,** before the jumpers go on its tabs: from the slot beside the stand's
+   keypad pocket, down into the channel under the stand — turning it a quarter on the way,
+   from lying across to lying along — and up out of the stand's floor. Then in through the
+   hole in the box's floor, next to the reader.
+5. Plug in the wires and screw the lid on. Push the box into the stand, drawing the tail's
+   slack back out at the keypad end, and only then peel the keypad's backing and stick it
+   into its pocket, red on the left.
+
+If the picture comes out upside down, set `DISPLAY_MADCTL = 0x88`.
+
+The boards' sizes come from their usual drawings and photos, not from calipers. If
+something doesn't fit, open `station.scad` in [OpenSCAD](https://openscad.org), change the
+number under *Window → Customizer*, render (F6) and export the STL (F7). The likely ones:
+
+- `display_stack`, from the front of the glass to the back of the board. A display that
+  rattles wants foam tape around the window, or a smaller number.
+- `display_view_offset`, if the window sits off the picture.
+- `inner_depth`, 24 instead of 38 with the wires soldered instead of Dupont plugs.
+- `usb_side`, for the cable to leave on the other side.
+- `keypad = false` for a station without size buttons: no step, no holes for the tail.
+
+From a terminal, each part is `openscad -D 'part="shell"' -o station-shell.stl station.scad`.
 
 ## Flashing a station
 
@@ -157,7 +228,7 @@ mpremote connect COM3 repl
 |---|---|
 | fast blinking | joining the wifi |
 | 3 quick blinks | up, and the server answered |
-| 1 short | pour sent — it's on the kiosk |
+| 1 short | pour sent — it's on the kiosk; again for a size pressed on the buttons |
 | 2 short | drink set: this spigot now pours the tag's drink |
 | 1 long | it didn't go through — see the console, and *Troubleshooting* |
 
@@ -222,7 +293,8 @@ npm run spigot-sim -- scan <another member's serial> --spigot 2 --beverage <drin
 The first sets spigot 1's drink, the second puts a pour card on the kiosk, the third a
 second card from spigot 2. `hello` makes a station show up in the kiosk's strip without
 scanning anything. Add `--out screen.png` to any of them to see what the station's display
-would show.
+would show. With `--buttons` a scan acts like a station with size buttons, and
+`npm run spigot-sim -- serve 0_5` then presses yellow for that pour.
 
 ### With a Pico on the desk
 

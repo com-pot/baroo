@@ -28,8 +28,12 @@ BUZZER_ACTIVE_LOW = False
 # A 2.8" ILI9341 display on SPI1 (README.md, "Display"). False for a station without one.
 DISPLAY = True
 # How the panel is driven: 0x48 suits most of these modules. Red and blue swapped: 0x40.
-# Mirrored: 0x88.
+# Upside down: 0x88. Mirrored: 0x08.
 DISPLAY_MADCTL = 0x48
+
+# Size buttons on the station (README.md, "Size buttons"): which GPIO pin each serving's
+# button is on, yellow Malé and red Velké. None for a station without them.
+SIZE_BUTTONS = {"0_3": 1, "0_5": 0}
 
 # Reboots the station if it ever hangs. Set to False while working in Thonny: once
 # started the watchdog cannot be stopped, and it would reboot the Pico under the REPL.

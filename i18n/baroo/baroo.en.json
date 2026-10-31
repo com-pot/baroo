@@ -32,7 +32,8 @@
                 "unknown_member_seq": "Nobody holds badge number {seq}",
                 "spigot_assigned": "Spigot {spigot} now pours {name}",
                 "spigot_unset": "Spigot {spigot} has no drink set — tap a beverage tag on it.",
-                "pour_failed": "Could not file the pour for {name}: {error}"
+                "pour_failed": "Could not file the pour for {name}: {error}",
+                "spigot_size_unavailable": "Spigot {spigot}: that size can't be filed — pick one on the tablet."
             },
             "spigot": {
                 "title": "Spigot {spigot}",

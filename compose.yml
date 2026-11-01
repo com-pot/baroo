@@ -8,3 +8,4 @@ services:
     volumes:
       - ./data/pb_data:/pb/pb_data
       - ./data/pb_migrations:/pb/pb_migrations
+      - ./data/pb_hooks:/pb/pb_hooks

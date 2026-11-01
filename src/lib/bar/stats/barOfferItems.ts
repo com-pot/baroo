@@ -1,197 +1,66 @@
-import type { BaseModel } from "pocketbase";
+
+import type { Measure } from "$lib/si/measure";
+import { indexBy } from "$lib/lists";
 import type { Bar, BarOfferItem, BarOrderItem } from "../BarModel";
-import { defaultVariantToVolume } from "../barAggregation";
-
-export async function getBarOfferItems(
-    pb: NonNullable<App.Locals['pb']>,
-    bar: Pick<Bar, "slug">,
-) {
-    const offerItemsRaw = await pb.collection<BarOfferItem>('bar_offer_items')
-        .getFullList({
-            filter: `bar.slug = "${bar.slug}"`,
-            sort: 'name',
-        })
-
-    const offerItems: {
-        data: typeof offerItemsRaw[0],
-        lastKegUncork: Date | null,
-        uncorkCount: number,
-        orderItems: BarOrderItem[],
-    }[] = []
-
-    for (let offerItem of offerItemsRaw) {
-        const kegUncorkList = await pb.collection('events')
-            .getList(1, 1, {
-                filter: `type = "keg-uncork" && target = "bar:${bar.slug}" && data.offerItemKey = "${offerItem.key}"`,
-                sort: '-created'
-            })
-        const lastUncorkEvent = kegUncorkList.items[0];
-
-        const uncorkCountResult = await pb.collection('events')
-            .getList(1, 1, {
-                filter: `type = "keg-uncork" && target = "bar:${bar.slug}" && data.offerItemKey = "${offerItem.key}"`,
-                sort: '-created'
-            })
-        const uncorkCount = uncorkCountResult.totalItems > 0 ? uncorkCountResult.totalItems : 1;
-
-        const orderItemFilterClauses = [
-            `key = "${offerItem.key}"`,
-            `customer.bar.slug = "${bar.slug}"`, // Ensure order items are from this bar
-        ]
-        if (lastUncorkEvent) {
-            orderItemFilterClauses.push(`created >= "${lastUncorkEvent.created}"`)
-        }
-        const orderItemsList = await pb.collection<BarOrderItem>('bar_order_items')
-            .getFullList({
-                filter: orderItemFilterClauses.join(' && '),
-                expand: 'customer'
-            })
-
-        offerItems.push({
-            data: offerItem,
-            lastKegUncork: lastUncorkEvent?.created || null,
-            uncorkCount,
-            orderItems: orderItemsList,
-        })
-    }
-
-    return offerItems
-}
+import { findServing, servingPreset } from "../servings";
+import type { UnsealEvent } from "../ops/unseal";
 
 export async function getBarOfferIndex(
     pb: NonNullable<App.Locals['pb']>,
     bar: Pick<Bar, "slug">,
-): Promise<Record<BarOfferItem["key"], BarOfferItem>> {
-    const offerItems = await pb.collection('bar_offer_items').getFullList({
+): Promise<BarOfferIndex> {
+    const offerItems = await pb.collection<BarOfferItem>('bar_offer_items').getFullList({
         filter: `bar.slug = "${bar.slug}"`,
     });
 
-    return Object.fromEntries(offerItems.map(item => [item.key, item]));
+    return indexBy("key", offerItems);
 }
 
-export type BarOfferIndex = Awaited<ReturnType<typeof getBarOfferIndex>>;
+export type BarOfferIndex = Record<BarOfferItem["key"], BarOfferItem>;
 
-/**
- * Collects statistics for the current keg (since last uncork) for a specific offer item
- * This includes total volume consumed and per-member consumption breakdown
- */
-export async function collectKegClosureData(
-    pb: NonNullable<App.Locals['pb']>,
-    bar: Pick<Bar, "slug">,
-    offerItemKey: string,
-) {
-    // Get the offer item details
-    const offerItem = await pb.collection<BarOfferItem>('bar_offer_items')
-        .getFirstListItem(`bar.slug = "${bar.slug}" && key = "${offerItemKey}"`);
+export type OfferStock = {
+    item: BarOfferItem;
+    measure: Measure;
+    unsealedAt: string | null;
+    unsealQuantity: number;
+    consumed: number;
+    left: number | null;
+};
 
-    // Find the last uncork event
-    const kegUncorkList = await pb.collection('events')
-        .getList(1, 1, {
-            filter: `type = "keg-uncork" && target = "bar:${bar.slug}" && data.offerItemKey = "${offerItemKey}"`,
-            sort: '-created'
-        });
-    const lastUncorkEvent = kegUncorkList.items[0];
+export function computeOfferStock(input: {
+    offerItems: BarOfferItem[];
+    unseals: Record<BarOfferItem["key"], UnsealEvent[]>;
+    orderItems: Pick<BarOrderItem, "key" | "variant" | "orderedAt">[];
+}): OfferStock[] {
+    const { offerItems, unseals, orderItems } = input;
 
-    // Get all order items since last uncork
-    const orderItemFilterClauses = [
-        `key = "${offerItemKey}"`,
-        `customer.bar.slug = "${bar.slug}"`,
-    ];
-    if (lastUncorkEvent) {
-        orderItemFilterClauses.push(`created >= "${lastUncorkEvent.created}"`);
-    }
-
-    const orderItems = await pb.collection<BarOrderItem>('bar_order_items')
-        .getFullList({
-            filter: orderItemFilterClauses.join(' && '),
-            expand: 'customer'
-        });
-
-    // Calculate variant counts
-    const variantCounts: Record<string, number> = {};
+    const ordersByKey = new Map<string, typeof orderItems>();
     for (const orderItem of orderItems) {
-        variantCounts[orderItem.variant] = (variantCounts[orderItem.variant] || 0) + 1;
+        const list = ordersByKey.get(orderItem.key);
+        if (list) list.push(orderItem);
+        else ordersByKey.set(orderItem.key, [orderItem]);
     }
 
-    // Calculate total volume in liters
-    let totalLiters = 0;
-    for (const [variant, count] of Object.entries(variantCounts)) {
-        const volumeInML = offerItem.variantVolumes?.[variant];
-        if (volumeInML) {
-            totalLiters += (volumeInML / 1000) * count;
-        } else {
-            totalLiters += (defaultVariantToVolume[variant] || 0.5) * count;
-        }
-    }
+    return offerItems.map((item) => {
+        const unseal = unseals[item.key]?.at(-1) ?? null;
+        const measure = servingPreset(item.servingPreset).measure;
+        const unsealQuantity = unseal?.data?.quantity
 
-    // Calculate per-member consumption
-    const memberConsumption: Record<string, {
-        memberId: string;
-        memberName: string;
-        count: number;
-        liters: number;
-        spent: number;
-    }> = {};
+        const consumed = (ordersByKey.get(item.key) ?? [])
+            .filter((orderItem) => !unseal || orderItem.orderedAt >= unseal.occurredAt)
+            .reduce((total, orderItem) => total + (findServing(item.servingPreset, orderItem.variant)?.quantity ?? 0), 0);
 
-    for (const orderItem of orderItems) {
-        const customer = (orderItem as any).expand?.customer;
-        if (!customer) continue;
-
-        const memberId = customer.id;
-        const memberName = customer.nickName || customer.id;
-
-        if (!memberConsumption[memberId]) {
-            memberConsumption[memberId] = {
-                memberId,
-                memberName,
-                count: 0,
-                liters: 0,
-                spent: 0,
-            };
-        }
-
-        memberConsumption[memberId].count += 1;
-
-        // Calculate liters for this order
-        const volumeInML = offerItem.variantVolumes?.[orderItem.variant];
-        if (volumeInML) {
-            memberConsumption[memberId].liters += volumeInML / 1000;
-        } else {
-            memberConsumption[memberId].liters += defaultVariantToVolume[orderItem.variant] || 0.5;
-        }
-
-        // Calculate amount spent
-        const price = offerItem.pricing?.[orderItem.variant] || 0;
-        memberConsumption[memberId].spent += price;
-    }
-
-    // Convert to array and sort by consumption (liters)
-    const memberStats = Object.values(memberConsumption)
-        .map(member => ({
-            ...member,
-            liters: Math.round(member.liters * 100) / 100, // Round to 2 decimals
-            spent: Math.round(member.spent),
-        }))
-        .sort((a, b) => b.liters - a.liters);
-
-    return {
-        offerItemKey,
-        offerItemName: offerItem.name,
-        lastUncorkDate: lastUncorkEvent?.created || null,
-        variantCounts,
-        totalLiters: Math.round(totalLiters * 100) / 100,
-        totalOrders: orderItems.length,
-        memberStats,
-    };
+        return {
+            item,
+            measure,
+            unsealedAt: unseal?.occurredAt ?? null,
+            unsealQuantity: unsealQuantity ?? 0,
+            consumed: Math.round(consumed * 100) / 100,
+            left: typeof unsealQuantity === "number" ? quantityLeft(unsealQuantity, consumed) : null,
+        };
+    });
 }
 
-export type AppEvent<T extends object = object> = {
-    type: string;
-    target: string;
-    data: T;
-} & BaseModel;
-
-export type PackageOpenEvent = AppEvent<{
-    offerItemKey: string;
-    closureData: Awaited<ReturnType<typeof collectKegClosureData>>;
-}>
+export function quantityLeft(quantity: number, consumed: number): number {
+    return Math.max(0, Math.round((quantity - consumed) * 100) / 100);
+}

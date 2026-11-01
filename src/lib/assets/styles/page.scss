@@ -31,18 +31,37 @@
     &.-tight {
         gap: 0.5rem;
     }
+
+    &:has(> .empty-state:first-child:last-child) {
+        grid-template-columns: 1fr;
+    }
 }
 
 .empty-state {
-    background: white;
-    padding: 3rem;
+    min-height: 100%;
+
+    padding: 2rem;
+    display: grid;
+    place-content: center;
+    gap: 1rem;
     text-align: center;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 
     p {
         color: #666;
         margin: 0;
+    }
+
+    > .actions {
+        place-self: center;
+    }
+
+    .error {
+        color: #b00;
+        font-family: monospace;
+    }
+
+    &.-full {
+        min-height: 80dvh;
     }
 }
 
@@ -104,19 +123,6 @@
     justify-self: start;
 }
 
-.info-message {
-    max-width: 600px;
-
-    p {
-        margin: 0 0 1rem;
-        color: #666;
-    }
-
-    strong {
-        color: #333;
-    }
-}
-
 .dashboard-grid {
     &:not(.row) {
         display: flex;
@@ -126,5 +132,17 @@
 
     &.row {
         gap: 1.5rem 0;
+    }
+}
+
+.page-centered {
+    min-height: 100dvh;
+    display: grid;
+    place-items: start center;
+    padding: 1rem;
+    padding-block-start: max(15vh, 1rem);
+
+    form {
+        width: min(28rem, 100%);
     }
 }

@@ -485,33 +485,13 @@
         "type": "json"
       },
       {
-        "hidden": false,
-        "id": "json4857820724",
-        "maxSize": 0,
-        "name": "variantLabels",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "json"
-      },
-      {
-        "hidden": false,
-        "id": "json4857820725",
-        "maxSize": 0,
-        "name": "variantVolumes",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "json"
-      },
-      {
         "autogeneratePattern": "",
         "hidden": false,
         "id": "text3027082717",
         "max": 0,
         "min": 0,
-        "name": "overviewType",
-        "pattern": "volume",
+        "name": "servingPreset",
+        "pattern": "^(tap|unit)$",
         "presentable": false,
         "primaryKey": false,
         "required": false,
@@ -582,7 +562,7 @@
     "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
-    "deleteRule": "",
+    "deleteRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "name": "bar_order_items",
     "type": "base",
     "fields": [
@@ -634,10 +614,35 @@
         "max": 0,
         "min": 1,
         "name": "variant",
-        "pattern": "^[a-z0-9]+$",
+        "pattern": "^[a-z0-9_-]+$",
         "presentable": true,
         "primaryKey": false,
         "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "date_orderedAt",
+        "max": "",
+        "min": "",
+        "name": "orderedAt",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_clientId",
+        "max": 0,
+        "min": 0,
+        "name": "clientId",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
         "system": false,
         "type": "text"
       },
@@ -662,7 +667,10 @@
         "type": "autodate"
       }
     ],
-    "indexes": [],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_bar_order_items_clientId` ON `bar_order_items` (`clientId`) WHERE `clientId` != ''",
+      "CREATE INDEX `idx_bar_order_items_orderedAt` ON `bar_order_items` (`orderedAt`)"
+    ],
     "system": false
   },
   {
@@ -816,6 +824,95 @@
     "system": false
   },
   {
+    "id": "pbc_1405557158",
+    "listRule": "",
+    "viewRule": "",
+    "createRule": "",
+    "updateRule": "",
+    "deleteRule": null,
+    "name": "counter_contributions",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_90131592",
+        "hidden": false,
+        "id": "relation_counter",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "counter",
+        "presentable": true,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_deviceId",
+        "max": 64,
+        "min": 1,
+        "name": "deviceId",
+        "pattern": "",
+        "presentable": true,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "number_value",
+        "max": null,
+        "min": 0,
+        "name": "value",
+        "onlyInt": true,
+        "presentable": true,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_counter_contributions_device` ON `counter_contributions` (`counter`, `deviceId`)"
+    ],
+    "system": false
+  },
+  {
     "id": "pbc_1687431684",
     "listRule": "",
     "viewRule": "",
@@ -879,6 +976,31 @@
       },
       {
         "hidden": false,
+        "id": "date_occurredAt",
+        "max": "",
+        "min": "",
+        "name": "occurredAt",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_clientId",
+        "max": 0,
+        "min": 0,
+        "name": "clientId",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
         "id": "autodate2990389176",
         "name": "created",
         "onCreate": true,
@@ -888,7 +1010,10 @@
         "type": "autodate"
       }
     ],
-    "indexes": [],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_events_clientId` ON `events` (`clientId`) WHERE `clientId` != ''",
+      "CREATE INDEX `idx_events_type_target` ON `events` (`type`, `target`, `occurredAt`)"
+    ],
     "system": false
   },
   {
@@ -952,5 +1077,228 @@
     ],
     "indexes": [],
     "system": false
+  },
+  {
+    "id": "pbc_pos_devices",
+    "name": "pos_devices",
+    "type": "base",
+    "system": false,
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_label",
+        "max": 0,
+        "min": 0,
+        "name": "label",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_2044303067",
+        "hidden": false,
+        "id": "relation_bar",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "bar",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "select_kind",
+        "maxSelect": 1,
+        "name": "kind",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "kiosk",
+          "staff"
+        ]
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "_pb_users_auth_",
+        "hidden": false,
+        "id": "relation_enrolledBy",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "enrolledBy",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "json_pos_config",
+        "maxSize": 0,
+        "name": "config",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "hidden": false,
+        "id": "bool_active",
+        "name": "active",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "bool"
+      },
+      {
+        "hidden": false,
+        "id": "date_lastSeen",
+        "max": "",
+        "min": "",
+        "name": "lastSeen",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_pos_devices_bar` ON `pos_devices` (`bar`)"
+    ],
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "deleteRule": "@request.auth.roles.name ?= \"bar-manager\""
+  },
+  {
+    "id": "pbc_pos_enrollment_codes",
+    "name": "pos_enrollment_codes",
+    "type": "base",
+    "system": false,
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_code",
+        "max": 4,
+        "min": 4,
+        "name": "code",
+        "pattern": "^[0-9]{4}$",
+        "presentable": true,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_pos_devices",
+        "hidden": false,
+        "id": "relation_device",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "device",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "date_expiresAt",
+        "max": "",
+        "min": "",
+        "name": "expiresAt",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_pos_enrollment_codes_code` ON `pos_enrollment_codes` (`code`)",
+      "CREATE UNIQUE INDEX `idx_pos_enrollment_codes_device` ON `pos_enrollment_codes` (`device`)"
+    ],
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "deleteRule": "@request.auth.roles.name ?= \"bar-manager\""
   }
 ]

@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { BarMember } from "$lib/bar/BarModel";
     import type { MemberOrderStats } from "$lib/bar/stats/memberOrderOverview";
+    import { barMemberAvatar, entityFileHref } from "$lib/ui/pbFiles";
     import type { Snippet } from "svelte";
 
     const {
@@ -27,11 +28,7 @@
 
     <div class="member">
         <img
-            class="avatar-1x1"
-            src={member.avatar_1x1
-                ? `/storage/api/files/bar_members/${member.id}/${member.avatar_1x1}`
-                : '/assets/default-badge.svg'
-            }
+            src={barMemberAvatar(member.id, member.avatar_1x1)}
             alt=""
         />
     </div>
@@ -40,7 +37,9 @@
         {#each itemsToBeRendered as item, i (i)}
             <li class="item" style={`--zero-index: ${i}; --end-dash: ${i % 2}; --relative-portion: ${item.totalCount / stats.totalOrders};`}>
                 {#if item.offerItem.preview_1x1}
-                <img src={`/storage/api/files/bar_offer_items/${item.offerItem.id}/${item.offerItem.preview_1x1}`} alt="">
+                    <img src={entityFileHref('bar_offer_items', item.offerItem.id, item.offerItem.preview_1x1)} alt="">
+                {:else}
+                    <div class="placeholder"></div>
                 {/if}
                 <div class="count">{item.totalCount}×</div>
             </li>
@@ -129,7 +128,7 @@
                     place-content: center;
                     margin-inline-end: -0.7rem;
                 }
-                img {
+                :is(img, .placeholder) {
                     --size: calc((var(--min-img-size) + var(--img-size-range) * var(--relative-portion)) * var(--scale));
                     width: var(--size);
                     height: var(--size);

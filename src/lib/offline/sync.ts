@@ -1,0 +1,105 @@
+import { fromResponse } from '$lib/errors';
+import { type PosDeviceConfig } from '$lib/pos/device';
+import {
+    deleteOpsByClientId,
+    listOps,
+    markOpFailed,
+    readDevice,
+    refreshDeviceToken,
+    patchDevice,
+    writeLastSyncAt,
+    writeSnapshot,
+} from './idb';
+import type { StoredOp } from './op';
+import type { BarSnapshot, DeviceIdentity } from './types';
+
+export type SyncOpResult = {
+    clientId: string;
+    status: 'applied' | 'duplicate' | 'failed';
+    error?: string;
+};
+
+export type SyncResponse = {
+    results: SyncResults;
+    token: string;
+};
+export type SyncResults = {
+    [key in SyncOpResult["status"]]: SyncOpResult[]
+}
+
+async function deviceHeaders(): Promise<{ identity: DeviceIdentity; headers: HeadersInit }> {
+    const identity = await readDevice();
+    if (!identity) throw new Error('device-not-enrolled');
+
+    return {
+        identity,
+        headers: {
+            Authorization: `Bearer ${identity.token}`,
+        },
+    };
+}
+
+export async function pullSnapshot(barSlug?: string): Promise<BarSnapshot> {
+    const { identity, headers } = await deviceHeaders();
+    const slug = barSlug || identity.bar.slug;
+
+    const response = await fetch(`/api/bars/${slug}/snapshot`, { headers });
+    if (!response.ok) {
+        throw await fromResponse("snapshot failed", response);
+    }
+
+    const data = (await response.json()) as {
+        snapshot: BarSnapshot;
+        token: string;
+        config: PosDeviceConfig;
+    };
+
+    await writeSnapshot(data.snapshot);
+    await refreshDeviceToken(data.token);
+    await patchDevice({ config: data.config });
+
+    return data.snapshot;
+}
+
+/**
+ * Pushes chronologically pending ops for the bar and drops the ok ones.
+ * Failed ops stay with their error recorded
+ */
+export async function pushOutbox(barSlug?: string): Promise<SyncResults|null> {
+    const { identity, headers } = await deviceHeaders();
+    const slug = barSlug || identity.bar.slug;
+
+    const ops = await listOps(slug);
+    if (!ops.length) return null;
+
+    const response = await fetch(`/api/bars/${slug}/sync`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ops: ops.map(stripSeq) }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`sync failed: ${response.status} ${await response.text()}`);
+    }
+
+    const { results, token } = (await response.json()) as SyncResponse;
+    await refreshDeviceToken(token);
+
+    const settled = [...results.applied, ...results.duplicate].map(r => r.clientId);
+    await deleteOpsByClientId(settled);
+
+    const bySeq = new Map(ops.map(op => [op.clientId, op.seq]));
+    for (const result of results.failed) {
+        const seq = bySeq.get(result.clientId);
+        if (seq !== undefined) await markOpFailed(seq, result.error || 'unknown');
+    }
+
+    await writeLastSyncAt(new Date().toISOString());
+
+    return results;
+}
+
+function stripSeq(op: StoredOp): Omit<StoredOp, "seq"> {
+    const { seq: _seq, ...rest } = op;
+    return rest;
+}

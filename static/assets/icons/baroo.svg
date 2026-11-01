@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 512 512"
+   width="512"
+   height="512"
+   version="1.1"
+   id="svg3"
+   sodipodi:docname="baroo.svg"
+   inkscape:export-filename="baroo.svg"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs3">
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath9">
+      <path
+         d="m 170.75147,208.86309 q 0,20.27379 -8.50848,36.49282 -8.34485,16.21903 -24.38005,26.55866 -14.23534,9.12321 -31.25228,13.3807 -17.016957,4.05476 -38.942641,4.05476 -16.198827,0 -33.379404,-0.60821 -17.016947,-0.81096 -18.980443,-1.0137 0.490872,-38.92567 0.654497,-73.39111 0.163541,-34.66817 0.163541,-66.09254 0,-59.60493 -0.490878,-94.273099 -0.327248,-34.870929 -0.327248,-36.290089 2.290744,-0.202742 17.998698,-1.013691 15.871578,-0.810952 30.761411,-0.810952 16.853324,0 31.08866,2.838327 14.235327,2.635595 24.052807,7.501309 14.88983,7.298557 23.3983,21.084739 8.50848,13.583439 8.50848,33.451752 0,20.881994 -10.79922,37.101034 -10.63559,16.01629 -24.38005,21.89569 v 2.02737 q 11.29009,1.21643 21.92568,6.69035 10.6356,5.27118 18.6532,15.20534 7.03585,8.71773 10.63559,19.2601 3.59974,10.54237 3.59974,25.95044 z m -27.97979,1.01369 q 0,-10.33962 -2.94525,-18.44914 -2.94524,-8.31225 -8.83572,-15.81356 -5.56323,-6.89308 -15.38071,-11.15058 -9.65384,-4.25749 -21.107561,-4.25749 -9.16297,0 -14.889827,0.20263 -5.563239,0.20262 -7.363105,0.20262 l -2.617992,-24.32854 q 12.108211,-0.40547 21.271187,-3.44654 9.326598,-3.24381 16.526078,-9.52868 6.87223,-6.08214 11.29009,-15.40807 4.41786,-9.528689 4.41786,-21.287484 0,-12.367005 -4.90874,-21.287473 -4.90873,-9.123209 -13.41721,-14.39439 -7.199476,-4.257496 -17.671445,-6.284873 -10.47197,-2.230119 -22.416557,-2.230119 -7.690353,0 -14.235331,0.405475 -6.381359,0.202629 -8.181231,0.202629 -0.490872,29.599731 -0.654496,62.848745 0,33.24901 0,48.25161 0,34.87091 0.163535,70.1473 0.327254,35.07365 0.327254,37.5065 3.272489,0.20263 8.672098,0.60822 5.563233,0.20263 10.635594,0.20263 18.816819,0 34.852021,-2.43286 16.198828,-2.43285 27.325298,-10.13689 9.16297,-6.28487 14.07171,-16.42177 5.07236,-10.13689 5.07236,-23.72033 z"
+         id="path9"
+         style="font-size:192px;font-family:Skia;-inkscape-font-specification:'Skia, Normal';white-space:pre;inline-size:187.311;stroke-width:1.94277"
+         aria-label="B"
+         inkscape:label="clipText" />
+    </clipPath>
+  </defs>
+  <sodipodi:namedview
+     id="namedview3"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.92164218"
+     inkscape:cx="107.95947"
+     inkscape:cy="305.43307"
+     inkscape:window-width="1710"
+     inkscape:window-height="952"
+     inkscape:window-x="0"
+     inkscape:window-y="39"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g6" />
+  <title
+     id="title1">Baroo</title>
+  <rect
+     width="512"
+     height="512"
+     fill="#2b1a12"
+     id="rect1"
+     inkscape:label="bg rect" />
+  <g
+     id="g7"
+     inkscape:label="mug"
+     transform="translate(-25.882294,-13.636389)">
+    <path
+       d="m 175.22263,196.7833 h -28.41281 a 44.395021,69.733927 0 0 0 0,139.46785 h 28.41281 z"
+       fill="none"
+       stroke="#f5c14b"
+       stroke-width="28.933"
+       id="path3"
+       inkscape:label="handle" />
+    <g
+       id="g6"
+       clip-path="none"
+       transform="translate(-12.587735,9.9376857)"
+       style="display:inline">
+      <g
+         transform="matrix(1.8089625,0,0,1.1479611,155.64006,84.516019)"
+         id="g3"
+         style="display:inline"
+         clip-path="url(#clipPath9)">
+        <path
+           d="m 20,0 h 150 a 20,20 0 0 1 20,20 v 240 a 40,40 0 0 1 -40,40 H 40 A 40,40 0 0 1 0,260 V 20 A 20,20 0 0 1 20,0 Z"
+           fill="#f5c14b"
+           id="path1"
+           inkscape:label="beer" />
+        <path
+           d="M 0,0 H 190 V 70 H 0 Z"
+           fill="#fffaf0"
+           id="path2"
+           inkscape:label="foam" />
+      </g>
+    </g>
+  </g>
+</svg>

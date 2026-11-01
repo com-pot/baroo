@@ -1,0 +1,13 @@
+{
+    "$schema": "https://inlang.com/schema/inlang-message-format",
+    "auth": {
+        "login": {
+            "title": "Přihlášení",
+            "who": "Kdo?",
+            "password": "Heslo",
+            "submit": "Přihlásit",
+            "logout": "Odhlásit",
+            "error_invalid": "Špatný e-mail nebo heslo."
+        }
+    }
+}

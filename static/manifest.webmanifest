@@ -1,0 +1,18 @@
+{
+    "name": "Baroo",
+    "short_name": "Baroo",
+    "description": "Bar tabs that keep working underground.",
+    "start_url": "/",
+    "scope": "/",
+    "display": "fullscreen",
+    "background_color": "#fafafa",
+    "theme_color": "#fafafa",
+    "icons": [
+        {
+            "src": "/assets/icons/baroo.png",
+            "sizes": "any",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

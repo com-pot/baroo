@@ -3,17 +3,17 @@
     import { servingLabel } from "$lib/bar/servings";
     import { formatQuantity, measureLabel } from "$lib/bar/quantity";
     import type { BarOfferItem } from "$lib/bar/BarModel";
-    import type { UnsealEvent } from "$lib/bar/ops/unseal";
+    import type { ClosureData } from "$lib/bar/ops/flush";
 
     const {
-        event,
+        closure,
+        closedAt,
         offerItem,
     }: {
-        event: UnsealEvent;
+        closure: ClosureData;
+        closedAt: string;
         offerItem: Pick<BarOfferItem, "servingPreset">;
     } = $props();
-
-    const closure = $derived(event.data.closureData);
 </script>
 
 <div class="closure-details">
@@ -21,12 +21,12 @@
         <p>
             <strong>Open:</strong>
             {#if closure.unsealedAt}
-                <time datetime={event.unsealedAt}>{new Date(closure.unsealedAt).toLocaleString()}</time>
+                <time datetime={closure.unsealedAt}>{new Date(closure.unsealedAt).toLocaleString()}</time>
             {:else}
                 ///
             {/if}
             <span role="separator">-</span>
-            <time datetime={event.created}>{new Date(event.created).toLocaleString()}</time>
+            <time datetime={closedAt}>{new Date(closedAt).toLocaleString()}</time>
         </p>
         <p>
             <strong>Total orders:</strong>

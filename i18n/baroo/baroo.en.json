@@ -30,26 +30,37 @@
                 "tag_unreadable": "Cannot read data from the NFC tag.",
                 "idle": "Idle",
                 "unknown_member_seq": "Nobody holds badge number {seq}",
-                "spigot_assigned": "Spigot {spigot} now pours {name}",
-                "spigot_unset": "Spigot {spigot} has no drink set — tap a beverage tag on it.",
-                "pour_failed": "Could not file the pour for {name}: {error}",
-                "spigot_size_unavailable": "Spigot {spigot}: that size can't be filed — pick one on the tablet."
+                "tap_unsealed": "Tap {tap}: tapped {name} ({package})",
+                "tap_unset": "Nothing is on tap {tap} — tap a package tag on it.",
+                "pending_order_failed": "Could not file the order for {name}: {error}",
+                "tap_size_unavailable": "Tap {tap}: that size can't be filed — pick one on the tablet.",
+                "tap_unseal_failed": "Could not file the package on tap {tap}: {error}"
             },
-            "spigot": {
-                "title": "Spigot {spigot}",
+            "tap": {
+                "title": "Tap {tap}",
                 "dismiss": "Discard",
-                "unknown_item": "“{key}” is not on the offer. Tap the beverage tag on the spigot again.",
-                "disconnected": "Not connected to the spigots",
-                "no_beverage": "no drink"
+                "unknown_item": "“{key}” is not on the offer. Tap the package onto the tap again.",
+                "disconnected": "Not connected to the taps",
+                "nothing_on_tap": "nothing on tap",
+                "lineup_title": "Taps",
+                "tapper_alive": "TapTapper connected",
+                "tapper_quiet": "TapTapper not checking in",
+                "none": "No tap",
+                "create": "New tap…",
+                "create_label": "New tap's name",
+                "create_placeholder": "e.g. 3",
+                "unseal_onto": "Tap a new package"
             },
             "nfc": "NFC",
             "stock": {
                 "title": "Stock",
                 "actions": "Actions",
                 "unseal_new": "Unseal new package",
+                "flush": "Flush the package",
+                "flush_confirm": "Close the {name} package? {left} left, it gets written off.",
                 "remaining": "Remaining",
                 "of_total": "of {total}",
-                "not_unsealed": "Unsealed",
+                "not_unsealed": "Not unsealed",
                 "empty": "This bar has nothing on offer yet."
             }
         },
@@ -88,6 +99,7 @@
                 "most_orders": "Most orders",
                 "unseal": "Unseal",
                 "unseal_quantity": "Quantity ({measure})",
+                "taps": "Taps",
                 "quantity_left": "{left} left of {total}",
                 "package_sequenced": "Package #{sequenceNumber}",
                 "total_quantity": "Total:",
@@ -153,10 +165,22 @@
                 "picture": "Picture",
                 "picture_hint": "Square, {max} at most.",
                 "picture_current": "Current picture",
-                "tagSerial": "Beverage NFC tag",
+                "packages": "Packages",
+                "packages_info": "Kinds of packages the items come in — a 50 l keg, a case of 24. A package tag tapped on a TapTapper taps a new package of its kind onto that tap.",
+                "add_package": "Add package",
+                "edit_package": "Edit package",
+                "delete_package_confirm": "Delete this package?",
+                "package_item": "Item",
+                "package_item_unknown": "This item is not the bar's.",
+                "package_label": "Label",
+                "package_label_placeholder": "e.g. Keg",
+                "package_quantity": "Holds",
+                "package_quantity_help": "In the item's measure, litres or pieces.",
+                "tagSerial": "Package NFC tag",
                 "tag_serial_placeholder": "e.g. 04a1b2c3d4e5f6",
-                "tag_serial_help": "Tapping it on a spigot switches the spigot to this drink. To find the tag's id, tap it on a spigot — the kiosk shows it as an unknown tag.",
-                "tag_serial_taken": "This tag already belongs to {name}."
+                "tag_serial_help": "Tapping it on a TapTapper taps a new package of this kind onto its tap. To find the tag's id, tap it on a TapTapper — the kiosk shows it as an unknown tag.",
+                "tag_serial_taken": "This tag already belongs to the package {name}.",
+                "tag_serial_card": "This is {name}'s member card."
             },
             "summaries": {
                 "title": "Member Summaries",
@@ -256,16 +280,19 @@
                 "staff": "Staff register"
             }
         },
-        "spigot_screen": {
+        "tap_screen": {
             "tap_card": "Tap your card",
             "no_drink": "No drink",
-            "tap_drink_tag": "Tap a drink tag",
-            "assigned": "Set",
+            "tap_package_tag": "Tap a package tag",
+            "unsealed": "Tapped",
+            "not_unsealed": "Not tapped",
+            "no_staff": "No staff tablet listening",
+            "no_staff_hint": "Tap the package on a tablet",
             "greeting_unknown": "Hi!",
             "pick_size": "Pick the size on the tablet",
             "no_kiosk": "No tablet listening",
             "no_kiosk_hint": "Tell the barman",
-            "unset_title": "No drink on this spigot"
+            "unset_title": "Nothing on this tap"
         },
         "enroll": {
             "title": "Pair this device",
@@ -316,6 +343,7 @@
             "op_mapping": "Tag {serialId} → {nickName}",
             "op_settlement": "Settled {nickName}: {amountPaid}",
             "op_unseal": "Opened {offerItem}",
+            "op_flush": "Flushed {offerItem}",
             "op_device_config": "Device preferences",
             "device_prefs": "Device preferences",
             "device_prefs_title": "{label} preferences",
@@ -329,6 +357,12 @@
             "unseal_section": "Open a package",
             "unseal_item": "Offer item",
             "unseal_quantity": "Quantity ({measure})",
+            "unseal_package": "Package",
+            "unseal_package_custom": "Custom quantity",
+            "unseal_tap": "Onto tap",
+            "unseal_flush_current": "Flush the current package",
+            "unseal_flush_current_hint": "The {left} left are written off and the package is closed.",
+            "unseal_top_up_hint": "The new package adds to what is left.",
             "unseal_submit": "Open it",
             "unauthorized": "This is a guest kiosk. Enrol it as a staff device to get here.",
             "op_member": "New member {nickName} (#{seq})",

@@ -1,8 +1,12 @@
-import type { BarMember, BarOfferItem } from '$lib/bar/BarModel';
+import type { BarMember, BarOfferItem, OfferPackage } from '$lib/bar/BarModel';
 import {
     computeOfferStock,
+    replayStock,
+    snapshotStockEvents,
     type BarOfferIndex,
     type OfferStock,
+    type StockEvent,
+    type TapAssignment,
 } from '$lib/bar/stats/barOfferItems';
 import {
     computeMemberStanding,
@@ -122,6 +126,10 @@ export class BarOfflineStore {
 
     get barOffer(): BarOfferIndex {
         return indexBy("key", this.offerItems);
+    }
+
+    get packages(): OfferPackage[] {
+        return this.snapshot?.packages ?? [];
     }
 
     get mappings(): TagMapping[] {
@@ -254,40 +262,46 @@ export class BarOfflineStore {
         return items;
     }
 
-    private get unseals() {
-        const unseals: NonNullable<typeof this.snapshot>["unseals"] = {};
-        for (const [name, itemUnseals] of Object.entries(this.snapshot?.unseals || {})) {
-            unseals[name] = itemUnseals.slice()
-        }
+    private get stockEvents(): StockEvent[] {
+        const events = this.snapshot ? snapshotStockEvents(this.snapshot) : [];
 
         for (const op of this.pending) {
-            if (op.kind !== 'unseal') continue;
-            if (!unseals[op.offerItemKey]) unseals[op.offerItemKey] = []
-            unseals[op.offerItemKey].push({
-                clientId: op.clientId,
-                created: op.occurredAt,
-                id: op.clientId,
-                occurredAt: op.occurredAt,
-                target: `bar:${op.barSlug}`,
-                type: "unseal",
-                data: {
+            if (op.kind === 'unseal') {
+                events.push({
+                    type: 'unseal',
                     offerItemKey: op.offerItemKey,
+                    occurredAt: op.occurredAt,
+                    clientId: op.clientId,
+                    tap: op.tap ?? null,
                     quantity: op.quantity,
-                    // If we need the closure data from the offline ops, we're cooked. Sorry
-                    closureData: null as any,
-                },
-            });
+                    packageId: op.packageId ?? null,
+                    flushCurrent: op.flushCurrent,
+                });
+            } else if (op.kind === 'flush') {
+                events.push({
+                    type: 'flush',
+                    offerItemKey: op.offerItemKey,
+                    occurredAt: op.occurredAt,
+                    clientId: op.clientId,
+                    tap: op.tap ?? null,
+                });
+            }
         }
 
-        return unseals
+        return events;
     }
 
     get stock(): OfferStock[] {
         return computeOfferStock({
             offerItems: this.offerItems,
-            unseals: this.unseals,
+            events: this.stockEvents,
             orderItems: this.orderItems,
         });
+    }
+
+    /** What is on which tap, as far as this device knows */
+    get taps(): TapAssignment[] {
+        return Object.values(replayStock(this.stockEvents).taps);
     }
 
     unknownTags = $state<string[]>([]);
@@ -327,8 +341,21 @@ export class BarOfflineStore {
         }
 
         this.opts?.onProcessed?.()
+        for (const listener of this.opListeners) listener(stored);
 
         return stored;
+    }
+
+    private opListeners = new Set<(op: StoredOp) => unknown>();
+    /** Hears of every op stored from now on, returns the unsubscribe */
+    onOp(listener: (op: StoredOp) => unknown): () => void {
+        this.opListeners.add(listener);
+        return () => this.opListeners.delete(listener);
+    }
+
+    /** Ops filed from a shared event share its clientId, as each listening device files them */
+    hasOp(clientId: string): boolean {
+        return this.pending.some((op) => op.clientId === clientId);
     }
 
     private async adoptConfig(config: PosDeviceConfig, keepSeq: number) {

@@ -1,7 +1,7 @@
 <script lang="ts">
     import * as m from '$lib/paraglide/messages.js';
     import type { PageData, ActionData } from './$types';
-    import type { BarOfferItem } from '$lib/bar/BarModel';
+    import type { BarOfferItem, BarOfferPackage } from '$lib/bar/BarModel';
     import { enhance } from '$app/forms';
     import FileDrop from '$lib/components/FileDrop.svelte';
     import {
@@ -16,6 +16,7 @@
     import { getUiLayers, type UiLayerCtrl } from '$lib/ui/uiLayers.svelte';
     import FormErrors from '$lib/components/FormErrors.svelte';
     import { entityFileHref } from '$lib/ui/pbFiles';
+    import { formatQuantity, packageLabel } from '$lib/bar/quantity';
 
     const renderer = getRenderer()
     const uiLayers = getUiLayers()
@@ -39,6 +40,25 @@
             onDestroyed: () => {
                 formLayerCtrl = null;
                 preset = SERVING_PRESETS.items[0].key;
+            },
+        }).ctrl;
+    }
+
+    const measureOf = (itemId: string) => {
+        const item = data.items.find((candidate) => candidate.id === itemId);
+        return item ? servingPreset(item.servingPreset).measure : 'volume';
+    };
+
+    let packageLayerCtrl = $state<UiLayerCtrl | null>(null);
+    function openPackageForm(offerPackage: BarOfferPackage | null, offerItemId?: string) {
+        if (packageLayerCtrl) return;
+
+        packageLayerCtrl = uiLayers.pushSnippet(offerPackageForm, { offerPackage, offerItemId: offerPackage?.offerItem ?? offerItemId }, {
+            heading: offerPackage
+                ? m["baroo.backstage.offer.edit_package"]()
+                : m["baroo.backstage.offer.add_package"](),
+            onDestroyed: () => {
+                packageLayerCtrl = null;
             },
         }).ctrl;
     }
@@ -74,6 +94,7 @@
                             <th>{m["baroo.backstage.offer.key"]()}</th>
                             <th>{m["baroo.backstage.offer.name"]()}</th>
                             <th>{m["baroo.backstage.offer.pricing"]()}</th>
+                            <th>{m["baroo.backstage.offer.packages"]()}</th>
                             <th>{m["baroo.backstage.offer.actions"]()}</th>
                         </tr>
                     </thead>
@@ -94,9 +115,6 @@
                                 </td>
                                 <td>
                                     <code>{item.key}</code>
-                                    {#if item.tagSerial}
-                                        <small class="tag-serial" title={m["baroo.backstage.offer.tagSerial"]()}>📶 {item.tagSerial}</small>
-                                    {/if}
                                 </td>
                                 <td>{item.name}</td>
                                 <td>
@@ -108,6 +126,16 @@
                                         {:else}
                                             <span class="text-muted">{m["baroo.backstage.offer.no_pricing"]()}</span>
                                         {/if}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="pricing-display">
+                                        {#each data.packages.filter((offerPackage) => offerPackage.offerItem === item.id) as offerPackage (offerPackage.id)}
+                                            <span class="badge bg-secondary">{packageLabel(offerPackage, servingPreset(item.servingPreset).measure)}{offerPackage.tagSerial ? ' 📶' : ''}</span>
+                                        {/each}
+                                        <button type="button" class="btn btn-link btn-sm" onclick={() => openPackageForm(null, item.id)}>
+                                            {m["baroo.backstage.offer.add_package"]()}
+                                        </button>
                                     </div>
                                 </td>
                                 <td>
@@ -138,10 +166,75 @@
 
             {/if}
             </section>
+
+            <section class="card">
+                <header class="card-header">
+                    <h3>{m["baroo.backstage.offer.packages"]()}</h3>
+                    <div class="actions">
+                        <button type="button" class="btn btn-outline-primary" onclick={() => openPackageForm(null)} disabled={!data.items.length}>
+                            {m["baroo.backstage.offer.add_package"]()}
+                        </button>
+                    </div>
+                </header>
+
+                <div class="card-body">
+                    <p class="text-meta">{m["baroo.backstage.offer.packages_info"]()}</p>
+                </div>
+
+                {#if data.packages.length}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>{m["baroo.backstage.offer.package_item"]()}</th>
+                            <th>{m["baroo.backstage.offer.package_label"]()}</th>
+                            <th>{m["baroo.backstage.offer.package_quantity"]()}</th>
+                            <th>{m["baroo.backstage.offer.tagSerial"]()}</th>
+                            <th>{m["baroo.backstage.offer.actions"]()}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#each data.packages as offerPackage (offerPackage.id)}
+                            <tr>
+                                <td>{data.items.find((item) => item.id === offerPackage.offerItem)?.name ?? offerPackage.offerItem}</td>
+                                <td>{offerPackage.label}</td>
+                                <td>{formatQuantity(measureOf(offerPackage.offerItem), offerPackage.quantity)}</td>
+                                <td>
+                                    {#if offerPackage.tagSerial}
+                                        <code class="tag-serial">📶 {offerPackage.tagSerial}</code>
+                                    {/if}
+                                </td>
+                                <td>
+                                    <div class="actions">
+                                        <button type="button" class="btn btn-link" onclick={() => openPackageForm(offerPackage)}>
+                                            {m["baroo.backstage.offer.edit"]()}
+                                        </button>
+                                        <form method="POST" action="?/deletePackage" use:enhance>
+                                            <input type="hidden" name="packageId" value={offerPackage.id} />
+                                            <button
+                                                type="submit"
+                                                class="btn btn-link text-danger"
+                                                onclick={(e) => {
+                                                    if (!confirm(m["baroo.backstage.offer.delete_package_confirm"]())) {
+                                                        e.preventDefault();
+                                                    }
+                                                }}
+                                            >
+                                                {m["baroo.backstage.offer.delete"]()}
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {/each}
+                    </tbody>
+                </table>
+                {/if}
+            </section>
         </div>
 </main>
 
 {#snippet offerItemForm(item: BarOfferItem | null)}
+    {@const failed = form?.data && 'key' in form.data ? form.data : null}
     <form
         method="POST"
         action={item ? '?/update' : '?/create'}
@@ -167,7 +260,7 @@
                 id="key"
                 name="key"
                 class="form-control"
-                value={form?.data?.key ?? item?.key ?? ''}
+                value={failed?.key ?? item?.key ?? ''}
                 required
                 pattern="[a-z0-9\-]+"
                 placeholder={m["baroo.backstage.offer.placeholder_key"]()}
@@ -183,7 +276,7 @@
                 id="name"
                 name="name"
                 class="form-control"
-                value={form?.data?.name ?? item?.name ?? ''}
+                value={failed?.name ?? item?.name ?? ''}
                 required
                 placeholder={m["baroo.backstage.offer.placeholder_name"]()}
                 class:error={form?.errors?.name}
@@ -240,27 +333,100 @@
             <FormErrors error={form?.errors?.pricing}/>
             <FormErrors error={form?.errors?.servingPreset}/>
         </div>
-        <div class="input-pair col-md-7">
-            <label for="tagSerial" class="form-label">{m["baroo.backstage.offer.tagSerial"]()}</label>
-            <input
-                type="text"
-                id="tagSerial"
-                name="tagSerial"
-                class="form-control font-monospace"
-                value={form?.data?.tagSerial ?? item?.tagSerial ?? ''}
-                autocomplete="off"
-                spellcheck="false"
-                placeholder={m["baroo.backstage.offer.tag_serial_placeholder"]()}
-                class:error={form?.errors?.tagSerial}
-            />
-            <FormErrors error={form?.errors?.tagSerial}/>
-            <small>{m["baroo.backstage.offer.tag_serial_help"]()}</small>
-        </div>
         <div class="col-12 actions">
             <button type="submit" class="btn btn-primary">
                 {item ? m["baroo.backstage.offer.update"]() : m["baroo.backstage.offer.create"]()}
             </button>
             <button type="button" class="btn btn-secondary" onclick={() => formLayerCtrl?.close()}>
+                {m["baroo.backstage.offer.cancel"]()}
+            </button>
+        </div>
+    </form>
+{/snippet}
+
+{#snippet offerPackageForm({ offerPackage, offerItemId }: { offerPackage: BarOfferPackage | null, offerItemId?: string })}
+    {@const failed = form?.action === 'savePackage' ? form : null}
+    {@const failedData = failed?.data && 'offerItem' in failed.data ? failed.data : null}
+    <form
+        method="POST"
+        action="?/savePackage"
+        use:enhance={() => {
+            return async ({ update, result }) => {
+                await update();
+                if (result.type === 'success') {
+                    packageLayerCtrl?.close();
+                }
+            };
+        }}
+        class="row g-3"
+    >
+        {#if offerPackage}
+            <input type="hidden" name="packageId" value={offerPackage.id} />
+        {/if}
+        <div class="input-pair col-md-6">
+            <label for="package.offerItem" class="form-label">{m["baroo.backstage.offer.package_item"]()}</label>
+            <select
+                id="package.offerItem"
+                name="offerItem"
+                class="form-select"
+                required
+                value={failedData?.offerItem ?? offerItemId ?? ''}
+            >
+                <option value="" disabled>—</option>
+                {#each data.items as item (item.id)}
+                    <option value={item.id}>{item.name}</option>
+                {/each}
+            </select>
+            <FormErrors error={failed?.errors?.offerItem}/>
+        </div>
+        <div class="input-pair col-md-6">
+            <label for="package.label" class="form-label">{m["baroo.backstage.offer.package_label"]()}</label>
+            <input
+                type="text"
+                id="package.label"
+                name="label"
+                class="form-control"
+                maxlength="40"
+                value={failedData?.label ?? offerPackage?.label ?? ''}
+                placeholder={m["baroo.backstage.offer.package_label_placeholder"]()}
+            />
+            <FormErrors error={failed?.errors?.label}/>
+        </div>
+        <div class="input-pair col-md-4">
+            <label for="package.quantity" class="form-label">{m["baroo.backstage.offer.package_quantity"]()}</label>
+            <input
+                type="number"
+                id="package.quantity"
+                name="quantity"
+                class="form-control"
+                min="0"
+                step="0.1"
+                required
+                value={failedData?.quantity ?? offerPackage?.quantity ?? ''}
+            />
+            <FormErrors error={failed?.errors?.quantity}/>
+            <small>{m["baroo.backstage.offer.package_quantity_help"]()}</small>
+        </div>
+        <div class="input-pair col-md-8">
+            <label for="package.tagSerial" class="form-label">{m["baroo.backstage.offer.tagSerial"]()}</label>
+            <input
+                type="text"
+                id="package.tagSerial"
+                name="tagSerial"
+                class="form-control font-monospace"
+                value={failedData?.tagSerial ?? offerPackage?.tagSerial ?? ''}
+                autocomplete="off"
+                spellcheck="false"
+                placeholder={m["baroo.backstage.offer.tag_serial_placeholder"]()}
+            />
+            <FormErrors error={failed?.errors?.tagSerial}/>
+            <small>{m["baroo.backstage.offer.tag_serial_help"]()}</small>
+        </div>
+        <div class="col-12 actions">
+            <button type="submit" class="btn btn-primary">
+                {offerPackage ? m["baroo.backstage.offer.update"]() : m["baroo.backstage.offer.create"]()}
+            </button>
+            <button type="button" class="btn btn-secondary" onclick={() => packageLayerCtrl?.close()}>
                 {m["baroo.backstage.offer.cancel"]()}
             </button>
         </div>
@@ -282,9 +448,13 @@
 }
 
 .tag-serial {
-    display: block;
     color: #6b7280;
-    font-family: monospace;
+}
+
+.content-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
 }
 
 .serving-prices {

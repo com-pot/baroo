@@ -1,5 +1,6 @@
 import { listIndex } from "$lib/lists";
 import type { Measure } from "$lib/si/measure";
+import type { BarOfferItem } from "./BarModel";
 import { measureLabel } from "./quantity";
 
 export type Serving = {
@@ -57,6 +58,13 @@ export function servingPreset(key: ServingPreset["key"]): ServingPreset {
 
 export function findServing(key: ServingPreset["key"], variant: string): Serving | undefined {
     return servingPreset(key).servings.find(serving => serving.key === variant);
+}
+
+/** Priced servings, or all of them when the item has no prices */
+export function offeredServings(item: Pick<BarOfferItem, "servingPreset" | "pricing">): readonly Serving[] {
+    const all = servingPreset(item.servingPreset).servings;
+    const priced = all.filter((serving) => item.pricing?.[serving.key] != null);
+    return priced.length ? priced : all;
 }
 
 export function servingText(serving: Serving, measure: Measure): string {

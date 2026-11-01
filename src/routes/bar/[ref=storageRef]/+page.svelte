@@ -11,7 +11,8 @@
     import { greetingFor, orderConfirmation } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
-    import type { Serving } from "$lib/bar/servings";
+    import { offeredServings, servingPreset, type Serving } from "$lib/bar/servings";
+    import { formatQuantity } from "$lib/bar/quantity";
     import { Narrator } from "$lib/speech.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
     import Gzt from "$lib/eggs/Gzt.svelte";
@@ -22,10 +23,20 @@
     import NewOrderDialogContent from "./NewOrderDialogContent.svelte";
     import UnsealWidget from "./UnsealWidget.svelte";
     import type { BarOfferItem } from "$lib/bar/BarModel";
-    import { SpigotStream } from "$lib/spigots/spigotStream.svelte";
-    import type { SpigotAssigned, SpigotEvent, SpigotPour, SpigotServed } from "$lib/spigots/spigotEvents";
-    import PourQueue, { pourServings, type PendingPour } from "./PourQueue.svelte";
-    import SpigotRoster from "./SpigotRoster.svelte";
+    import type { Measure } from "$lib/si/measure";
+    import { TapStream, type HeardTap } from "$lib/taps/tapStream.svelte";
+    import {
+        TAP_ORDER_PREFIX,
+        TAP_STALE_MS,
+        TAP_UNSEAL_PREFIX,
+        type OfferServedEvent,
+        type PendingOfferEvent,
+        type TapEvent,
+        type TapUnsealedEvent,
+    } from "$lib/taps/tapEvents";
+    import PendingOffersModal, { type PendingOrder } from "./PendingOffersModal.svelte";
+    import TapLineup from "./TapLineup.svelte";
+    import TapBadge from "./TapBadge.svelte";
 
     const uiLayers = getUiLayers()
 
@@ -154,85 +165,104 @@
         if (greeting) narrator?.speak(greeting);
     }
 
-    /** Kept apart from the dialog layers - several customers can wait at the spigots at once */
-    let pendingPours = $state<PendingPour[]>([]);
-    let spigotStream = $state<SpigotStream | undefined>();
+    /** Kept apart from the dialog layers - several customers can wait at the taps at once */
+    let pendingOrders = $state<PendingOrder[]>([]);
+    let tapStream = $state<TapStream | undefined>();
 
-    function onSpigotEvent(event: SpigotEvent) {
+    function onTapEvent(event: TapEvent) {
         switch (event.type) {
-            case "pour":
-                receivePour(event);
+            case "pending-offer":
+                receivePendingOffer(event);
                 return;
-            case "pour-served":
-                serveAtSpigot(event);
+            case "offer-served":
+                offerServed(event);
                 return;
-            case "spigot-assigned":
-                unsealAtSpigot(event);
+            case "offer-dismissed":
+                dropPendingOrder(event.id);
                 return;
-            case "spigot-unset":
-                setStatus("⚠️", m["baroo.bar.status.spigot_unset"]({ spigot: event.spigot }));
+            case "tap-unsealed":
+                void unsealAtTap(event);
+                return;
+            case "tap-unset":
+                setStatus("⚠️", m["baroo.bar.status.tap_unset"]({ tap: event.tap }));
                 return;
         }
     }
 
-    /** Staff kiosks ask for the new package's size, prefilled with the previous one */
-    function unsealAtSpigot(event: SpigotAssigned) {
-        setStatus("ℹ️", m["baroo.bar.status.spigot_assigned"]({ spigot: event.spigot, name: event.name }));
+    /** Staff kiosks file the package right away, every one of them under the same clientId */
+    async function unsealAtTap(event: TapUnsealedEvent) {
+        setStatus("ℹ️", m["baroo.bar.status.tap_unsealed"]({
+            tap: event.tap,
+            name: event.offerItemName,
+            package: event.packageLabel,
+        }));
 
-        const stock = store.stock.find((entry) => entry.item.key === event.beverage);
-        if (!store.isStaffDevice || !stock) return;
+        const clientId = `${TAP_UNSEAL_PREFIX}${event.id}`;
+        if (!store.isStaffDevice || store.hasOp(clientId)) return;
 
-        const layer = uiLayers.pushComponent(UnsealWidget, {
-            store,
-            lockedItemKey: stock.item.key,
-            clientId: `spigot-unseal:${event.id}`,
-            initialQuantity: stock.unsealedAt && stock.unsealQuantity > 0 ? stock.unsealQuantity : undefined,
-            onDone: () => layer.ctrl.close(),
-        }, {
-            heading: `${m["baroo.bar.stock.unseal_new"]()} — ${stock.item.name}`,
-        });
+        try {
+            await store.process("unseal", {
+                clientId,
+                occurredAt: event.at,
+                offerItemKey: event.offerItemKey,
+                offerItemName: event.offerItemName,
+                quantity: event.quantity,
+                tap: event.tap,
+                packageId: event.packageId,
+                flushCurrent: true,
+            });
+        } catch (error) {
+            console.error(error);
+            setStatus("❌", m["baroo.bar.status.tap_unseal_failed"]({ tap: event.tap, error: errorText(error) }));
+        }
     }
 
-    function receivePour(pour: SpigotPour) {
-        if (pendingPours.some((pending) => pending.id === pour.id)) return;
+    function receivePendingOffer(offer: PendingOfferEvent) {
+        if (pendingOrders.some((pending) => pending.id === offer.id)) return;
 
-        const mapping = store.findMapping(pour.serialId);
-        if (!mapping) {
-            reportUnknown(pour.serialId);
+        const order = pendingOrderOf(offer);
+        if (!order) {
+            reportUnknown(offer.serialId);
             return;
         }
 
-        const label = mapping.member.nickName || "???";
-        greet(mapping, label);
-
-        pendingPours = [...pendingPours, {
-            id: pour.id,
-            spigot: pour.spigot,
-            mapping,
-            label,
-            beverage: pour.beverage,
-        }];
+        greet(order.mapping, order.label);
+        pendingOrders = [...pendingOrders, order];
     }
 
-    async function servePour(pour: PendingPour, item: BarOfferItem, serving: Serving) {
+    function pendingOrderOf(offer: Pick<PendingOfferEvent, "id" | "tap" | "serialId" | "offerItemKey">): PendingOrder | null {
+        const mapping = store.findMapping(offer.serialId);
+        if (!mapping) return null;
+
+        return {
+            id: offer.id,
+            tap: offer.tap,
+            mapping,
+            label: mapping.member.nickName || "???",
+            offerItemKey: offer.offerItemKey,
+        };
+    }
+
+    async function servePendingOrder(order: PendingOrder, item: BarOfferItem, serving: Serving, occurredAt?: string) {
         // Removed before the outbox write so a double press can't pour twice
-        pendingPours = pendingPours.filter((pending) => pending.id !== pour.id);
+        dropPendingOrder(order.id);
 
         try {
             await store.process("order", {
-                // Kiosks answering the same pour land one order, sync dedupes on clientId
-                clientId: `spigot:${pour.id}`,
-                serialId: pour.mapping.serialId,
-                memberId: pour.mapping.member.id,
-                memberLabel: pour.label,
+                // Kiosks answering the same offer land one order, sync dedupes on clientId
+                clientId: `${TAP_ORDER_PREFIX}${order.id}`,
+                occurredAt,
+                serialId: order.mapping.serialId,
+                memberId: order.mapping.member.id,
+                memberLabel: order.label,
                 items: [{ key: item.key, variant: serving.key }],
             });
         } catch (error) {
             console.error(error);
-            pendingPours = [pour, ...pendingPours];
-            setStatus("❌", m["baroo.bar.status.pour_failed"]({
-                name: pour.label,
-                error: error instanceof Error ? error.message : String(error),
+            pendingOrders = [order, ...pendingOrders];
+            setStatus("❌", m["baroo.bar.status.pending_order_failed"]({
+                name: order.label,
+                error: errorText(error),
             }));
             return;
         }
@@ -241,23 +271,90 @@
         if (narrationEnabled) narrator?.speak(orderConfirmation());
     }
 
-    /** Pours no longer pending were served or dismissed on the kiosk already */
-    function serveAtSpigot(event: SpigotServed) {
-        const pour = pendingPours.find((pending) => pending.id === event.id);
-        if (!pour) return;
-
-        const item = store.offerItems.find((candidate) => candidate.key === pour.beverage);
-        const serving = item && pourServings(item).find((candidate) => candidate.key === event.variant);
-        if (!item || !serving) {
-            setStatus("⚠️", m["baroo.bar.status.spigot_size_unavailable"]({ spigot: event.spigot }));
+    /**
+     * Served on another kiosk, which filed the order - or at the TapTapper, then every kiosk
+     * files it, even one that came along after the card was tapped
+     */
+    function offerServed(event: OfferServedEvent) {
+        const filed = event.source === "kiosk" || store.hasOp(`${TAP_ORDER_PREFIX}${event.id}`);
+        const order = pendingOrders.find((pending) => pending.id === event.id) ?? pendingOrderOf(event);
+        if (filed || !order) {
+            dropPendingOrder(event.id);
             return;
         }
 
-        void servePour(pour, item, serving);
+        const item = store.offerItems.find((candidate) => candidate.key === event.offerItemKey);
+        const serving = item && offeredServings(item).find((candidate) => candidate.key === event.variant);
+        if (!item || !serving) {
+            setStatus("⚠️", m["baroo.bar.status.tap_size_unavailable"]({ tap: event.tap }));
+            return;
+        }
+
+        void servePendingOrder(order, item, serving, event.at);
     }
 
-    function dismissPour(pour: PendingPour) {
-        pendingPours = pendingPours.filter((pending) => pending.id !== pour.id);
+    function dismissPendingOrder(order: PendingOrder) {
+        dropPendingOrder(order.id);
+        void tapStream?.dismiss(order.id);
+    }
+
+    function dropPendingOrder(id: string) {
+        pendingOrders = pendingOrders.filter((pending) => pending.id !== id);
+    }
+
+    /** The taps this device knows of, from the venue server and from its own data */
+    const knownTaps = $derived([
+        ...(tapStream?.taps ?? []).map((state) => ({ tap: state.tap, offerItemKey: state.offerItemKey })),
+        ...store.taps.map((assignment) => ({ tap: assignment.tap, offerItemKey: assignment.offerItemKey })),
+    ]);
+
+    function openUnseal(opts: { itemKey?: string, tap?: string }) {
+        const item = opts.itemKey ? store.barOffer[opts.itemKey] : undefined;
+        const layer = uiLayers.pushComponent(UnsealWidget, {
+            store,
+            lockedItemKey: item?.key,
+            tap: opts.tap,
+            taps: knownTaps,
+            onDone: () => uiLayers.close(layer.id),
+        }, {
+            heading: `${m["baroo.bar.stock.unseal_new"]()} — ${item?.name ?? m["baroo.bar.tap.title"]({ tap: opts.tap ?? "" })}`,
+        });
+    }
+
+    async function flushOffer(item: BarOfferItem, left: { measure: Measure, quantity: number | null }, tap?: string) {
+        const confirmed = confirm(m["baroo.bar.stock.flush_confirm"]({
+            name: item.name,
+            left: left.quantity === null ? "?" : formatQuantity(left.measure, left.quantity),
+        }));
+        if (!confirmed) return;
+
+        try {
+            await store.process("flush", {
+                offerItemKey: item.key,
+                offerItemName: item.name,
+                tap: tap ?? null,
+            });
+        } catch (error) {
+            console.error(error);
+            setStatus("❌", errorText(error));
+        }
+    }
+
+    // Ticks so TapTappers that went quiet show as stale on the stock board
+    let now = $state(Date.now());
+    onMount(() => {
+        const timer = setInterval(() => (now = Date.now()), 5_000);
+        return () => clearInterval(timer);
+    });
+
+    function tapperAlive(tap: string): boolean | null {
+        const heardAt = tapStream?.taps.find((state) => state.tap === tap)?.heardAt ?? null;
+        if (heardAt === null) return null;
+        return !!tapStream?.connected && now - heardAt < TAP_STALE_MS;
+    }
+
+    function errorText(error: unknown): string {
+        return error instanceof Error ? error.message : String(error);
     }
 
     function submitSelectForm(e: SubmitEvent) {
@@ -329,19 +426,25 @@
             },
         },
         {
-            name: "spigots",
-            // After the narrator, so the first pour already gets its greeting
-            isEnabled: () => !!store.device?.spigotTicket,
+            name: "taps",
+            // After the narrator, so the first offer already gets its greeting
+            isEnabled: () => !!store.device?.tapTicket,
             init: async () => {
-                const stream = new SpigotStream({
+                const stream = new TapStream({
                     barSlug: store.barSlug,
-                    ticket: () => store.device?.spigotTicket ?? null,
-                    onEvent: onSpigotEvent,
+                    ticket: () => store.device?.tapTicket ?? null,
+                    onEvent: onTapEvent,
                 });
-                spigotStream = stream;
+                tapStream = stream;
 
+                const stopRelaying = store.onOp((op) => stream.relay(op));
                 // Not awaiting the connection, it keeps retrying in the background
-                return stream.start();
+                const stop = stream.start();
+
+                return () => {
+                    stopRelaying();
+                    stop();
+                };
             },
         },
     ], {
@@ -417,10 +520,6 @@
         </div>
 
         <div class="info-sections" data-boot>
-            {#if spigotStream}
-                <SpigotRoster stream={spigotStream} offerItems={store.offerItems} />
-            {/if}
-
             {#if status?.text}
                 <div class="form-status" data-level={status.level}>
                     <span class="level">{status.level}</span>
@@ -433,37 +532,76 @@
             {/if}
         </div>
 
+        {#if tapStream}
+            <TapLineup stream={tapStream} offerItems={store.offerItems}
+                actionsMenu={store.isStaffDevice ? tapActions : undefined}
+            />
+        {/if}
+
         {#if store.isStaffDevice}
             <OfferStockBoard {store}>
-                {#snippet actionsMenu(item, btnAttrs)}
+                {#snippet tapBadge(tap)}
+                    <TapBadge {tap} alive={tapperAlive(tap)} />
+                {/snippet}
+                {#snippet actionsMenu(entry, btnAttrs)}
                     <li>
                         <button
                             type="button"
                             {...btnAttrs}
-                            onclick={() => {
-                                const layer = uiLayers.pushComponent(UnsealWidget, {
-                                    store,
-                                    lockedItemKey: item.key,
-                                    onDone: () => ( uiLayers.close(layer.id) )
-                                }, {
-                                    heading: `${m["baroo.bar.stock.unseal_new"]()} — ${item.name}`,
-                                })
-                            }}
+                            onclick={() => openUnseal({ itemKey: entry.item.key })}
                         >
                             {m["baroo.bar.stock.unseal_new"]()}
                         </button>
                     </li>
+                    {#if entry.unsealedAt}
+                        <li>
+                            <button
+                                type="button"
+                                {...btnAttrs}
+                                onclick={() => flushOffer(entry.item, { measure: entry.measure, quantity: entry.left }, entry.taps[0])}
+                            >
+                                {m["baroo.bar.stock.flush"]()}
+                            </button>
+                        </li>
+                    {/if}
                 {/snippet}
             </OfferStockBoard>
         {/if}
     </div>
 </main>
 
-<PourQueue
-    pours={pendingPours}
+{#snippet tapActions(tap: HeardTap, btnAttrs: Record<string, unknown>)}
+    {@const item = tap.offerItemKey ? store.barOffer[tap.offerItemKey] : undefined}
+    <li>
+        <button
+            type="button"
+            {...btnAttrs}
+            onclick={() => openUnseal({ tap: tap.tap })}
+        >
+            {m["baroo.bar.tap.unseal_onto"]()}
+        </button>
+    </li>
+    {#if item}
+        <li>
+            <button
+                type="button"
+                {...btnAttrs}
+                onclick={() => flushOffer(item, {
+                    measure: servingPreset(item.servingPreset).measure,
+                    quantity: tap.stock?.left ?? null,
+                }, tap.tap)}
+            >
+                {m["baroo.bar.stock.flush"]()}
+            </button>
+        </li>
+    {/if}
+{/snippet}
+
+<PendingOffersModal
+    orders={pendingOrders}
     offerItems={store.offerItems}
-    onServe={servePour}
-    onDismiss={dismissPour}
+    onServe={servePendingOrder}
+    onDismiss={dismissPendingOrder}
 />
 
 <style lang="scss">
@@ -566,7 +704,7 @@
     z-index: 50;
 }
 
-:global(.stock-board) {
+:global(:is(.stock-board, .tap-lineup)) {
     margin-block-start: 2rem;
 
     width: min(72rem, calc(100vw - 2rem));

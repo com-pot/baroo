@@ -1,34 +1,58 @@
 import { barDoUnseal } from '$lib/bar/ops/unseal';
+import { barDoFlush } from '$lib/bar/ops/flush';
 import { formatPbError } from '$lib/db.server';
 import { barSchema } from '$lib/model/bar';
 import { getFieldErrors } from '$lib/validation/validator';
 import z from 'zod';
 import type { PageServerLoad, Actions } from './$types';
 import { fail, redirect } from '@sveltejs/kit';
-import { zFromForm } from '$lib/zchem/schema';
 import getSnapshot from '$lib/bar/snapshot/getSnapshot';
+import { tapsEnabled } from '$lib/taps/tapAuth.server';
+import { boardStock, broadcastTaps, learnSnapshot, tapStates } from '$lib/taps/tapBoard.server';
+import { tapIdSchema } from '$lib/taps/tapEvents';
 
 export const load: PageServerLoad = async ({ parent, locals }) => {
     const { bar } = await parent();
-    const snapshot = bar ? await getSnapshot(locals, bar.slug) : null
+    if (!bar) return { snapshot: null, stock: [], taps: [], liveTaps: false };
 
-    return { snapshot };
+    const snapshot = await getSnapshot(locals, bar.slug)
+
+    // Fresh from PocketBase, so the venue server's taps learn from it too
+    if (await learnSnapshot(locals, bar.slug, snapshot)) {
+        void broadcastTaps(locals, bar.slug).catch((err) => locals.logger.error(err, '[taps] could not tell what is on the taps'));
+    }
+
+    return {
+        snapshot,
+        stock: await boardStock(locals, bar.slug, snapshot.offerItems),
+        taps: await tapStates(locals, bar.slug),
+        liveTaps: tapsEnabled(),
+    };
 };
 
-const unsealDataSchema = z.object({
-    eventType: z.literal("unseal"),
+const tapField = z.union([z.literal(''), tapIdSchema]).transform((tap) => tap || null);
+
+const unsealFormSchema = z.object({
     offerItemKey: z.string().min(1),
-    quantity: z.number().gt(0),
+    quantity: z.coerce.number().gt(0),
+    tap: tapField,
+    packageId: z.string().transform((id) => id || null),
+    flushCurrent: z.literal('on').optional().transform((checked) => checked === 'on'),
 })
+
+const flushFormSchema = z.object({
+    offerItemKey: z.string().min(1),
+    tap: tapField,
+})
+
 export const actions: Actions = {
-    createEvent: async ({ request, params, locals }) => {
+    unseal: async ({ request, params, locals }) => {
         const ref = params.ref;
         if (ref === 'new') {
             return fail(400, { error: 'Cannot create events for this bar' });
         }
 
-        const input = unsealDataSchema.safeParse(zFromForm(unsealDataSchema, await request.formData()));
-
+        const input = unsealFormSchema.safeParse(Object.fromEntries(await request.formData()));
         if (!input.success) {
             return fail(400, { error: 'Invalid data', issues: input.error.issues });
         }
@@ -36,10 +60,31 @@ export const actions: Actions = {
         try {
             await barDoUnseal(locals, ref, input.data)
 
-            return { success: true, action: 'createEvent' };
+            return { success: true, action: 'unseal' };
         } catch (err) {
-            console.error('Failed to create event:', err);
-            return fail(500, { error: 'Failed to create event' });
+            locals.logger.error(err, 'Failed to unseal');
+            return fail(500, { error: 'Failed to unseal' });
+        }
+    },
+
+    flush: async ({ request, params, locals }) => {
+        const ref = params.ref;
+        if (ref === 'new') {
+            return fail(400, { error: 'Cannot create events for this bar' });
+        }
+
+        const input = flushFormSchema.safeParse(Object.fromEntries(await request.formData()));
+        if (!input.success) {
+            return fail(400, { error: 'Invalid data', issues: input.error.issues });
+        }
+
+        try {
+            await barDoFlush(locals, ref, input.data)
+
+            return { success: true, action: 'flush' };
+        } catch (err) {
+            locals.logger.error(err, 'Failed to flush');
+            return fail(500, { error: 'Failed to flush' });
         }
     },
 

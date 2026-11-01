@@ -14,9 +14,21 @@ export type BarOfferItem = {
     servingPreset: ServingPreset["key"];
     pricing: Record<Serving["key"], number>;
     preview_1x1: string | null;
-    /** NFC tag that switches a spigot station to this item */
-    tagSerial?: string;
 }
+
+/** A kind of package an offer item comes in, e.g. its 50 l keg */
+export type BarOfferPackage = {
+    id: string;
+    offerItem: BarOfferItem["id"];
+    /** e.g.: Sud 50 l */
+    label: string;
+    quantity: number;
+    /** NFC tag that unseals a package of this kind onto a tap */
+    tagSerial: string;
+}
+
+/** A package as the snapshot carries it */
+export type OfferPackage = Omit<BarOfferPackage, "offerItem"> & { offerItemKey: BarOfferItem["key"] }
 
 export type BarMember = {
     id: string;

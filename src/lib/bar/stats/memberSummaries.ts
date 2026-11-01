@@ -20,6 +20,8 @@ export type MemberTimelineEntry = { date: string; } & (
         data: {
             key: string;
             variant: string;
+            /** Lets the venue server tell orders it heard of from the ones that reached PocketBase */
+            clientId?: string;
         };
     }
     | {
@@ -66,7 +68,7 @@ export function computeMemberStanding(input: {
 }
 
 export function buildMemberTimeline(input: {
-    orderItems: Pick<BarOrderItem, "key" | "variant" | "orderedAt">[],
+    orderItems: Pick<BarOrderItem, "key" | "variant" | "orderedAt" | "clientId">[],
     settlementEvents: { occurredAt: string, data: { amountDue: number, amountPaid: number } }[],
 }): MemberTimelineEntry[] {
     const timeline: MemberTimelineEntry[] = [];
@@ -78,6 +80,7 @@ export function buildMemberTimeline(input: {
             data: {
                 key: orderItem.key,
                 variant: orderItem.variant,
+                ...(orderItem.clientId ? { clientId: orderItem.clientId } : {}),
             },
         });
     }

@@ -1,4 +1,5 @@
-import type { BarOfferItem } from '$lib/bar/BarModel';
+import type { BarOfferItem, BarOfferPackage } from '$lib/bar/BarModel';
+import { ClientResponseError } from 'pocketbase';
 import { formatPbError, type Db } from '$lib/db.server';
 import { SERVING_PRESETS } from '$lib/bar/servings';
 import { normalizeTag } from '$lib/bar/tags';
@@ -7,16 +8,26 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { PICTURE_MAX_BYTES } from './offerItem';
 import { isError, type AppError } from '$lib/errors';
-import { barOfferItemSchema } from '$lib/model/bar';
+import { barOfferItemSchema, barOfferPackageSchema } from '$lib/model/bar';
 import * as m from '$lib/paraglide/messages.js';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-    const items = await locals.pb.collection<BarOfferItem>('bar_offer_items').getFullList({
-        filter: `bar.slug = "${params.ref}"`,
-        sort: 'name'
-    });
+    const [items, packages] = await Promise.all([
+        locals.pb.collection<BarOfferItem>('bar_offer_items').getFullList({
+            filter: `bar.slug = "${params.ref}"`,
+            sort: 'name'
+        }),
+        locals.pb.collection<BarOfferPackage>('bar_offer_packages').getFullList({
+            filter: `offerItem.bar.slug = "${params.ref}"`,
+            sort: 'quantity',
+        }).catch((err: unknown) => {
+            // Until pb_schema.json is imported
+            if (err instanceof ClientResponseError && err.status === 404) return [];
+            throw err;
+        }),
+    ]);
 
-    return { items };
+    return { items, packages };
 };
 
 export const actions: Actions = {
@@ -40,15 +51,6 @@ export const actions: Actions = {
             return fail(400, {
                 data,
                 errors: collectErrors(validationResult.error?.issues, picture),
-                action: 'create'
-            });
-        }
-
-        const tagSerialOwner = await findTagSerialOwner(locals.pb, bar.id, data.tagSerial);
-        if (tagSerialOwner) {
-            return fail(400, {
-                data,
-                errors: tagSerialTakenErrors(tagSerialOwner),
                 action: 'create'
             });
         }
@@ -97,15 +99,6 @@ export const actions: Actions = {
             });
         }
 
-        const tagSerialOwner = await findTagSerialOwner(locals.pb, bar.id, data.tagSerial, itemId);
-        if (tagSerialOwner) {
-            return fail(400, {
-                data: { ...data, itemId },
-                errors: tagSerialTakenErrors(tagSerialOwner),
-                action: 'update'
-            });
-        }
-
         try {
             await locals.pb.collection('bar_offer_items').update(itemId, {
                 ...validationResult.data,
@@ -133,6 +126,64 @@ export const actions: Actions = {
             return { success: true, action: 'delete' };
         } catch (error) {
             return fail(500, { error: 'Failed to delete item' });
+        }
+    },
+
+    savePackage: async ({ request, params, locals }) => {
+        const { pb } = locals;
+        const bar = await pb.collection('bars').getFirstListItem(`slug="${params.ref}"`);
+
+        const formData = await request.formData();
+        const packageId = formData.get('packageId')?.toString() || undefined;
+        const data = {
+            offerItem: formData.get('offerItem')?.toString() || '',
+            label: formData.get('label')?.toString().trim() || '',
+            quantity: Number(formData.get('quantity')?.toString() || NaN),
+            tagSerial: normalizeTag((formData.get('tagSerial')?.toString() ?? '').replaceAll(/[\s-]/g, '')),
+        };
+
+        const validationResult = barOfferPackageSchema.safeParse(data);
+        if (!validationResult.success) {
+            return fail(400, {
+                data: { ...data, packageId },
+                errors: getFieldErrors(validationResult.error.issues),
+                action: 'savePackage'
+            });
+        }
+
+        const errors = await packageConflicts(pb, bar.id, validationResult.data, packageId);
+        if (errors) {
+            return fail(400, { data: { ...data, packageId }, errors, action: 'savePackage' });
+        }
+
+        try {
+            if (packageId) {
+                await pb.collection('bar_offer_packages').update(packageId, validationResult.data);
+            } else {
+                await pb.collection('bar_offer_packages').create(validationResult.data);
+            }
+            return { success: true, action: 'savePackage' };
+        } catch (err) {
+            const formattedError = formatPbError(err)
+            if (formattedError) return fail(400, { ...formattedError, action: 'savePackage' });
+
+            throw err;
+        }
+    },
+
+    deletePackage: async ({ request, locals }) => {
+        const formData = await request.formData();
+        const packageId = formData.get('packageId')?.toString();
+
+        if (!packageId) {
+            return fail(400, { error: 'Package ID is required' });
+        }
+
+        try {
+            await locals.pb.collection('bar_offer_packages').delete(packageId);
+            return { success: true, action: 'deletePackage' };
+        } catch (error) {
+            return fail(500, { error: 'Failed to delete package' });
         }
     }
 };
@@ -185,30 +236,47 @@ function parseOfferData(formData: FormData) {
     return {
         servingPreset: preset.key,
         pricing,
-        tagSerial: normalizeTag((formData.get('tagSerial')?.toString() ?? '').replaceAll(/[\s-]/g, '')),
     };
 }
 
-function tagSerialTakenErrors(owner: BarOfferItem): Record<string, ValidationError[]> {
-    return {
-        tagSerial: [{ field: 'tagSerial', message: m["baroo.backstage.offer.tag_serial_taken"]({ name: owner.name }) }],
-    };
-}
-
-/** One tag, one drink - otherwise a spigot would pour whichever item it read last */
-async function findTagSerialOwner(
+/** The package's item must be the bar's, and its tag no other package's nor a member's card */
+async function packageConflicts(
     pb: Db,
     barId: string,
-    tagSerial: string,
-    exceptItemId?: string,
-): Promise<BarOfferItem | null> {
-    if (!tagSerial) return null;
-
-    return pb.collection<BarOfferItem>('bar_offer_items').getFirstListItem(
-        pb.filter('bar = {:bar} && tagSerial = {:tagSerial} && id != {:itemId}', {
-            bar: barId,
-            tagSerial,
-            itemId: exceptItemId ?? '',
-        }),
+    data: Pick<BarOfferPackage, 'offerItem' | 'tagSerial'>,
+    exceptPackageId?: string,
+): Promise<Record<string, ValidationError[]> | null> {
+    const item = await pb.collection<BarOfferItem>('bar_offer_items').getFirstListItem(
+        pb.filter('id = {:id} && bar = {:bar}', { id: data.offerItem, bar: barId }),
     ).catch(() => null);
+    if (!item) {
+        return { offerItem: [{ field: 'offerItem', message: m["baroo.backstage.offer.package_item_unknown"]() }] };
+    }
+
+    if (!data.tagSerial) return null;
+
+    // One tag, one package kind - otherwise a TapTapper would unseal whichever it read last
+    const owner = await pb.collection<BarOfferPackage & { expand?: { offerItem?: BarOfferItem } }>('bar_offer_packages').getFirstListItem(
+        pb.filter('offerItem.bar = {:bar} && tagSerial = {:tagSerial} && id != {:packageId}', {
+            bar: barId,
+            tagSerial: data.tagSerial,
+            packageId: exceptPackageId ?? '',
+        }),
+        { expand: 'offerItem' },
+    ).catch(() => null);
+    if (owner) {
+        const name = [owner.expand?.offerItem?.name, owner.label].filter(Boolean).join(' — ');
+        return { tagSerial: [{ field: 'tagSerial', message: m["baroo.backstage.offer.tag_serial_taken"]({ name }) }] };
+    }
+
+    // A TapTapper takes a package tag for a package before it would take it for a card
+    const card = await pb.collection('bar_member_mappings').getFirstListItem(
+        pb.filter('member.bar = {:bar} && serialId = {:serialId}', { bar: barId, serialId: data.tagSerial }),
+        { expand: 'member' },
+    ).catch(() => null);
+    if (card) {
+        return { tagSerial: [{ field: 'tagSerial', message: m["baroo.backstage.offer.tag_serial_card"]({ name: card.expand?.member?.nickName ?? '' }) }] };
+    }
+
+    return null;
 }

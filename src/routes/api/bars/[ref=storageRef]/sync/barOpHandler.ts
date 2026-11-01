@@ -5,6 +5,7 @@ import { readPosConfig } from '$lib/pos/device';
 import { serverMemberId, type BarOp, type OrderOp, type OutboxOp } from '$lib/offline/op';
 import type { SyncOpResult } from '$lib/offline/sync';
 import { barDoUnseal } from '$lib/bar/ops/unseal';
+import { barDoFlush } from '$lib/bar/ops/flush';
 
 type Ctx = { pb: Db; bar: Bar };
 
@@ -129,7 +130,26 @@ const opMap: {
         return { clientId: op.clientId, status: 'applied' };
     },
     'unseal': async (ctx, op) => {
-        await barDoUnseal(ctx, ctx.bar.slug, op)
+        await barDoUnseal(ctx, ctx.bar.slug, {
+            offerItemKey: op.offerItemKey,
+            quantity: op.quantity,
+            tap: op.tap,
+            packageId: op.packageId,
+            // Ops from before flush events always started a fresh package
+            flushCurrent: op.flushCurrent ?? true,
+            clientId: op.clientId,
+            occurredAt: op.occurredAt,
+        })
+
+        return { clientId: op.clientId, status: 'applied' };
+    },
+    'flush': async (ctx, op) => {
+        await barDoFlush(ctx, ctx.bar.slug, {
+            offerItemKey: op.offerItemKey,
+            tap: op.tap,
+            clientId: op.clientId,
+            occurredAt: op.occurredAt,
+        })
 
         return { clientId: op.clientId, status: 'applied' };
     },

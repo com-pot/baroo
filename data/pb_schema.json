@@ -499,20 +499,6 @@
         "type": "text"
       },
       {
-        "autogeneratePattern": "",
-        "hidden": false,
-        "id": "text1946358214",
-        "max": 32,
-        "min": 0,
-        "name": "tagSerial",
-        "pattern": "^[0-9a-f]*$",
-        "presentable": false,
-        "primaryKey": false,
-        "required": false,
-        "system": false,
-        "type": "text"
-      },
-      {
         "hidden": false,
         "id": "file382214865",
         "maxSelect": 1,
@@ -1308,6 +1294,110 @@
     "indexes": [
       "CREATE UNIQUE INDEX `idx_pos_enrollment_codes_code` ON `pos_enrollment_codes` (`code`)",
       "CREATE UNIQUE INDEX `idx_pos_enrollment_codes_device` ON `pos_enrollment_codes` (`device`)"
+    ],
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "deleteRule": "@request.auth.roles.name ?= \"bar-manager\""
+  },
+  {
+    "id": "pbc_bar_offer_packages",
+    "name": "bar_offer_packages",
+    "type": "base",
+    "system": false,
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_3741736354",
+        "hidden": false,
+        "id": "relation_offerItem",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "offerItem",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_package_label",
+        "max": 40,
+        "min": 0,
+        "name": "label",
+        "pattern": "",
+        "presentable": true,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "number_package_quantity",
+        "max": null,
+        "min": 0,
+        "name": "quantity",
+        "onlyInt": false,
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_package_tagSerial",
+        "max": 32,
+        "min": 0,
+        "name": "tagSerial",
+        "pattern": "^[0-9a-f]*$",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_bar_offer_packages_offerItem` ON `bar_offer_packages` (`offerItem`)",
+      "CREATE INDEX `idx_bar_offer_packages_tagSerial` ON `bar_offer_packages` (`tagSerial`)"
     ],
     "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",

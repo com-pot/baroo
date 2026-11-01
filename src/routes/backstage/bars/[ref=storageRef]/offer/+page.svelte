@@ -95,7 +95,7 @@
                                 <td>
                                     <code>{item.key}</code>
                                     {#if item.tagSerial}
-                                        <small class="tag-serial" title={m["baroo.backstage.offer.tag_serial"]()}>📶 {item.tagSerial}</small>
+                                        <small class="tag-serial" title={m["baroo.backstage.offer.tagSerial"]()}>📶 {item.tagSerial}</small>
                                     {/if}
                                 </td>
                                 <td>{item.name}</td>
@@ -241,7 +241,7 @@
             <FormErrors error={form?.errors?.servingPreset}/>
         </div>
         <div class="input-pair col-md-7">
-            <label for="tagSerial" class="form-label">{m["baroo.backstage.offer.tag_serial"]()}</label>
+            <label for="tagSerial" class="form-label">{m["baroo.backstage.offer.tagSerial"]()}</label>
             <input
                 type="text"
                 id="tagSerial"

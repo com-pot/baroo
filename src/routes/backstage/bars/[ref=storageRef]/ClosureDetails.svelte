@@ -3,17 +3,18 @@
     import { servingLabel } from "$lib/bar/servings";
     import { formatQuantity, measureLabel } from "$lib/bar/quantity";
     import type { BarOfferItem } from "$lib/bar/BarModel";
-    import type { UnsealEvent } from "$lib/bar/ops/unseal";
+    import type { ClosureData } from "$lib/bar/ops/flush";
 
     const {
-        event,
+        closure,
+        closedAt,
         offerItem,
     }: {
-        event: UnsealEvent;
-        offerItem: Pick<BarOfferItem, "servingPreset">;
+        closure: ClosureData;
+        closedAt: string;
+        /** `null` once the item is gone from the offer */
+        offerItem: Pick<BarOfferItem, "servingPreset"> | null;
     } = $props();
-
-    const closure = $derived(event.data.closureData);
 </script>
 
 <div class="closure-details">
@@ -21,12 +22,12 @@
         <p>
             <strong>Open:</strong>
             {#if closure.unsealedAt}
-                <time datetime={event.unsealedAt}>{new Date(closure.unsealedAt).toLocaleString()}</time>
+                <time datetime={closure.unsealedAt}>{new Date(closure.unsealedAt).toLocaleString()}</time>
             {:else}
                 ///
             {/if}
             <span role="separator">-</span>
-            <time datetime={event.created}>{new Date(event.created).toLocaleString()}</time>
+            <time datetime={closedAt}>{new Date(closedAt).toLocaleString()}</time>
         </p>
         <p>
             <strong>Total orders:</strong>
@@ -48,7 +49,7 @@
             <div class="items-grid -tight">
                 {#each Object.entries(closure.variantCounts) as [variant, count]}
                     <div class="tile">
-                        <span class="label">{servingLabel(offerItem.servingPreset, variant)}</span>
+                        <span class="label">{offerItem ? servingLabel(offerItem.servingPreset, variant) : variant}</span>
                         <span role="separator">×</span>
                         <span class="value">{count}</span>
                     </div>

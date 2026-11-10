@@ -16,6 +16,39 @@ export type BarOfferItem = {
     preview_1x1: string | null;
 }
 
+/**
+ * A package of an offer item, e.g. a 50 l keg: registered, unsealed - onto a tap or not -
+ * and flushed once done with. Its orders refer to it, so what is left of it is what it held
+ * less what they drew.
+ */
+export type BarOfferPackage = {
+    id: string;
+    offerItem: BarOfferItem["id"];
+    /** e.g.: Sud 50 l */
+    label: string;
+    quantity: number;
+    /** NFC tag that unseals the package onto a tap */
+    tagSerial: string;
+    /** `bar_taps` id while it is on a tap */
+    tap: string;
+    /** Empty while it is only registered */
+    unsealedAt: string;
+    flushedAt: string;
+}
+
+/** A package as the snapshot carries it, by the item's key and the tap's sequence */
+export type OfferPackage = Omit<BarOfferPackage, "offerItem" | "tap"> & {
+    offerItemKey: BarOfferItem["key"];
+    tap: string | null;
+}
+
+export type PackageState = "registered" | "unsealed" | "flushed";
+
+export function packageState(offerPackage: Pick<BarOfferPackage, "unsealedAt" | "flushedAt">): PackageState {
+    if (offerPackage.flushedAt) return "flushed";
+    return offerPackage.unsealedAt ? "unsealed" : "registered";
+}
+
 export type BarMember = {
     id: string;
     nickName: string;
@@ -40,6 +73,10 @@ export interface BarOrderItem {
 export type BarOrderItemRecord = BarOrderItem & {
     id: string;
     customer: BarMember["id"];
+    /** `bar_taps` id of the tap it was poured from */
+    tap: string;
+    /** The package it drew from */
+    package: BarOfferPackage["id"];
     created: string;
 }
 

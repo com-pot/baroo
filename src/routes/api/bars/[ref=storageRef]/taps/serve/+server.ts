@@ -1,0 +1,46 @@
+import { error, json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { requireTap } from '$lib/taps/tapAuth.server';
+import { lookupDrink } from '$lib/taps/tapLookup.server';
+import { findOffer } from '$lib/taps/tapHub.server';
+import { serveOffer } from '$lib/taps/tapOffers.server';
+import { goneScreens, servedScreens } from '$lib/taps/tapScreens.server';
+import { tapServeSchema, type TapServeResult } from '$lib/taps/tapEvents';
+
+/**
+ * Serving picked on a TapTapper's buttons for the offer of its last scan
+ *
+ * The tap files the order, the reply shows what is left on the tap after it.
+ */
+export const POST: RequestHandler = async (event) => {
+    const session = await requireTap(event);
+
+    const { locals } = event;
+    const barSlug = session.tap.bar.slug;
+    const body = tapServeSchema.safeParse(await event.request.json().catch(() => null));
+    if (!body.success) error(400, 'expected { offer, variant }');
+
+    const { variant } = body.data;
+
+    const offer = findOffer(barSlug, body.data.offer);
+    if (!offer || offer.tap !== session.ref || offer.state === 'dismissed') {
+        return reply({ result: 'gone', ...await goneScreens(session) });
+    }
+
+    if (offer.state === 'served') {
+        // Served on a kiosk meanwhile, or the reply to the first press got lost
+        return reply({ result: 'served', ...await servedScreens(session, { ...offer, variant: offer.variant ?? variant }) });
+    }
+
+    const drink = await lookupDrink(session.pb, barSlug, offer.offerItemKey);
+    if (drink && !drink.servings.includes(variant)) error(400, 'size-not-offered');
+
+    const served = await serveOffer(locals, barSlug, offer.id, variant, 'tapper');
+    if (!served) {
+        return reply({ result: 'gone', ...await goneScreens(session) });
+    }
+
+    return reply({ result: 'served', ...await servedScreens(session, { ...served, variant }) });
+};
+
+const reply = (result: TapServeResult) => json(result);

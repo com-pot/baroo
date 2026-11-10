@@ -16,6 +16,13 @@ export const barOfferItemSchema = z.object({
     ),
 })
 
+export const barOfferPackageSchema = z.object({
+    offerItem: z.string().min(15).max(15).regex(/^[a-z0-9]+$/).describe("ID of the offer item the package holds"),
+    label: z.string().max(40).describe("How the barman calls the package, e.g. Sud 50 l"),
+    quantity: z.number().gt(0).describe("What the package holds, in the item's measure"),
+    tagSerial: z.string().max(32).regex(/^[0-9a-f]*$/).describe("NFC tag that unseals a package of this kind onto a tap"),
+})
+
 export const barMemberMappingSchema = z.object({
     serialId: z.string().min(1).describe("Serial ID of a tag to map to a member"),
     userId: z.string().min(1).describe("User ID to associate with the tag"),

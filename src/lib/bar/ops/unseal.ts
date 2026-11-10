@@ -1,138 +1,107 @@
 import type { AppEvent } from "$lib/model/event";
-import { toPbDate } from "$lib/pocketbase";
-import { type Bar, type BarOfferItem, type BarOrderItem, type BarOrderItemRecord } from "../BarModel";
-import { findServing, servingPreset } from "../servings";
+import { toIsoDate, toPbDate } from "$lib/pocketbase";
+import { BarTapsCollection, type BarTap } from "$lib/taps/barTap";
+import { type Bar, type BarOfferItem, type BarOfferPackage } from "../BarModel";
+import { barDoFlush, type ClosureData } from "./flush";
 
-type UnsealData = Pick<UnsealEvent["data"], "offerItemKey" | "quantity">
+export type UnsealData = {
+    offerItemKey: string;
+    /**
+     * The registered package to unseal, or the id of one to register - a kiosk mints it
+     * before it syncs. Left out, a package gets registered under a new id.
+     */
+    packageId?: BarOfferPackage["id"] | null;
+    quantity: number;
+    label?: string;
+    tap?: string | null;
+}
 
-export async function barDoUnseal(ctx: Pick<App.Locals, "pb">, slug: Bar["slug"], data: UnsealData) {
-    const closureData = await collectClosureData(ctx.pb, { slug }, data.offerItemKey);
+/**
+ * Opens the package in its slot - its tap, or its item's packages off the taps - flushing
+ * whatever was open there before. One unsealed later stays, closing this one right away.
+ *
+ * Mirrors `applyUnseal` in src/lib/bar/stats/barOfferItems.ts.
+ */
+export async function barDoUnseal(
+    ctx: Pick<App.Locals, "pb">,
+    slug: Bar["slug"],
+    data: UnsealData & { clientId?: string; occurredAt?: string },
+): Promise<BarOfferPackage> {
+    const { pb } = ctx;
+    const { clientId, occurredAt = new Date().toISOString(), ...unseal } = data;
 
-    await ctx.pb.collection('events')
+    const item = await pb.collection<BarOfferItem & { bar: string }>('bar_offer_items')
+        .getFirstListItem(pb.filter('bar.slug = {:slug} && key = {:key}', { slug, key: unseal.offerItemKey }));
+    const tap = unseal.tap
+        ? await pb.collection<BarTap>(BarTapsCollection)
+            .getFirstListItem(pb.filter('bar = {:bar} && sequence = {:sequence}', { bar: item.bar, sequence: Number(unseal.tap) }))
+        : null;
+
+    const registered = unseal.packageId
+        ? await pb.collection<BarOfferPackage>('bar_offer_packages').getOne(unseal.packageId).catch(() => null)
+        : null;
+    if (registered && registered.offerItem !== item.id) throw new Error(`package ${registered.id} is not of ${item.key}`);
+    const offerPackage = registered ?? await pb.collection<BarOfferPackage>('bar_offer_packages').create<BarOfferPackage>({
+        ...(unseal.packageId ? { id: unseal.packageId } : {}),
+        offerItem: item.id,
+        label: unseal.label ?? '',
+        quantity: unseal.quantity,
+    });
+
+    const rivals = await pb.collection<BarOfferPackage>('bar_offer_packages').getFullList({
+        filter: tap
+            ? pb.filter('tap = {:tap} && unsealedAt != "" && flushedAt = "" && id != {:id}', { tap: tap.id, id: offerPackage.id })
+            : pb.filter('offerItem = {:item} && tap = "" && unsealedAt != "" && flushedAt = "" && id != {:id}', { item: item.id, id: offerPackage.id }),
+        sort: 'unsealedAt',
+    });
+    const newer = rivals.find((rival) => toIsoDate(rival.unsealedAt) > occurredAt);
+
+    for (const rival of rivals) {
+        if (rival === newer) break;
+        await barDoFlush(ctx, slug, {
+            packageId: rival.id,
+            clientId: clientId && `${clientId}:flush:${rival.id}`,
+            occurredAt,
+        });
+    }
+
+    const unsealed = await pb.collection<BarOfferPackage>('bar_offer_packages').update(offerPackage.id, {
+        tap: tap?.id ?? '',
+        unsealedAt: toPbDate(occurredAt),
+        flushedAt: '',
+    });
+
+    await pb.collection('events')
         .create({
             type: 'unseal',
             target: `bar:${slug}`,
-            occurredAt: new Date().toISOString(),
+            occurredAt,
+            clientId,
             data: {
-                ...data,
-                closureData,
+                offerItemKey: unseal.offerItemKey,
+                quantity: unsealed.quantity,
+                tap: unseal.tap ?? null,
+                packageId: unsealed.id,
             },
-        } satisfies Omit<UnsealEvent, "id">)
+        } satisfies Omit<UnsealEvent, "id" | "created">)
+
+    if (newer) {
+        // Was replaced before this unseal got here
+        await barDoFlush(ctx, slug, {
+            packageId: offerPackage.id,
+            clientId: clientId && `${clientId}:flush:${offerPackage.id}`,
+            occurredAt: toIsoDate(newer.unsealedAt),
+        });
+    }
+
+    return unsealed;
 }
 
-export type UnsealEvent = AppEvent<{
-    offerItemKey: string;
-    quantity: number;
-    closureData: ClosureData;
+export type UnsealEvent = AppEvent<Omit<UnsealData, "label" | "packageId"> & {
+    /** Missing on unseals from before packages were registered */
+    packageId?: string | null;
+    /** Only on unseals from before packages: whether the item's open stock was flushed first */
+    flushCurrent?: boolean;
+    /** Closure of the package an unseal from before flush events replaced */
+    closureData?: ClosureData;
 }>
-
-export async function collectClosureData(
-    pb: NonNullable<App.Locals['pb']>,
-    bar: Pick<Bar, "slug">,
-    offerItemKey: string,
-) {
-    const offerItem = await pb.collection<BarOfferItem>('bar_offer_items')
-        .getFirstListItem(`bar.slug = "${bar.slug}" && key = "${offerItemKey}"`);
-
-    const unseal = await getLastUnseal(pb, bar, offerItemKey);
-    const orderItems = await getOrderItemsSince(pb, bar, offerItemKey, unseal?.occurredAt);
-
-    const variantCounts: Record<string, number> = {};
-    for (const orderItem of orderItems) {
-        variantCounts[orderItem.variant] = (variantCounts[orderItem.variant] || 0) + 1;
-    }
-
-    let totalQuantity = 0;
-    for (const [variant, count] of Object.entries(variantCounts)) {
-        totalQuantity += findServing(offerItem.servingPreset, variant)?.quantity ?? 0 * count;
-    }
-
-    const memberConsumption = calculateMemberConsumption(offerItem, orderItems)
-
-    const memberStats = Object.values(memberConsumption)
-        .map(member => ({
-            ...member,
-            quantity: Math.round(member.quantity * 100) / 100,
-        }))
-        .sort((a, b) => b.quantity - a.quantity);
-
-    return {
-        offerItemKey,
-        offerItemName: offerItem.name,
-        unsealedAt: unseal?.occurredAt ?? null,
-        quantity: unseal?.quantity ?? null,
-        measure: servingPreset(offerItem.servingPreset).measure,
-        variantCounts,
-        totalQuantity: Math.round(totalQuantity * 100) / 100,
-        totalOrders: orderItems.length,
-        memberStats,
-    };
-}
-
-function calculateMemberConsumption(offerItem: BarOfferItem, orderItems: BarOrderItem[]) {
-    const memberConsumption: Record<string, {
-        memberId: string;
-        memberName: string;
-        count: number;
-        quantity: number;
-    }> = {};
-
-    for (const orderItem of orderItems) {
-        const customer = (orderItem as any).expand?.customer;
-        if (!customer) continue;
-
-        const memberId = customer.id;
-        const memberName = customer.nickName || customer.id;
-
-        if (!memberConsumption[memberId]) {
-            memberConsumption[memberId] = {
-                memberId,
-                memberName,
-                count: 0,
-                quantity: 0,
-            };
-        }
-
-        memberConsumption[memberId].count += 1;
-        memberConsumption[memberId].quantity += findServing(offerItem.servingPreset, orderItem.variant)?.quantity ?? 0;
-    }
-
-    return memberConsumption
-}
-
-export type ClosureData = Awaited<ReturnType<typeof collectClosureData>>;
-
-async function getLastUnseal(
-    pb: NonNullable<App.Locals['pb']>,
-    bar: Pick<Bar, "slug">,
-    offerItemKey: string,
-): Promise<UnsealEvent | null> {
-    const list = await pb.collection<UnsealEvent>('events')
-        .getList(1, 1, {
-            filter: `type = "unseal" && target = "bar:${bar.slug}" && data.offerItemKey = "${offerItemKey}"`,
-            sort: '-occurredAt',
-        });
-
-    return list.items[0] ?? null;
-}
-
-export async function getOrderItemsSince(
-    pb: NonNullable<App.Locals['pb']>,
-    bar: Pick<Bar, "slug">,
-    offerItemKey: string,
-    sinceDate: string | null | undefined,
-) {
-    const clauses = [
-        `key = "${offerItemKey}"`,
-        `customer.bar.slug = "${bar.slug}"`,
-    ];
-    if (sinceDate) {
-        clauses.push(`orderedAt >= "${toPbDate(sinceDate)}"`);
-    }
-
-    return await pb.collection<BarOrderItemRecord>('bar_order_items')
-        .getFullList({
-            filter: clauses.join(' && '),
-            expand: 'customer',
-        });
-}

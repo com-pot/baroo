@@ -1,8 +1,14 @@
-import type { BarMember, BarOfferItem } from '$lib/bar/BarModel';
+import type { BarMember, BarOfferItem, OfferPackage } from '$lib/bar/BarModel';
 import {
+    applyFlush,
+    applyUnseal,
     computeOfferStock,
+    orderPackage,
+    tapAssignments,
     type BarOfferIndex,
     type OfferStock,
+    type StockOrder,
+    type TapAssignment,
 } from '$lib/bar/stats/barOfferItems';
 import {
     computeMemberStanding,
@@ -124,6 +130,28 @@ export class BarOfflineStore {
         return indexBy("key", this.offerItems);
     }
 
+    /** Registered and unsealed, with this device's unseals and flushes on top */
+    get packages(): OfferPackage[] {
+        let packages = this.snapshot?.packages ?? [];
+
+        for (const op of this.pending.toSorted((a, b) => a.occurredAt.localeCompare(b.occurredAt))) {
+            if (op.kind === 'unseal') {
+                packages = applyUnseal(packages, {
+                    packageId: op.packageId,
+                    offerItemKey: op.offerItemKey,
+                    quantity: op.quantity,
+                    label: op.label,
+                    tap: op.tap ?? null,
+                    at: op.occurredAt,
+                });
+            } else if (op.kind === 'flush' && op.packageId) {
+                packages = applyFlush(packages, { packageId: op.packageId, at: op.occurredAt });
+            }
+        }
+
+        return packages;
+    }
+
     get mappings(): TagMapping[] {
         const merged = new Map<string, TagMapping>();
 
@@ -234,8 +262,9 @@ export class BarOfflineStore {
         }))
     }
 
-    private get orderItems(): { key: string; variant: string; orderedAt: string }[] {
-        const items: { key: string; variant: string; orderedAt: string }[] = [];
+    /** The server tells the package of a synced order, this device guesses it for its own */
+    private get orderItems(): StockOrder[] {
+        const items: StockOrder[] = [];
 
         for (const timeline of Object.values(this.snapshot?.timelines ?? {})) {
             for (const entry of timeline) {
@@ -244,50 +273,33 @@ export class BarOfflineStore {
             }
         }
 
+        const packages = this.packages;
         for (const op of this.pending) {
             if (op.kind !== 'order') continue;
             for (const item of op.items) {
-                items.push({ ...item, orderedAt: op.occurredAt });
+                items.push({
+                    key: item.key,
+                    variant: item.variant,
+                    orderedAt: op.occurredAt,
+                    package: orderPackage(packages, { key: item.key, tap: item.tap, at: op.occurredAt })?.id ?? null,
+                });
             }
         }
 
         return items;
     }
 
-    private get unseals() {
-        const unseals: NonNullable<typeof this.snapshot>["unseals"] = {};
-        for (const [name, itemUnseals] of Object.entries(this.snapshot?.unseals || {})) {
-            unseals[name] = itemUnseals.slice()
-        }
-
-        for (const op of this.pending) {
-            if (op.kind !== 'unseal') continue;
-            if (!unseals[op.offerItemKey]) unseals[op.offerItemKey] = []
-            unseals[op.offerItemKey].push({
-                clientId: op.clientId,
-                created: op.occurredAt,
-                id: op.clientId,
-                occurredAt: op.occurredAt,
-                target: `bar:${op.barSlug}`,
-                type: "unseal",
-                data: {
-                    offerItemKey: op.offerItemKey,
-                    quantity: op.quantity,
-                    // If we need the closure data from the offline ops, we're cooked. Sorry
-                    closureData: null as any,
-                },
-            });
-        }
-
-        return unseals
-    }
-
     get stock(): OfferStock[] {
         return computeOfferStock({
             offerItems: this.offerItems,
-            unseals: this.unseals,
+            packages: this.packages,
             orderItems: this.orderItems,
         });
+    }
+
+    /** What is on which tap, as far as this device knows */
+    get taps(): TapAssignment[] {
+        return tapAssignments(this.packages);
     }
 
     unknownTags = $state<string[]>([]);

@@ -284,7 +284,7 @@
     .create-device {
         margin-bottom: 2rem;
 
-        :global(.pos-config) {
+        :global(.schema-form) {
             display: contents;
         }
     }

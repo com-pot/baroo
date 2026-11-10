@@ -42,6 +42,18 @@
             },
         }).ctrl;
     }
+
+    let packageLayerCtrl = $state<UiLayerCtrl | null>(null);
+    function openPackageForm(item: BarOfferItem) {
+        if (packageLayerCtrl) return;
+
+        packageLayerCtrl = uiLayers.pushSnippet(offerPackageForm, item, {
+            heading: `${m["baroo.backstage.offer.add_package"]()} — ${item.name}`,
+            onDestroyed: () => {
+                packageLayerCtrl = null;
+            },
+        }).ctrl;
+    }
 </script>
 
 <main class="backstage-content items-page">
@@ -71,14 +83,15 @@
                     <thead>
                         <tr>
                             <th class="picture-col">{m["baroo.backstage.offer.picture"]()}</th>
-                            <th>{m["baroo.backstage.offer.key"]()}</th>
                             <th>{m["baroo.backstage.offer.name"]()}</th>
                             <th>{m["baroo.backstage.offer.pricing"]()}</th>
+                            <th>{m["baroo.backstage.offer.packages"]()}</th>
                             <th>{m["baroo.backstage.offer.actions"]()}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {#each data.items as item}
+                            {@const counts = data.packageCounts[item.id]}
                             <tr>
                                 <td class="picture-col">
                                     <div class="frame thumb">
@@ -92,8 +105,10 @@
                                         {/if}
                                     </div>
                                 </td>
-                                <td><code>{item.key}</code></td>
-                                <td>{item.name}</td>
+                                <td>
+                                    <div>{item.name}</div>
+                                    <code>{item.key}</code>
+                                </td>
                                 <td>
                                     <div class="pricing-display">
                                         {#if item.pricing && Object.keys(item.pricing).length > 0}
@@ -103,6 +118,20 @@
                                         {:else}
                                             <span class="text-muted">{m["baroo.backstage.offer.no_pricing"]()}</span>
                                         {/if}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="package-counts">
+                                        <span title={m["baroo.backstage.offer.packages_registered"]()}>{counts?.registered ?? 0}</span>
+                                        <span class="text-primary" title={m["baroo.backstage.offer.packages_unsealed"]()}>{counts?.unsealed ?? 0}</span>
+                                        <span class="text-muted" title={m["baroo.backstage.offer.packages_flushed"]()}>{counts?.flushed ?? 0}</span>
+                                        <button
+                                            type="button"
+                                            class="btn btn-icon btn-sm"
+                                            title={m["baroo.backstage.offer.add_package"]()}
+                                            aria-label={m["baroo.backstage.offer.add_package"]()}
+                                            onclick={() => openPackageForm(item)}
+                                        >➕</button>
                                     </div>
                                 </td>
                                 <td>
@@ -133,10 +162,12 @@
 
             {/if}
             </section>
+
         </div>
 </main>
 
 {#snippet offerItemForm(item: BarOfferItem | null)}
+    {@const failed = form?.data && 'key' in form.data ? form.data : null}
     <form
         method="POST"
         action={item ? '?/update' : '?/create'}
@@ -162,7 +193,7 @@
                 id="key"
                 name="key"
                 class="form-control"
-                value={form?.data?.key ?? item?.key ?? ''}
+                value={failed?.key ?? item?.key ?? ''}
                 required
                 pattern="[a-z0-9\-]+"
                 placeholder={m["baroo.backstage.offer.placeholder_key"]()}
@@ -178,7 +209,7 @@
                 id="name"
                 name="name"
                 class="form-control"
-                value={form?.data?.name ?? item?.name ?? ''}
+                value={failed?.name ?? item?.name ?? ''}
                 required
                 placeholder={m["baroo.backstage.offer.placeholder_name"]()}
                 class:error={form?.errors?.name}
@@ -246,6 +277,79 @@
     </form>
 {/snippet}
 
+{#snippet offerPackageForm(item: BarOfferItem)}
+    {@const failed = form?.action === 'createPackage' ? form : null}
+    {@const failedData = failed?.data && 'offerItem' in failed.data ? failed.data : null}
+    <form
+        method="POST"
+        action="?/createPackage"
+        use:enhance={() => {
+            return async ({ update, result }) => {
+                await update();
+                if (result.type === 'success') {
+                    packageLayerCtrl?.close();
+                }
+            };
+        }}
+        class="row g-3"
+    >
+        <input type="hidden" name="offerItem" value={item.id} />
+        <p class="col-12 text-meta">{m["baroo.backstage.offer.packages_info"]()}</p>
+        <div class="input-pair col-md-6">
+            <label for="package.label" class="form-label">{m["baroo.backstage.offer.package_label"]()}</label>
+            <input
+                type="text"
+                id="package.label"
+                name="label"
+                class="form-control"
+                maxlength="40"
+                value={failedData?.label ?? ''}
+                placeholder={m["baroo.backstage.offer.package_label_placeholder"]()}
+            />
+            <FormErrors error={failed?.errors?.label}/>
+        </div>
+        <div class="input-pair col-md-6">
+            <label for="package.quantity" class="form-label">{m["baroo.backstage.offer.package_quantity"]()}</label>
+            <input
+                type="number"
+                id="package.quantity"
+                name="quantity"
+                class="form-control"
+                min="0"
+                step="0.1"
+                required
+                value={failedData?.quantity ?? ''}
+            />
+            <FormErrors error={failed?.errors?.quantity}/>
+            <small>{m["baroo.backstage.offer.package_quantity_help"]()}</small>
+        </div>
+        <div class="input-pair col-12">
+            <label for="package.tagSerial" class="form-label">{m["baroo.backstage.offer.tagSerial"]()}</label>
+            <input
+                type="text"
+                id="package.tagSerial"
+                name="tagSerial"
+                class="form-control font-monospace"
+                value={failedData?.tagSerial ?? ''}
+                autocomplete="off"
+                spellcheck="false"
+                placeholder={m["baroo.backstage.offer.tag_serial_placeholder"]()}
+            />
+            <FormErrors error={failed?.errors?.tagSerial}/>
+            <FormErrors error={failed?.errors?.offerItem}/>
+            <small>{m["baroo.backstage.offer.tag_serial_help"]()}</small>
+        </div>
+        <div class="col-12 actions">
+            <button type="submit" class="btn btn-primary">
+                {m["baroo.backstage.offer.create"]()}
+            </button>
+            <button type="button" class="btn btn-secondary" onclick={() => packageLayerCtrl?.close()}>
+                {m["baroo.backstage.offer.cancel"]()}
+            </button>
+        </div>
+    </form>
+{/snippet}
+
 <style lang="scss">
 .picture-col {
     width: 1%;
@@ -258,6 +362,19 @@
     object-fit: contain;
     border-radius: 0.25rem;
     overflow: clip;
+}
+
+.package-counts {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.content-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
 }
 
 .serving-prices {

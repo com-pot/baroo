@@ -1,40 +1,94 @@
 <script lang="ts">
     import * as m from '$lib/paraglide/messages.js';
     import type { PageData, ActionData } from './$types';
-    import { enhance } from '$app/forms';
+    import { applyAction, deserialize, enhance } from '$app/forms';
+    import { invalidateAll } from '$app/navigation';
     import { onMount } from 'svelte';
-    import { measureLabel } from '$lib/bar/quantity';
-    import { computeOfferStock } from '$lib/bar/stats/barOfferItems';
-    import ClosureDetails from './ClosureDetails.svelte';
-    import { getUiLayers } from '$lib/ui/uiLayers.svelte';
-    import OfferStockBoard from '../../../bar/[ref=storageRef]/OfferStockBoard.svelte';
-    import type { BarOfflineStore } from '$lib/offline/store.svelte';
-    import { type BarOfferItem } from '$lib/bar/BarModel';
-    import { type Measure } from '$lib/si/measure';
+    import { formatQuantity } from '$lib/bar/quantity';
     import { servingPreset } from '$lib/bar/servings';
+    import { packageState, type BarOfferItem } from '$lib/bar/BarModel';
+    import { compareTaps } from '$lib/bar/stats/barOfferItems';
+    import ClosureDetails from './ClosureDetails.svelte';
+    import UnsealForm from './UnsealForm.svelte';
+    import { getUiLayers } from '$lib/ui/uiLayers.svelte';
+    import StockCard from '../../../bar/[ref=storageRef]/StockCard.svelte';
+    import TapBadge from '../../../bar/[ref=storageRef]/TapBadge.svelte';
     import FormErrors from '$lib/components/FormErrors.svelte';
+    import { TAP_STALE_MS, type TapState } from '$lib/taps/tapEvents';
+    import { TapStream } from '$lib/taps/tapStream.svelte';
 
     const uiLayers = getUiLayers()
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
     const snapshot = $derived(data.snapshot)
 
-    const store = $derived.by((): Pick<BarOfflineStore, "stock"> | null => {
-        if (!snapshot) return null
+    // The taps, live while the stream is up
+    let tapStream = $state<TapStream | undefined>();
+    const taps = $derived<TapState[]>((tapStream?.connected ? tapStream.taps : data.taps)
+        .toSorted((a, b) => compareTaps(a.tap, b.tap)));
 
-        const orderItems = Object.values(snapshot.timelines)
-            .map((timeline) => timeline.filter((item) => item.type === "order"))
-            .flat()
-            .map((orderItem) => ({ ...orderItem.data, orderedAt: orderItem.date }))
+    const offerItemOf = (key: string | null): BarOfferItem | null =>
+        (key && snapshot?.offerItems.find((item) => item.key === key)) || null;
 
-        return {
-            stock: computeOfferStock({
-                offerItems: snapshot.offerItems,
-                orderItems: orderItems,
-                unseals: snapshot.unseals,
-            }),
+    onMount(() => {
+        if (!data.taps.length || !data.bar) return;
+
+        const stream = new TapStream({ barSlug: data.bar.slug });
+        tapStream = stream;
+        return stream.start();
+    });
+
+    // Ticks so TapTappers that went quiet show as stale
+    let now = $state(Date.now());
+    onMount(() => {
+        const timer = setInterval(() => (now = Date.now()), 5_000);
+        return () => clearInterval(timer);
+    });
+
+    function tapperAlive(tap: string): boolean | null {
+        if (tapStream?.connected) {
+            const heardAt = tapStream.taps.find((state) => state.tap === tap)?.heardAt ?? null;
+            return heardAt === null ? null : now - heardAt < TAP_STALE_MS;
         }
-    })
+
+        const lastSeenAt = data.taps.find((state) => state.tap === tap)?.lastSeenAt;
+        return lastSeenAt ? now - Date.parse(lastSeenAt) < TAP_STALE_MS : null;
+    }
+
+    function openUnseal(state: TapState) {
+        const layer = uiLayers.pushComponent(UnsealForm, {
+            tap: state,
+            offerItems: snapshot?.offerItems ?? [],
+            packages: (snapshot?.packages ?? []).filter((offerPackage) => packageState(offerPackage) === 'registered'),
+            onSuccess: (() => layer.ctrl.close()) as () => unknown,
+        }, {
+            heading: `${m["baroo.backstage.bar.unseal"]()} — ${state.label}`,
+        })
+    }
+
+    async function flushTap(state: TapState, item: BarOfferItem | null) {
+        if (!state.stock) return
+
+        const confirmed = confirm(m["baroo.bar.stock.flush_confirm"]({
+            name: item?.name ?? state.offerItemKey ?? '',
+            left: item ? formatQuantity(servingPreset(item.servingPreset).measure, state.stock.left) : String(state.stock.left),
+        }))
+        if (!confirmed) return
+
+        const body = new FormData()
+        body.set('packageId', state.stock.packageId)
+
+        const response = await fetch('?/flush', {
+            method: 'POST',
+            body,
+            headers: { 'x-sveltekit-action': 'true' },
+        })
+        const result = deserialize(await response.text())
+
+        if (result.type === 'success') await invalidateAll()
+        await applyAction(result)
+    }
+
     const memberStats = $derived.by(() => {
         if (!snapshot) return []
         return snapshot.members
@@ -173,7 +227,7 @@
                             <button type="submit" class="btn btn-primary">{m["baroo.backstage.bar.save_changes"]()}</button>
                         </div>
 
-                        {#if form?.success && form?.action !== 'createEvent'}
+                        {#if form?.success && !form?.action}
                             <div class="alert alert-success">{m["baroo.backstage.bar.save_success"]()}</div>
                         {/if}
                     </form>
@@ -201,83 +255,67 @@
                 </div>
             </section>
 
-            {#if store}
-            <OfferStockBoard
-                store={store}
-            >
-            {#snippet actionsMenu(offerItem, btnAtrs)}
-                {@const itemClosures = snapshot?.unseals[offerItem.key] ?? []}
-                <li>
-                    <button
-                        type="button"
-                        class="dropdown-item"
-                        {...btnAtrs}
-                        onclick={() => {
-                            const measure = servingPreset(offerItem.servingPreset).measure
-                            const layer = uiLayers.pushSnippet(unsealItemForm, {
-                                offerItem,
-                                measure,
-                                onSuccess: (() => layer.ctrl.close()) as () => unknown
-                            }, {
-                                heading: m["baroo.backstage.bar.unseal"]() + " " + offerItem.name,
-                            })
-                        }}
-                    >
-                        {m["baroo.backstage.bar.unseal"]()}
-                    </button>
-                </li>
-                {#each itemClosures as closure, index}
-                    <li>
-                        <button
-                            type="button"
-                            class="dropdown-item"
-                            {...btnAtrs}
-                            onclick={() => {
-                                const sequenceNumber = itemClosures.length - index
+            {#if taps.length}
+            <section class="col-12" data-name="taps">
+                <h2>{m["baroo.backstage.bar.taps"]()}</h2>
+                <div class="items-grid -tight" style="--item-size: 15rem;">
+                    {#each taps as state (state.tap)}
+                        {@const item = offerItemOf(state.offerItemKey)}
+                        {@const tapClosures = data.closures[state.tap] ?? []}
+                        {#snippet badge()}
+                            <TapBadge tap={state.tap} label={state.label} alive={tapperAlive(state.tap)} />
+                        {/snippet}
+                        {#snippet actions(btnAttrs: Record<string, unknown>)}
+                            <li>
+                                <button type="button" class="dropdown-item" {...btnAttrs} onclick={() => openUnseal(state)}>
+                                    {m["baroo.backstage.bar.unseal"]()}
+                                </button>
+                            </li>
+                            {#if state.stock}
+                                <li>
+                                    <button type="button" class="dropdown-item" {...btnAttrs} onclick={() => flushTap(state, item)}>
+                                        {m["baroo.bar.stock.flush"]()}
+                                    </button>
+                                </li>
+                            {/if}
+                            {#each tapClosures as { closure, closedAt }, index}
+                                {@const sequenceNumber = tapClosures.length - index}
+                                <li>
+                                    <button
+                                        type="button"
+                                        class="dropdown-item"
+                                        {...btnAttrs}
+                                        onclick={() => {
+                                            uiLayers.pushComponent(ClosureDetails, { closure, closedAt, offerItem: offerItemOf(closure.offerItemKey) }, {
+                                                heading: `#${sequenceNumber} - ${closure.offerItemName}`
+                                            })
+                                        }}
+                                    >
+                                        #{sequenceNumber} - {closure.offerItemName}, {new Date(closedAt).toLocaleDateString()}
+                                    </button>
+                                </li>
+                            {/each}
+                        {/snippet}
 
-                                uiLayers.pushComponent(ClosureDetails, {event: closure, offerItem: offerItem}, {
-                                    heading: `#${sequenceNumber} - ${offerItem.name}`
-                                })
-                            }}
-                        >
-                            #{itemClosures.length - index} - {new Date(closure.occurredAt).toLocaleDateString()}
-                        </button>
-                    </li>
-                {/each}
-            {/snippet}
-            </OfferStockBoard>
+                        <StockCard
+                            {item}
+                            title={item?.name ?? state.offerItemKey ?? m["baroo.bar.tap.nothing_on_tap"]()}
+                            measure={item ? servingPreset(item.servingPreset).measure : "volume"}
+                            left={state.stock?.left ?? null}
+                            total={state.stock?.quantity ?? 0}
+                            empty={m["baroo.bar.tap.nothing_on_tap"]()}
+                            highlight={!!state.stock}
+                            {badge}
+                            actionsMenu={actions}
+                        />
+                    {/each}
+                </div>
+            </section>
             {/if}
         </div>
     {/if}
 </main>
 
-{#snippet unsealItemForm({ offerItem, measure, onSuccess }: { offerItem: BarOfferItem, measure: Measure, onSuccess: () => unknown })}
-    <form method="POST" action="?/createEvent" use:enhance={() => {
-        return async ({ update, result }) => {
-            await update()
-            onSuccess()
-        }
-    }}>
-        <input type="hidden" name="eventType" value="unseal" />
-        <input type="hidden" name="offerItemKey" value={offerItem.key} />
-        <div class="input-group input-group-sm">
-            <input
-                type="number"
-                name="quantity"
-                class="form-control"
-                min={measure === 'count' ? 1 : 0.1}
-                step={measure === 'count' ? 1 : 0.1}
-                required
-                placeholder={m["baroo.backstage.bar.unseal_quantity"]({
-                    measure: measureLabel(measure),
-                })}
-            />
-            <button type="submit" class="btn btn-primary">
-                {m["baroo.backstage.bar.unseal"]()}
-            </button>
-        </div>
-    </form>
-{/snippet}
 
 <style lang="scss">
 

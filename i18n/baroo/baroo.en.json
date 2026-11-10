@@ -18,7 +18,8 @@
                 "title_summary": "Summary - {userName}",
                 "items": "Items",
                 "confirm": "Confirm",
-                "cancel": "Cancel"
+                "cancel": "Cancel",
+                "off_tap": "Off tap"
             },
             "summary": {
                 "item": "Item",
@@ -29,16 +30,34 @@
                 "unknown_tag": "Unknown tag {serialId}",
                 "tag_unreadable": "Cannot read data from the NFC tag.",
                 "idle": "Idle",
-                "unknown_member_seq": "Nobody holds badge number {seq}"
+                "unknown_member_seq": "Nobody holds badge number {seq}",
+                "tap_unsealed": "Tap {tap}: tapped {name} ({package})",
+                "tap_unset": "Nothing is on tap {tap} — tap a package tag on it.",
+                "pending_order_failed": "Could not file the order for {name}: {error}",
+                "tap_order_filed": "Order for {name} filed"
+            },
+            "tap": {
+                "title": "Tap {tap}",
+                "dismiss": "Discard",
+                "unknown_item": "“{key}” is not on the offer. Tap the package onto the tap again.",
+                "disconnected": "Not connected to the taps",
+                "nothing_on_tap": "nothing on tap",
+                "lineup_title": "Taps",
+                "tapper_alive": "TapTapper connected",
+                "tapper_quiet": "TapTapper not checking in",
+                "none": "No tap",
+                "unseal_onto": "Tap a new package"
             },
             "nfc": "NFC",
             "stock": {
                 "title": "Stock",
                 "actions": "Actions",
                 "unseal_new": "Unseal new package",
+                "flush": "Flush the package",
+                "flush_confirm": "Close the {name} package? {left} left, it gets written off.",
                 "remaining": "Remaining",
                 "of_total": "of {total}",
-                "not_unsealed": "Unsealed",
+                "not_unsealed": "Not unsealed",
                 "empty": "This bar has nothing on offer yet."
             }
         },
@@ -77,6 +96,7 @@
                 "most_orders": "Most orders",
                 "unseal": "Unseal",
                 "unseal_quantity": "Quantity ({measure})",
+                "taps": "Taps",
                 "quantity_left": "{left} left of {total}",
                 "package_sequenced": "Package #{sequenceNumber}",
                 "total_quantity": "Total:",
@@ -87,7 +107,8 @@
                     "overview": "Overview",
                     "offer": "Offer",
                     "members": "Members",
-                    "pos": "PoS's"
+                    "pos": "PoS's",
+                    "taps": "Taps"
                 },
                 "other_variants": "Other"
             },
@@ -141,7 +162,23 @@
                 "serving_prices": "Serving prices",
                 "picture": "Picture",
                 "picture_hint": "Square, {max} at most.",
-                "picture_current": "Current picture"
+                "picture_current": "Current picture",
+                "packages": "Packages",
+                "packages_info": "A package of the item and what it holds — a 50 l keg, a case of 24. Its tag tapped on a TapTapper taps the package onto that tap.",
+                "packages_registered": "Registered",
+                "packages_unsealed": "Unsealed",
+                "packages_flushed": "Flushed",
+                "add_package": "Add package",
+                "package_item_unknown": "This item is not the bar's.",
+                "package_label": "Label",
+                "package_label_placeholder": "e.g. Keg",
+                "package_quantity": "Holds",
+                "package_quantity_help": "In the item's measure, litres or pieces.",
+                "tagSerial": "Package NFC tag",
+                "tag_serial_placeholder": "e.g. 04a1b2c3d4e5f6",
+                "tag_serial_help": "Tapping it on a TapTapper taps the package onto its tap. To find the tag id, tap it on a TapTapper — the kiosk shows it as an unknown tag. Once the package is flushed, the tag may go on a new one.",
+                "tag_serial_taken": "This tag already belongs to the package {name}.",
+                "tag_serial_card": "This is {name}'s member card."
             },
             "summaries": {
                 "title": "Member Summaries",
@@ -218,6 +255,38 @@
                 "nada": "Nothing due",
                 "due": "Due {amountWithCurrency}",
                 "toReturn": "To return {amountWithCurrency}"
+            },
+            "taps": {
+                "title": "Taps",
+                "create": "Add a tap",
+                "none": "No taps yet. Add one, configure it and authorize it — its TapTapper gets the config file.",
+                "tap": "Tap",
+                "now_serving": "On tap",
+                "pos_device": "POS device",
+                "last_seen": "Last seen",
+                "authorization": "Authorization",
+                "authorization.unauthorized": "Not authorized",
+                "authorization.expired": "Token expired",
+                "authorization.changed": "Changed config not authorized",
+                "authorization.authorized": "Authorized",
+                "valid_through": "Valid through {date}",
+                "configure": "Configure",
+                "delete": "Delete",
+                "delete_confirm": "Delete {tap}? Its TapTapper stops working.",
+                "name": "Name",
+                "config_legend": "Config ({model})",
+                "authorize": "Authorize and download config.py",
+                "authorize_confirm": "Authorize {tap} again? The TapTapper stops working until it gets the new config.py.",
+                "authorize_hint": "Saving keeps the config for later. Authorizing issues the tap a new token in config.py — save it to the Pico. The previous token stops working.",
+                "wifi": {
+                    "title": "Wifi networks",
+                    "hint": "The networks the taps of this bar can join. A changed network needs the taps using it authorized again.",
+                    "ssid": "Network name (SSID)",
+                    "password": "Password",
+                    "password_keep": "Unchanged",
+                    "country": "Country",
+                    "remove_confirm": "Remove the network {ssid}?"
+                }
             }
         },
         "pos": {
@@ -240,6 +309,18 @@
                 "kiosk": "Self-service kiosk",
                 "staff": "Staff register"
             }
+        },
+        "tap_screen": {
+            "tap_card": "Tap your card",
+            "no_drink": "No drink",
+            "tap_package_tag": "Tap a package tag",
+            "unsealed": "Tapped",
+            "greeting_unknown": "Hi!",
+            "pick_size": "Pick the size on the tablet",
+            "no_kiosk": "No tablet listening",
+            "no_kiosk_hint": "Tell the barman",
+            "unset_title": "Nothing on this tap",
+            "unknown_card": "Unknown card"
         },
         "enroll": {
             "title": "Pair this device",
@@ -290,6 +371,7 @@
             "op_mapping": "Tag {serialId} → {nickName}",
             "op_settlement": "Settled {nickName}: {amountPaid}",
             "op_unseal": "Opened {offerItem}",
+            "op_flush": "Flushed {offerItem}",
             "op_device_config": "Device preferences",
             "device_prefs": "Device preferences",
             "device_prefs_title": "{label} preferences",
@@ -303,6 +385,10 @@
             "unseal_section": "Open a package",
             "unseal_item": "Offer item",
             "unseal_quantity": "Quantity ({measure})",
+            "unseal_package": "Package",
+            "unseal_package_new": "New package",
+            "unseal_tap": "Onto tap",
+            "unseal_flush_current_hint": "{name} gets flushed, the {left} left are written off.",
             "unseal_submit": "Open it",
             "unauthorized": "This is a guest kiosk. Enrol it as a staff device to get here.",
             "op_member": "New member {nickName} (#{seq})",
@@ -342,6 +428,38 @@
             "deactivate": "Deactivate",
             "activate": "Activate",
             "enrolled_by": "Enrolled by"
+        },
+        "tap": {
+            "config": {
+                "server": "Server address",
+                "server.help": "Where baroo runs, by IP address — the TapTapper cannot resolve .local names.",
+                "wifiNetwork": "Wifi network",
+                "buzzerPin": "Buzzer pin",
+                "buzzerPin.help": "GPIO of the buzzer module, empty for the on-board LED only.",
+                "buzzerActiveLow": "Buzzer sounds on LOW",
+                "display": "Display",
+                "displayMadctl": "Display orientation",
+                "displayMadctl.value": {
+                    "0x48": "Normal",
+                    "0x40": "Red and blue swapped",
+                    "0x88": "Upside down",
+                    "0x08": "Mirrored"
+                },
+                "buttons": "Size buttons",
+                "buttons.help": "Left to right. They serve the sizes the drink on tap comes in, smallest first.",
+                "buttons.pin": "GPIO pin",
+                "buttons.color": "Color",
+                "watchdog": "Watchdog",
+                "watchdog.help": "Reboots a TapTapper that hangs. Off while working in Thonny."
+            },
+            "palette": {
+                "yellow": "Yellow",
+                "red": "Red",
+                "green": "Green",
+                "blue": "Blue",
+                "white": "White",
+                "black": "Black"
+            }
         }
     }
 }

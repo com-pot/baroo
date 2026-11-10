@@ -1,17 +1,20 @@
-import type { Bar, BarMember, BarOfferItem } from '$lib/bar/BarModel';
-import type { UnsealEvent } from '$lib/bar/ops/unseal';
+import type { Bar, BarMember, BarOfferItem, OfferPackage } from '$lib/bar/BarModel';
 import type { MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
 import type { TagMapping } from '$lib/bar/tags';
 import type { PosDevice } from '$lib/pos/device';
+import type { BarTap } from '$lib/taps/barTap';
 
 export type BarSnapshot = {
     capturedAt: string;
     bar: Bar;
     offerItems: BarOfferItem[];
+    /** Registered and unsealed, missing in snapshots from before packages */
+    packages?: OfferPackage[];
     members: BarMember[];
     mappings: TagMapping[];
     timelines: Record<BarMember['id'], MemberTimelineEntry[]>;
-    unseals: Record<BarOfferItem['key'], UnsealEvent[]>;
+    /** The bar's taps, missing in snapshots from before they were prepared in backstage */
+    taps?: Pick<BarTap, 'sequence' | 'name'>[];
 };
 
 export type DeviceIdentity = {

@@ -10,7 +10,9 @@
         "action": {
             "open": "Open",
             "copy": "copy",
-            "save": "Save"
+            "save": "Save",
+            "add": "Add",
+            "remove": "Remove"
         },
         "list": {
             "no_items": "No items to display."

@@ -10,7 +10,9 @@
         "action": {
             "open": "Otevřít",
             "copy": "kopírovat",
-            "save": "Uložit"
+            "save": "Uložit",
+            "add": "Přidat",
+            "remove": "Odebrat"
         },
         "list": {
             "no_items": "Žádné položky k zobrazení."

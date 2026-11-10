@@ -220,8 +220,8 @@
   },
   {
     "id": "pbc_3189002037",
-    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
-    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && member.bar = @request.auth.bar)",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && member.bar = @request.auth.bar)",
     "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "deleteRule": "@request.auth.roles.name ?= \"bar-manager\"",
@@ -287,8 +287,8 @@
   },
   {
     "id": "pbc_661968279",
-    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
-    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && bar = @request.auth.bar)",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && bar = @request.auth.bar)",
     "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "deleteRule": "@request.auth.roles.name ?= \"bar-manager\"",
@@ -411,8 +411,8 @@
   },
   {
     "id": "pbc_3741736354",
-    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
-    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && bar = @request.auth.bar)",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && bar = @request.auth.bar)",
     "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "deleteRule": "@request.auth.roles.name ?= \"bar-manager\"",
@@ -558,9 +558,9 @@
   },
   {
     "id": "pbc_3753202870",
-    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
-    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
-    "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && customer.bar = @request.auth.bar)",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && customer.bar = @request.auth.bar)",
+    "createRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && customer.bar = @request.auth.bar)",
     "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "deleteRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "name": "bar_order_items",
@@ -647,6 +647,32 @@
         "type": "text"
       },
       {
+        "cascadeDelete": false,
+        "collectionId": "pbc_bar_taps",
+        "hidden": false,
+        "id": "relation_bar_order_items_tap",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "tap",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_bar_offer_packages",
+        "hidden": false,
+        "id": "relation_bar_order_items_package",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "package",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
         "hidden": false,
         "id": "autodate2990389176",
         "name": "created",
@@ -669,14 +695,15 @@
     ],
     "indexes": [
       "CREATE UNIQUE INDEX `idx_bar_order_items_clientId` ON `bar_order_items` (`clientId`) WHERE `clientId` != ''",
-      "CREATE INDEX `idx_bar_order_items_orderedAt` ON `bar_order_items` (`orderedAt`)"
+      "CREATE INDEX `idx_bar_order_items_orderedAt` ON `bar_order_items` (`orderedAt`)",
+      "CREATE INDEX `idx_bar_order_items_package` ON `bar_order_items` (`package`)"
     ],
     "system": false
   },
   {
     "id": "pbc_2044303067",
-    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
-    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && id = @request.auth.bar)",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && id = @request.auth.bar)",
     "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "deleteRule": "@request.auth.roles.name ?= \"bar-manager\"",
@@ -916,7 +943,7 @@
     "id": "pbc_1687431684",
     "listRule": "",
     "viewRule": "",
-    "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "createRule": "@request.auth.roles.name ?= \"bar-manager\" || @request.auth.collectionName = \"bar_taps\"",
     "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "deleteRule": "",
     "name": "events",
@@ -1294,6 +1321,531 @@
     "indexes": [
       "CREATE UNIQUE INDEX `idx_pos_enrollment_codes_code` ON `pos_enrollment_codes` (`code`)",
       "CREATE UNIQUE INDEX `idx_pos_enrollment_codes_device` ON `pos_enrollment_codes` (`device`)"
+    ],
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "deleteRule": "@request.auth.roles.name ?= \"bar-manager\""
+  },
+  {
+    "id": "pbc_bar_offer_packages",
+    "name": "bar_offer_packages",
+    "type": "base",
+    "system": false,
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_3741736354",
+        "hidden": false,
+        "id": "relation_offerItem",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "offerItem",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_package_label",
+        "max": 40,
+        "min": 0,
+        "name": "label",
+        "pattern": "",
+        "presentable": true,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "number_package_quantity",
+        "max": null,
+        "min": 0,
+        "name": "quantity",
+        "onlyInt": false,
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_package_tagSerial",
+        "max": 32,
+        "min": 0,
+        "name": "tagSerial",
+        "pattern": "^[0-9a-f]*$",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_bar_taps",
+        "hidden": false,
+        "id": "relation_bar_offer_packages_tap",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "tap",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "date_bar_offer_packages_unsealedAt",
+        "max": "",
+        "min": "",
+        "name": "unsealedAt",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "date_bar_offer_packages_flushedAt",
+        "max": "",
+        "min": "",
+        "name": "flushedAt",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_bar_offer_packages_offerItem` ON `bar_offer_packages` (`offerItem`)",
+      "CREATE INDEX `idx_bar_offer_packages_tagSerial` ON `bar_offer_packages` (`tagSerial`)",
+      "CREATE INDEX `idx_bar_offer_packages_tap` ON `bar_offer_packages` (`tap`)"
+    ],
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && offerItem.bar = @request.auth.bar)",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && offerItem.bar = @request.auth.bar)",
+    "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "updateRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && offerItem.bar = @request.auth.bar)",
+    "deleteRule": "@request.auth.roles.name ?= \"bar-manager\""
+  },
+  {
+    "id": "pbc_bar_taps",
+    "listRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && bar = @request.auth.bar)",
+    "viewRule": "@request.auth.roles.name ?= \"bar-manager\" || (@request.auth.collectionName = \"bar_taps\" && bar = @request.auth.bar)",
+    "createRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "updateRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "deleteRule": "@request.auth.roles.name ?= \"bar-manager\"",
+    "name": "bar_taps",
+    "type": "auth",
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_tokenKey_bar_taps` ON `bar_taps` (`tokenKey`)",
+      "CREATE UNIQUE INDEX `idx_email_bar_taps` ON `bar_taps` (`email`) WHERE `email` != ''",
+      "CREATE UNIQUE INDEX `idx_bar_taps_bar_sequence` ON `bar_taps` (`bar`, `sequence`)"
+    ],
+    "system": false,
+    "authRule": "",
+    "manageRule": null,
+    "authAlert": {
+      "enabled": false,
+      "emailTemplate": {
+        "subject": "Login from a new location",
+        "body": "<p>Hello,</p>\n<p>We noticed a login to your {APP_NAME} account from a new location.</p>\n<p>If this was you, you may disregard this email.</p>\n<p><strong>If this wasn't you, you should immediately change your {APP_NAME} account password to revoke access from all other locations.</strong></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+      }
+    },
+    "oauth2": {
+      "mappedFields": {
+        "id": "",
+        "name": "",
+        "username": "",
+        "avatarURL": ""
+      },
+      "enabled": false
+    },
+    "passwordAuth": {
+      "enabled": false,
+      "identityFields": [
+        "email"
+      ]
+    },
+    "mfa": {
+      "enabled": false,
+      "duration": 1800,
+      "rule": ""
+    },
+    "otp": {
+      "enabled": false,
+      "duration": 180,
+      "length": 8,
+      "emailTemplate": {
+        "subject": "OTP for {APP_NAME}",
+        "body": "<p>Hello,</p>\n<p>Your one-time password is: <strong>{OTP}</strong></p>\n<p><i>If you didn't ask for the one-time password, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+      }
+    },
+    "authToken": {
+      "duration": 31536000
+    },
+    "passwordResetToken": {
+      "duration": 1800
+    },
+    "emailChangeToken": {
+      "duration": 1800
+    },
+    "verificationToken": {
+      "duration": 259200
+    },
+    "fileToken": {
+      "duration": 180
+    },
+    "verificationTemplate": {
+      "subject": "Verify your {APP_NAME} email",
+      "body": "<p>Hello,</p>\n<p>Thank you for joining us at {APP_NAME}.</p>\n<p>Click on the button below to verify your email address.</p>\n<p>\n  <a class=\"btn\" href=\"{APP_URL}/_/#/auth/confirm-verification/{TOKEN}\" target=\"_blank\" rel=\"noopener\">Verify</a>\n</p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+    },
+    "resetPasswordTemplate": {
+      "subject": "Reset your {APP_NAME} password",
+      "body": "<p>Hello,</p>\n<p>Click on the button below to reset your password.</p>\n<p>\n  <a class=\"btn\" href=\"{APP_URL}/_/#/auth/confirm-password-reset/{TOKEN}\" target=\"_blank\" rel=\"noopener\">Reset password</a>\n</p>\n<p><i>If you didn't ask to reset your password, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+    },
+    "confirmEmailChangeTemplate": {
+      "subject": "Confirm your {APP_NAME} new email address",
+      "body": "<p>Hello,</p>\n<p>Click on the button below to confirm your new email address.</p>\n<p>\n  <a class=\"btn\" href=\"{APP_URL}/_/#/auth/confirm-email-change/{TOKEN}\" target=\"_blank\" rel=\"noopener\">Confirm new email</a>\n</p>\n<p><i>If you didn't ask to change your email address, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>"
+    },
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text_bar_taps_id",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cost": 0,
+        "hidden": true,
+        "id": "password_bar_taps",
+        "max": 0,
+        "min": 8,
+        "name": "password",
+        "pattern": "",
+        "presentable": false,
+        "required": true,
+        "system": true,
+        "type": "password"
+      },
+      {
+        "autogeneratePattern": "[a-zA-Z0-9]{50}",
+        "hidden": true,
+        "id": "text_bar_taps_tokenKey",
+        "max": 60,
+        "min": 30,
+        "name": "tokenKey",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "exceptDomains": null,
+        "hidden": false,
+        "id": "email_bar_taps",
+        "name": "email",
+        "onlyDomains": null,
+        "presentable": false,
+        "required": false,
+        "system": true,
+        "type": "email"
+      },
+      {
+        "hidden": false,
+        "id": "bool_bar_taps_emailVisibility",
+        "name": "emailVisibility",
+        "presentable": false,
+        "required": false,
+        "system": true,
+        "type": "bool"
+      },
+      {
+        "hidden": false,
+        "id": "bool_bar_taps_verified",
+        "name": "verified",
+        "presentable": false,
+        "required": false,
+        "system": true,
+        "type": "bool"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_2044303067",
+        "hidden": false,
+        "id": "relation_bar_taps_bar",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "bar",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "number_bar_taps_sequence",
+        "max": 999,
+        "min": 1,
+        "name": "sequence",
+        "onlyInt": true,
+        "presentable": true,
+        "required": true,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_bar_taps_name",
+        "max": 40,
+        "min": 0,
+        "name": "name",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_pos_devices",
+        "hidden": false,
+        "id": "relation_bar_taps_posDevice",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "posDevice",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_3741736354",
+        "hidden": false,
+        "id": "relation_bar_taps_nowServing",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "nowServing",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "select_bar_taps_model",
+        "maxSelect": 1,
+        "name": "model",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "tap-tapper_v1.0"
+        ]
+      },
+      {
+        "hidden": false,
+        "id": "json_bar_taps_config",
+        "maxSize": 0,
+        "name": "config",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_bar_taps_configChecksum",
+        "max": 64,
+        "min": 0,
+        "name": "configChecksum",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "date_bar_taps_validThrough",
+        "max": "",
+        "min": "",
+        "name": "validThrough",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "date_bar_taps_lastSeen",
+        "max": "",
+        "min": "",
+        "name": "lastSeen",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_bar_taps_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_bar_taps_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ]
+  },
+  {
+    "id": "pbc_app_settings",
+    "name": "app_settings",
+    "type": "base",
+    "system": false,
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text_app_settings_id",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_app_settings_namespace",
+        "max": 80,
+        "min": 0,
+        "name": "namespace",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_app_settings_key",
+        "max": 80,
+        "min": 0,
+        "name": "key",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "json_app_settings_value",
+        "maxSize": 0,
+        "name": "value",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_app_settings_created",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate_app_settings_updated",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_app_settings_namespace_key` ON `app_settings` (`namespace`, `key`)"
     ],
     "listRule": "@request.auth.roles.name ?= \"bar-manager\"",
     "viewRule": "@request.auth.roles.name ?= \"bar-manager\"",

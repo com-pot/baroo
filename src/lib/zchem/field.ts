@@ -2,17 +2,21 @@ import * as z from "zod";
 import * as m from "$lib/paraglide/messages.js";
 
 export type FieldMeta = {
-    /** Labels of enum values, by `${enumI18nPrefix}${value}` */
-    enumI18nPrefix?: string;
-    /** A select of the options the form gets under this name */
+    optionsI18nPrefix?: string;
     optionsFrom?: string;
     /** Color swatches, the value is the picked one's index */
     palette?: readonly { key: string; fill: string; text?: string }[];
-    /** Labels of the swatches, by `${paletteI18nPrefix}${key}` */
-    paletteI18nPrefix?: string;
 };
 
-export type FieldKind = "string" | "number" | "boolean" | "enum" | "array" | "unknown";
+const kinds = {
+    string: "string",
+    number: "number",
+    boolean: "boolean",
+    enum: "enum",
+    array: "array",
+} as const
+
+export type FieldKind = keyof typeof kinds | "unknown";
 
 export type FieldShape = {
     kind: FieldKind;
@@ -41,18 +45,10 @@ export function describeField(schema: z.ZodType): FieldShape {
         }
     }
 
-    const kinds: Record<string, FieldKind> = {
-        string: "string",
-        number: "number",
-        boolean: "boolean",
-        enum: "enum",
-        array: "array",
-    };
-
-    return { kind: kinds[base.type] ?? "unknown", base, nullable, meta };
+    const kind: FieldKind = base.type in kinds ? kinds[base.type as keyof typeof kinds] : "unknown"
+    return { kind, base, nullable, meta };
 }
 
-/** A message by a key put together at runtime, `undefined` when there is none */
 export function messageOf(key: string): string | undefined {
     const messages = m as unknown as Record<string, (() => string) | undefined>;
     return key in messages ? messages[key]?.() : undefined;

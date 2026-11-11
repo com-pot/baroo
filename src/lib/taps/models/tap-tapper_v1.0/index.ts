@@ -14,18 +14,18 @@ export const configSchema = z.object({
 
     display: z.boolean().default(true),
     displayMadctl: z.enum(['0x48', '0x40', '0x88', '0x08']).default('0x48').meta({
-        enumI18nPrefix: 'baroo.tap.config.displayMadctl.value.',
+        optionsI18nPrefix: 'baroo.tap.config.displayMadctl.value.',
     }),
 
     buttons: z.array(z.object({
         pin: gpio.default(0),
-        color: z.number().int().min(0).max(BUTTON_PALETTE.length - 1).default(0).meta({
+        color: z.string().default(BUTTON_PALETTE[0].key).meta({
             palette: BUTTON_PALETTE,
-            paletteI18nPrefix: 'baroo.tap.palette.',
+            optionsI18nPrefix: 'color.',
         }),
     })).max(4).default([
-        { pin: 1, color: 0 },
-        { pin: 0, color: 1 },
+        { pin: 1, color: BUTTON_PALETTE[0].key },
+        { pin: 0, color: BUTTON_PALETTE[1].key },
     ]),
 
     watchdog: z.boolean().default(true),

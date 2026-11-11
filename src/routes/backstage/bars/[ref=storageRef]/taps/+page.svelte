@@ -11,6 +11,7 @@
     import { tapLabel } from "$lib/taps/barTap";
     import { TAP_STALE_MS } from "$lib/taps/tapEvents";
     import TapBadge from "../../../../bar/[ref=storageRef]/TapBadge.svelte";
+    import { setOptionsList } from "$lib/ui/zchem/optionsLists";
 
     type Tap = PageData["taps"][number];
 
@@ -29,6 +30,7 @@
     const wifiOptions = $derived({
         wifiNetworks: data.wifiNetworks.map((network) => ({ value: network.id, label: network.ssid })),
     });
+    setOptionsList(() => wifiOptions)
 
     // Ticks so taps that went quiet show as such
     let now = $state(Date.now());
@@ -315,7 +317,6 @@
                     bind:data={draft.config}
                     i18nPrefix="baroo.tap.config."
                     idSuffix={tap.id}
-                    options={wifiOptions}
                 />
             </fieldset>
         {/if}

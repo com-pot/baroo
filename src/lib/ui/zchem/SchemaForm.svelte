@@ -1,8 +1,3 @@
-<script lang="ts" module>
-    /** Choices for fields with `optionsFrom` meta, by its value */
-    export type SchemaFormOptions = Record<string, { value: string, label: string }[]>;
-</script>
-
 <script lang="ts">
     import z from "zod";
     import { messageOf } from "$lib/zchem/field";
@@ -16,7 +11,6 @@
         idSuffix,
         fieldId = (name: string) => (idSuffix ? `${name}-${idSuffix}` : name),
         wrapperClasses = {},
-        options = {},
         layout = "stack",
     }: {
         schema: z.ZodObject,
@@ -25,7 +19,6 @@
         idSuffix?: string,
         fieldId?: (name: string) => string,
         wrapperClasses?: Record<string, string | undefined>,
-        options?: SchemaFormOptions,
         layout?: "row" | "stack",
     } = $props();
 </script>
@@ -39,7 +32,6 @@
             help={messageOf(`${i18nPrefix}${name}.help`)}
             {fieldId}
             {i18nPrefix}
-            {options}
 
             wrapperClass={wrapperClasses[name] ?? ''}
 

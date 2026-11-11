@@ -451,14 +451,6 @@
                 "buttons.color": "Color",
                 "watchdog": "Watchdog",
                 "watchdog.help": "Reboots a TapTapper that hangs. Off while working in Thonny."
-            },
-            "palette": {
-                "yellow": "Yellow",
-                "red": "Red",
-                "green": "Green",
-                "blue": "Blue",
-                "white": "White",
-                "black": "Black"
             }
         }
     }

@@ -52,7 +52,7 @@
                 <StockCard
                     {item}
                     title={item?.name ?? tap.offerItemKey ?? m["baroo.bar.tap.nothing_on_tap"]()}
-                    measure={item ? servingPreset(item.servingPreset).measure : "volume"}
+                    measure={item?.measure ?? "volume"}
                     left={tap.stock?.left ?? null}
                     total={tap.stock?.quantity ?? 0}
                     empty={tap.offerItemKey ? m["baroo.bar.stock.not_unsealed"]() : m["baroo.bar.tap.nothing_on_tap"]()}

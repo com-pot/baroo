@@ -1,8 +1,12 @@
 <script lang="ts">
     import z from "zod";
     import { describeField, messageOf } from "$lib/zchem/field";
-    import SchemaForm, { type SchemaFormOptions } from "./SchemaForm.svelte";
+    import SchemaForm from "./SchemaForm.svelte";
     import * as m from "$lib/paraglide/messages.js";
+    import { getOptionsLists } from "./optionsLists";
+
+    const getOptionsListsFn = getOptionsLists()
+    const options = $derived(getOptionsListsFn())
 
     let {
         inputSchema,
@@ -15,7 +19,6 @@
         placeholder,
         /** Captions of nested fields, by `${i18nPrefix}${name}.${field}` */
         i18nPrefix = "",
-        options = {},
 
         value = $bindable(null),
     }: {
@@ -28,7 +31,6 @@
         wrapperClass?: string,
         placeholder?: string,
         i18nPrefix?: string,
-        options?: SchemaFormOptions,
 
         value: any,
     } = $props()
@@ -37,7 +39,7 @@
 
     const enumOptions = $derived.by(() => {
         if (field.base.type !== 'enum') return []
-        const prefix = field.meta.enumI18nPrefix
+        const prefix = field.meta.optionsI18nPrefix
 
         return ((field.base as z.ZodEnum).options as string[]).map((value) => ({
             value,
@@ -74,10 +76,10 @@
     <fieldset class="input-pair palette {wrapperClass}" data-name={name}>
         <legend class="form-label">{caption}</legend>
         <div class="swatches">
-            {#each field.meta.palette as color, index (color.key)}
-                {@const label = messageOf(`${field.meta.paletteI18nPrefix ?? ''}${color.key}`) ?? color.key}
+            {#each field.meta.palette as color (color.key)}
+                {@const label = messageOf(`${field.meta.optionsI18nPrefix ?? ''}${color.key}`) ?? color.key}
                 <label class="swatch" title={label} style:--swatch={color.fill}>
-                    <input type="radio" name={fieldId(name)} value={index} checked={value === index} onchange={() => (value = index)} />
+                    <input type="radio" name={fieldId(name)} value={color.key} checked={value === color.key} onchange={() => (value = color.key)} />
                     <span class="visually-hidden">{label}</span>
                 </label>
             {/each}
@@ -150,7 +152,6 @@
                     bind:data={value[index]}
                     i18nPrefix={`${i18nPrefix}${name}.`}
                     fieldId={(nested) => fieldId(`${name}-${index}-${nested}`)}
-                    {options}
                     layout="row"
                 />
                 <button class="btn btn-sm btn-outline-danger" type="button" onclick={() => removeRow(index)}>

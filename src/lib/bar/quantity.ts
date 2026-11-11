@@ -18,5 +18,5 @@ export function packageLabel(offerPackage: { label: string; quantity: number }, 
 
 export function measureLabel(measure: Measure): string {
     if (!measure || !knownMeasures.index[measure]) measure = "count"
-    return m[`generic.measure.${measure}`]()
+    return m[`generic.measure.mode.${measure}`]()
 }

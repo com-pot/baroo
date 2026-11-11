@@ -6,7 +6,6 @@
     import FileDrop from '$lib/components/FileDrop.svelte';
     import {
         SERVING_PRESETS,
-        servingLabel,
         servingPreset,
         servingText,
         type ServingPreset,
@@ -112,8 +111,8 @@
                                 <td>
                                     <div class="pricing-display">
                                         {#if item.pricing && Object.keys(item.pricing).length > 0}
-                                            {#each Object.entries(item.pricing) as [variant, price]}
-                                                <span class="badge bg-info">{servingLabel(item.servingPreset, variant)}: {renderer.formatCurrency("czk", price)}</span>
+                                            {#each item.servings as serving (serving.key)}
+                                                <span class="badge bg-info">{servingText(serving, item.measure)}: {renderer.formatCurrency("czk", item.pricing[serving.key])}</span>
                                             {/each}
                                         {:else}
                                             <span class="text-muted">{m["baroo.backstage.offer.no_pricing"]()}</span>

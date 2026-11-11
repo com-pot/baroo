@@ -1,3 +1,4 @@
+import z from 'zod';
 import { error, json } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import type { RequestHandler } from './$types';
@@ -8,8 +9,12 @@ import { requireTap, type TapSession } from '$lib/taps/tapAuth.server';
 import { broadcastTaps, tapState } from '$lib/taps/tapBoard.server';
 import { lookupCard, lookupDrink, lookupPackageTag, type Package } from '$lib/taps/tapLookup.server';
 import { emit, openOffer } from '$lib/taps/tapHub.server';
-import { OFFER_WAIT_MS, SCREEN_HOLD_MS, tapButtons, tapScreens, tapVariants } from '$lib/taps/tapScreens.server';
-import { TAP_UNSEAL_PREFIX, tapScanSchema, type TapScanResult } from '$lib/taps/tapEvents';
+import { OFFER_WAIT_MS, SCREEN_HOLD_MS, tapButtons, tapScreens } from '$lib/taps/tapScreens.server';
+import { cardUid, TAP_UNSEAL_PREFIX, type TapScanResult } from '$lib/taps/tapEvents';
+
+const tapScanSchema = z.object({
+    uid: cardUid,
+});
 
 /**
  * Card tapped at a TapTapper
@@ -70,9 +75,11 @@ export const POST: RequestHandler = async (event) => {
     });
 
     const drink = await lookupDrink(session.pb, barSlug, offerItemKey);
-    const variants = drink ? tapVariants(drink) : [];
+    const variants = drink?.servings ?? [];
     // The buttons answer the variants in order, the ones past the last button only a kiosk
-    const sizes = variants.slice(0, tapButtons(session.tap).length).map((variant) => variant.key);
+    const sizes = variants
+        .slice(0, tapButtons(session.tap).length)
+        .map((variant) => variant.key)
     const answerable = delivered > 0 || sizes.length > 0;
 
     return reply({

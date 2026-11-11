@@ -32,7 +32,7 @@ async function readTapStates(pb: Db, barSlug: string): Promise<TapState[]> {
             filter: pb.filter('bar.slug = {:barSlug}', { barSlug }),
             fields: 'id,sequence,name,lastSeen',
         }),
-        pb.collection<BarOfferPackage & { expand?: { offerItem?: Pick<BarOfferItem, 'key' | 'servingPreset'> } }>('bar_offer_packages').getFullList({
+        pb.collection<BarOfferPackage & { expand?: { offerItem?: Pick<BarOfferItem, 'key' | 'servings'> } }>('bar_offer_packages').getFullList({
             filter: pb.filter('offerItem.bar.slug = {:barSlug} && tap != "" && unsealedAt != "" && flushedAt = ""', { barSlug }),
             sort: '-unsealedAt',
             expand: 'offerItem',
@@ -59,10 +59,7 @@ async function readTapStates(pb: Db, barSlug: string): Promise<TapState[]> {
                 stock: offerPackage && item
                     ? {
                         quantity: roundQuantity(offerPackage.quantity),
-                        left: quantityLeft(offerPackage.quantity, consumedBy(
-                            item.servingPreset,
-                            orders.filter((order) => order.package === offerPackage.id),
-                        )),
+                        left: quantityLeft(offerPackage.quantity, consumedBy(item, orders.filter((order) => order.package === offerPackage.id))),
                         unsealedAt: toIsoDate(offerPackage.unsealedAt),
                         packageId: offerPackage.id,
                     }

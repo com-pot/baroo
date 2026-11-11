@@ -1,6 +1,6 @@
 <script lang="ts" module>
     import type { BarOfferItem } from "$lib/bar/BarModel";
-    import { offeredServings, servingPreset, type Serving } from "$lib/bar/servings";
+    import { type Serving } from "$lib/bar/servings";
     import type { TagMapping } from "$lib/bar/tags";
 
     /** A pending offer of a tap, waiting for its serving on the kiosk */
@@ -77,7 +77,6 @@
                 </div>
                 <div class="card-body">
                     {#if item}
-                        {@const measure = servingPreset(item.servingPreset).measure}
                         <div class="offer-item">
                             {#if item.preview_1x1}
                                 <img src={entityFileHref('bar_offer_items', item.id, item.preview_1x1)} alt="" />
@@ -85,7 +84,7 @@
                             <span class="name">{item.name}</span>
                         </div>
                         <div class="servings">
-                            {#each offeredServings(item) as serving (serving.key)}
+                            {#each item.servings as serving (serving.key)}
                                 <button
                                     type="button"
                                     class="btn btn-primary serving"
@@ -93,7 +92,7 @@
                                     onclick={() => onServe(order, item, serving)}
                                 >
                                     <span class="serving-name">{renderer.print(serving.name)}</span>
-                                    <span class="serving-amount">{servingText(serving, measure)}</span>
+                                    <span class="serving-amount">{servingText(serving, item.measure)}</span>
                                 </button>
                             {/each}
                         </div>

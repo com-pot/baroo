@@ -23,7 +23,6 @@ from machine import Pin
 
 import config
 from mfrc522 import MFRC522
-from palette import color_name
 
 # RC522 on SPI0 — the wiring table in README.md.
 PIN_SCK = 18
@@ -366,7 +365,7 @@ def main():
     set_country()
     print("tap of bar", config.BAR)
     for i, pin in enumerate(buttons):
-        print("button", i + 1, color_name(config.BUTTONS[i]["color"]), "on", pin)
+        print("button", i + 1, config.BUTTONS[i]["color"], "on", pin)
 
     display = open_display()
     # What the server calls this tap, once it has said so.

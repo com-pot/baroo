@@ -114,7 +114,7 @@ export type TapScanResult = TapScreens & (
      * `variants` - what the item is offered in, the TapTapper's buttons answer them in order;
      * `delivered` - number of kiosks listening
      */
-    | { result: 'offer'; offer: string; variants: TapVariant[]; delivered: number }
+    | { result: 'offer'; offer: string; variants: readonly TapVariant[]; delivered: number }
 );
 
 /** `gone` - the offer was dismissed, or the server forgot it */
@@ -134,33 +134,9 @@ export type TapHelloResult = {
 export const TAP_STALE_MS = 60_000;
 
 export const tapRefSchema = z.string().regex(/^[0-9]{1,3}$/);
-const servingKey = z.string().regex(/^[0-9a-z_]{1,8}$/);
-const cardUid = z.string().regex(/^[0-9a-f:]{4,40}$/i);
+export const servingKey = z.string().regex(/^[0-9a-z_]{1,8}$/);
+export const cardUid = z.string().regex(/^[0-9a-f:]{4,40}$/i);
 
-export const tapScanSchema = z.object({
-    uid: cardUid,
-});
-
-export const tapServeSchema = z.object({
-    /** `offer` from the scan reply */
-    offer: z.uuid(),
-    /** Serving key */
-    variant: servingKey,
-});
-
-export const tapHelloSchema = z.object({
-    /** The offer the TapTapper waits on, its state comes back once it is not pending */
-    offer: z.uuid().optional(),
-});
-
-/** A kiosk picking the serving of a pending offer */
-export const kioskServeSchema = z.object({
-    variant: servingKey,
-});
-
-export const tapDismissSchema = z.object({
-    offer: z.uuid(),
-});
 
 /** clientId of the order filed for a pending offer */
 export const TAP_ORDER_PREFIX = 'tap:';

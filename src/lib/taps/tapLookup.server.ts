@@ -1,6 +1,5 @@
 import type { Db } from '$lib/db.server';
 import type { BarMember, BarOfferItem, BarOfferPackage } from '$lib/bar/BarModel';
-import { offeredServings, servingPreset, type ServingPreset } from '$lib/bar/servings';
 import type { Measure } from '$lib/si/measure';
 import type { StoredImage } from './tapImages.server';
 
@@ -13,10 +12,9 @@ export type Drink = {
     key: string;
     name: string;
     image: StoredImage | null;
-    servingPreset: ServingPreset["key"];
     measure: Measure;
     /** Serving keys the item is offered in, smallest first */
-    servings: string[];
+    servings: BarOfferItem["servings"];
 };
 
 export type Package = Pick<BarOfferPackage, 'id' | 'label' | 'quantity'> & { offerItemKey: string };
@@ -74,8 +72,7 @@ function drinkOf(item: BarOfferItem): Drink {
         image: item.preview_1x1
             ? { collection: 'bar_offer_items', recordId: item.id, filename: item.preview_1x1 }
             : null,
-        servingPreset: item.servingPreset,
-        measure: servingPreset(item.servingPreset).measure,
-        servings: offeredServings(item).map((serving) => serving.key),
+        measure: item.measure,
+        servings: item.servings,
     };
 }

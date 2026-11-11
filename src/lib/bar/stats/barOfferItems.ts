@@ -2,7 +2,6 @@
 import type { Measure } from "$lib/si/measure";
 import { indexBy } from "$lib/lists";
 import { packageState, type Bar, type BarOfferItem, type BarOfferPackage, type BarOrderItem, type OfferPackage } from "../BarModel";
-import { findServing, servingPreset, type ServingPreset } from "../servings";
 import type { BarTap } from "$lib/taps/barTap";
 
 export async function getBarOfferIndex(
@@ -162,12 +161,12 @@ export function computeOfferStock(input: {
             : b.unsealedAt.localeCompare(a.unsealedAt));
 
     return offerItems.flatMap((item): OfferStock[] => {
-        const measure = servingPreset(item.servingPreset).measure;
+        const measure = item.measure;
         const own = open.filter((offerPackage) => offerPackage.offerItemKey === item.key);
         if (!own.length) return [{ item, measure, package: null, consumed: 0, left: null }];
 
         return own.map((offerPackage) => {
-            const consumed = consumedBy(item.servingPreset, ordersByPackage.get(offerPackage.id) ?? []);
+            const consumed = consumedBy(item, ordersByPackage.get(offerPackage.id) ?? []);
             return {
                 item,
                 measure,
@@ -181,10 +180,14 @@ export function computeOfferStock(input: {
 
 /** What the orders drew */
 export function consumedBy(
-    preset: ServingPreset["key"],
+    offerItem: Pick<BarOfferItem, "servings">,
     orderItems: Pick<BarOrderItem, "variant">[],
 ): number {
-    return orderItems.reduce((total, orderItem) => total + (findServing(preset, orderItem.variant)?.quantity ?? 0), 0);
+    let total = 0
+    for (const orderItem of orderItems) {
+        total += offerItem.servings.find((serving) => serving.key === orderItem.variant)?.quantity ?? 0
+    }
+    return total
 }
 
 export function quantityLeft(quantity: number, consumed: number): number {

@@ -71,7 +71,7 @@
 
         const confirmed = confirm(m["baroo.bar.stock.flush_confirm"]({
             name: item?.name ?? state.offerItemKey ?? '',
-            left: item ? formatQuantity(servingPreset(item.servingPreset).measure, state.stock.left) : String(state.stock.left),
+            left: item ? formatQuantity(item.measure, state.stock.left) : String(state.stock.left),
         }))
         if (!confirmed) return
 

@@ -132,10 +132,9 @@ waits on the tablet; picked there, the tap files it all the same.
 | shared contact | GND | 3 |
 
 - The buttons are part of the tap's config in backstage (*Tlačítka velikostí*): each its
-  GPIO pin and its color, left to right — so any free pins will do. The colors come from
-  `palette.py`, the same list baroo draws them with; copy it to the Pico with `main.py`. A
-  TapTapper without the keypad has none: the screen then tells the customer to pick on the
-  tablet.
+  GPIO pin and its color, left to right — so any free pins will do.
+  A TapTapper without the keypad has none: the screen then tells the customer to pick on
+  the tablet.
 - The Pico's own pull-ups do the rest — no resistors, no power wire.
 - The tail's tabs fit a 3-pin 2.54 mm female header, or male header pins and the usual
   jumper wires. **Do not solder to the tail**: its tracks are printed silver ink.
@@ -204,7 +203,7 @@ From a terminal, each part is `openscad -D 'part="shell"' -o station-shell.stl s
    a stáhnout config.py*. Save the downloaded `config.py` to the Pico. It holds the tap's
    own token — each TapTapper gets its own file, and authorizing a tap again revokes the
    token in the old one.
-5. **Program.** Save `main.py` and `palette.py` to the Pico — and `display.py` too, for a
+5. **Program.** Save `main.py` to the Pico — and `display.py` too, for a
    TapTapper with a display. `main.py` starts on its own at every power-up.
 
 Or, with [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html)
@@ -212,12 +211,12 @@ Or, with [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.ht
 
 ```bash
 mpremote mip install github:danjperron/micropython-mfrc522/mfrc522.py
-mpremote cp config.py :config.py + cp main.py :main.py + cp palette.py :palette.py + cp display.py :display.py + reset
+mpremote cp config.py :config.py + cp main.py :main.py + cp display.py :display.py + reset
 ```
 
 ## Updating a TapTapper
 
-After changing `main.py`, `palette.py` or `display.py`, copy the file to the Pico again.
+After changing `main.py` or `display.py`, copy the file to the Pico again.
 A changed config takes a new `config.py`: backstage marks the tap *Změněná konfigurace není
 autorizovaná* until it is authorized again — the wifi it uses changing counts too. Close
 anything else using the Pico's COM port first: only one program can talk to it at a time.

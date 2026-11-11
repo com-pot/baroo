@@ -125,11 +125,6 @@ export async function goneScreens(session: TapSession): Promise<TapScreens> {
     return { screen: idle, idle, hold: 0 };
 }
 
-/** What the drink is offered in, labeled for the TapTapper's buttons */
-export function tapVariants(drink: Pick<Drink, 'servings'>): TapVariant[] {
-    return drink.servings.map((key) => ({ key, label: sizeName(key) }));
-}
-
 /** Colors of the tap's size buttons, in their order */
 export function tapButtons(tap: TapSession["tap"]): number[] {
     const model = tapModel(tap.model);
@@ -378,12 +373,12 @@ async function cutOut(bytes: Buffer, size: number, shape: 'circle' | 'rounded'):
 /** e.g.: "Malé 0.3l" */
 function sizeName(key: string, withAmount = true): string {
     for (const preset of SERVING_PRESETS.items) {
-        const serving = preset.servings.find(candidate => candidate.key === key);
+        const serving = preset.props.servings.find(candidate => candidate.key === key);
         if (!serving) continue;
 
         const names: Record<string, string> = serving.name;
         const name = names[getLocale()] ?? names.cs;
-        return withAmount ? `${name} ${servingText(serving, preset.measure)}` : name;
+        return withAmount ? `${name} ${servingText(serving, preset.props.measure)}` : name;
     }
     return key;
 }

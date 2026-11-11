@@ -2,7 +2,11 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireTapKiosk } from '$lib/taps/tapAuth.server';
 import { dismissOffer } from '$lib/taps/tapOffers.server';
-import { tapDismissSchema } from '$lib/taps/tapEvents';
+import z from 'zod';
+
+const tapDismissSchema = z.object({
+    offer: z.uuid(),
+})
 
 /**
  * Pending offer dropped on a kiosk - the other kiosks drop it too, the TapTapper stops waiting

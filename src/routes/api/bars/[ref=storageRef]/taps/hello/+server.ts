@@ -1,3 +1,4 @@
+import z from 'zod';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { tapLabel } from '$lib/taps/barTap';
@@ -5,7 +6,12 @@ import { requireTap } from '$lib/taps/tapAuth.server';
 import { broadcastTaps } from '$lib/taps/tapBoard.server';
 import { findOffer, listenerCount } from '$lib/taps/tapHub.server';
 import { goneScreens, idleScreen, SCREEN_HOLD_MS, servedScreens } from '$lib/taps/tapScreens.server';
-import { tapHelloSchema, type TapHelloResult } from '$lib/taps/tapEvents';
+import { type TapHelloResult } from '$lib/taps/tapEvents';
+
+const tapHelloSchema = z.object({
+    /** The offer the TapTapper waits on, its state comes back once it is not pending */
+    offer: z.uuid().optional(),
+});
 
 /**
  * TapTapper heartbeat, sent at boot and every 20 s, replies with the idle screen - the tap's

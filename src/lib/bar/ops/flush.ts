@@ -3,7 +3,6 @@ import { toIsoDate, toPbDate } from "$lib/pocketbase";
 import type { Measure } from "$lib/si/measure";
 import { tapRef, type BarTap } from "$lib/taps/barTap";
 import { packageState, type Bar, type BarOfferItem, type BarOfferPackage, type BarOrderItemRecord } from "../BarModel";
-import { findServing, servingPreset } from "../servings";
 import { roundQuantity } from "../stats/barOfferItems";
 
 type Pb = NonNullable<App.Locals['pb']>;
@@ -92,7 +91,7 @@ export async function collectClosureData(
 
     let totalQuantity = 0;
     for (const [variant, count] of Object.entries(variantCounts)) {
-        totalQuantity += (findServing(offerItem.servingPreset, variant)?.quantity ?? 0) * count;
+        totalQuantity += (offerItem.servings.find((serving) =>serving.key === variant)?.quantity ?? 0) * count;
     }
 
     const memberStats = Object.values(calculateMemberConsumption(offerItem, orderItems))
@@ -107,7 +106,7 @@ export async function collectClosureData(
         offerItemName: offerItem.name,
         unsealedAt: toIsoDate(offerPackage.unsealedAt) || null,
         quantity: roundQuantity(offerPackage.quantity),
-        measure: servingPreset(offerItem.servingPreset).measure,
+        measure: offerItem.measure,
         variantCounts,
         totalQuantity: roundQuantity(totalQuantity),
         totalOrders: orderItems.length,
@@ -135,7 +134,7 @@ function calculateMemberConsumption(offerItem: BarOfferItem, orderItems: BarOrde
         }
 
         memberConsumption[memberId].count += 1;
-        memberConsumption[memberId].quantity += findServing(offerItem.servingPreset, orderItem.variant)?.quantity ?? 0;
+        memberConsumption[memberId].quantity += offerItem.servings.find((serving) => serving.key === orderItem.variant)?.quantity ?? 0;
     }
 
     return memberConsumption

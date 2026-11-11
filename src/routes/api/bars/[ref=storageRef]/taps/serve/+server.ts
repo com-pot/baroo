@@ -1,3 +1,4 @@
+import z from 'zod';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireTap } from '$lib/taps/tapAuth.server';
@@ -5,7 +6,14 @@ import { lookupDrink } from '$lib/taps/tapLookup.server';
 import { findOffer } from '$lib/taps/tapHub.server';
 import { serveOffer } from '$lib/taps/tapOffers.server';
 import { goneScreens, servedScreens } from '$lib/taps/tapScreens.server';
-import { tapServeSchema, type TapServeResult } from '$lib/taps/tapEvents';
+import { servingKey, type TapServeResult } from '$lib/taps/tapEvents';
+
+const tapServeSchema = z.object({
+    /** `offer` from the scan reply */
+    offer: z.uuid(),
+    /** Serving key */
+    variant: servingKey,
+});
 
 /**
  * Serving picked on a TapTapper's buttons for the offer of its last scan

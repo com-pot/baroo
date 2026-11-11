@@ -28,7 +28,7 @@ DISPLAY = {{DISPLAY}}
 DISPLAY_MADCTL = {{DISPLAY_MADCTL}}
 
 # Size buttons left to right (README.md, "Size buttons"): the GPIO pin of each and its color
-# from palette.py. They serve the sizes the drink on tap is offered in, in order.
+# They serve the sizes the drink on tap is offered in, in order.
 BUTTONS = {{BUTTONS}}
 
 # Reboots the TapTapper if it ever hangs. Set to False while working in Thonny: once

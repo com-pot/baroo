@@ -18,8 +18,11 @@
             "no_items": "No items to display."
         },
         "measure": {
-            "volume": "l",
-            "count": "pcs"
+            "label": "Měrná jednotka",
+            "mode": {
+                "volume": "l",
+                "count": "pcs"
+            }
         },
         "file_drop": {
             "prompt": "Drop a file here, or click to pick one",
@@ -29,5 +32,13 @@
             "bad_aspect": "Aspect ratio must be {ratio}; this image is {width}×{height}.",
             "unreadable": "That file could not be read as an image."
         }
+    },
+    "color": {
+        "yellow": "Yellow",
+        "red": "Red",
+        "green": "Green",
+        "blue": "Blue",
+        "white": "White",
+        "black": "Black"
     }
 }

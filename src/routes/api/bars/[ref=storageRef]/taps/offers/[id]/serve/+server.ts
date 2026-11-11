@@ -1,9 +1,14 @@
+import z from 'zod';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireTapKiosk } from '$lib/taps/tapAuth.server';
 import { findOffer } from '$lib/taps/tapHub.server';
 import { serveOffer } from '$lib/taps/tapOffers.server';
-import { kioskServeSchema } from '$lib/taps/tapEvents';
+import { servingKey } from '$lib/taps/tapEvents';
+
+const kioskServeSchema = z.object({
+    variant: servingKey,
+});
 
 /**
  * Serving of a pending offer picked on a kiosk - the offer's tap files the order, as if

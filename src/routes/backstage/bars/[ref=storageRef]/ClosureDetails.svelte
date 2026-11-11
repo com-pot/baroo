@@ -1,6 +1,6 @@
 <script lang="ts">
     import { quantityLeft } from "$lib/bar/stats/barOfferItems";
-    import { servingLabel } from "$lib/bar/servings";
+    import { servingText } from "$lib/bar/servings";
     import { formatQuantity, measureLabel } from "$lib/bar/quantity";
     import type { BarOfferItem } from "$lib/bar/BarModel";
     import type { ClosureData } from "$lib/bar/ops/flush";
@@ -12,8 +12,7 @@
     }: {
         closure: ClosureData;
         closedAt: string;
-        /** `null` once the item is gone from the offer */
-        offerItem: Pick<BarOfferItem, "servingPreset"> | null;
+        offerItem: Pick<BarOfferItem, "measure"|"servings">;
     } = $props();
 </script>
 
@@ -47,12 +46,15 @@
         <div class="variant-breakdown">
             <strong>Variants:</strong>
             <div class="items-grid -tight">
-                {#each Object.entries(closure.variantCounts) as [variant, count]}
+                {#each offerItem.servings as serving (serving.key)}
+                    {@const count = closure.variantCounts[serving.key] ?? 0}
+                    {#if count > 0}
                     <div class="tile">
-                        <span class="label">{offerItem ? servingLabel(offerItem.servingPreset, variant) : variant}</span>
+                        <span class="label">{servingText(serving, offerItem.measure)}</span>
                         <span role="separator">×</span>
                         <span class="value">{count}</span>
                     </div>
+                    {/if}
                 {/each}
             </div>
         </div>

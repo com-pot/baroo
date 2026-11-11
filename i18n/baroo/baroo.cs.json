@@ -455,14 +455,6 @@
                 "buttons.color": "Barva",
                 "watchdog": "Watchdog",
                 "watchdog.help": "Restartuje zaseknutý PípaPípač. Při práci v Thonny vypněte."
-            },
-            "palette": {
-                "yellow": "Žlutá",
-                "red": "Červená",
-                "green": "Zelená",
-                "blue": "Modrá",
-                "white": "Bílá",
-                "black": "Černá"
             }
         }
     }

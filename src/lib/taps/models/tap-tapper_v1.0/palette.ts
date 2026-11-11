@@ -1,7 +1,3 @@
-/**
- * Colors a TapTapper's size buttons come in, by index - `palette.py` in the firmware keeps
- * the same order, so only ever append
- */
 export const BUTTON_PALETTE = [
     { key: 'yellow', fill: '#facc15', text: '#111827' },
     { key: 'red', fill: '#dc2626', text: '#f9fafb' },
@@ -13,7 +9,6 @@ export const BUTTON_PALETTE = [
 
 export type ButtonColor = (typeof BUTTON_PALETTE)[number];
 
-/** Unknown indices fall back to the first color */
 export function buttonColor(index: number): ButtonColor {
     return BUTTON_PALETTE[index] ?? BUTTON_PALETTE[0];
 }

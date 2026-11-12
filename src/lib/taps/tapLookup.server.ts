@@ -13,7 +13,7 @@ export type Drink = {
     name: string;
     image: StoredImage | null;
     measure: Measure;
-    /** Serving keys the item is offered in, smallest first */
+    /** What the item is offered in, as the TapTapper's buttons answer them */
     servings: BarOfferItem["servings"];
 };
 

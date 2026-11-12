@@ -18,7 +18,7 @@
             "no_items": "No items to display."
         },
         "measure": {
-            "label": "Měrná jednotka",
+            "label": "Unit of measure",
             "mode": {
                 "volume": "l",
                 "count": "pcs"

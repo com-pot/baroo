@@ -1,7 +1,7 @@
 <script lang="ts">
 import * as m from "$lib/paraglide/messages.js";
 import { computeTotalPrice } from "$lib/bar/stats/memberSummaries";
-import { servingPreset, servingText, type Serving } from "$lib/bar/servings";
+import { servingText, type Serving } from "$lib/bar/servings";
 import type { BarOrderItem } from "$lib/bar/BarModel";
 import type { BarOfflineStore } from "$lib/offline/store.svelte";
 import type { TagMapping } from "$lib/bar/tags";
@@ -50,12 +50,11 @@ const summaryRows = $derived.by(() => {
             itemCounts[item.key] = { name: offerItem.name, valueCounts: {} };
         }
         if (!itemCounts[item.key].valueCounts[item.variant]) {
-            const preset = servingPreset(offerItem.servingPreset)
-            const serving = preset.servings.find((serving) => serving.key === item.variant)!
+            const serving = offerItem.servings.find((serving) => serving.key === item.variant)!
 
             itemCounts[item.key].valueCounts[item.variant] = {
                 variant: item.variant,
-                measure: preset.measure,
+                measure: offerItem.measure,
                 serving,
                 price: offerItem.pricing?.[item.variant] || 0,
                 count: 0,

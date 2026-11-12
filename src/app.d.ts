@@ -1,5 +1,6 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 
+import type { ServerI18n } from '$lib/server/i18n.server';
 import type { Logger } from 'pino';
 
 // for information about these interfaces
@@ -11,6 +12,7 @@ declare global {
         }
         interface Locals {
             logger: Logger;
+            i18n: ServerI18n;
 
             user?: {
                 id: string;

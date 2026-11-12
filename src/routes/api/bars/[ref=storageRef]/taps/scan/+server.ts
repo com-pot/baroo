@@ -8,8 +8,8 @@ import { barDoUnseal } from '$lib/bar/ops/unseal';
 import { requireTap, type TapSession } from '$lib/taps/tapAuth.server';
 import { broadcastTaps, tapState } from '$lib/taps/tapBoard.server';
 import { lookupCard, lookupDrink, lookupPackageTag, type Package } from '$lib/taps/tapLookup.server';
-import { emit, openOffer } from '$lib/taps/tapHub.server';
-import { OFFER_WAIT_MS, SCREEN_HOLD_MS, tapButtons, tapScreens } from '$lib/taps/tapScreens.server';
+import { openOffer } from '$lib/taps/tapOffers.server';
+import { OFFER_WAIT_MS, tapButtons, tapScreens } from '$lib/taps/tapScreens.server';
 import { cardUid, TAP_UNSEAL_PREFIX, type TapScanResult } from '$lib/taps/tapEvents';
 
 const tapScanSchema = z.object({
@@ -20,8 +20,7 @@ const tapScanSchema = z.object({
  * Card tapped at a TapTapper
  *
  * A package tag unseals its package onto the tap. A member's card opens an
- * offer of what the tap pours, waiting for a serving from the TapTapper's buttons or a kiosk
- * (`../serve`, `../offers/[id]/serve`) - the tap files the order either way.
+ * offer of what the tap pours, waiting for a serving from the TapTapper's buttons (`../serve`).
  */
 export const POST: RequestHandler = async (event) => {
     const session = await requireTap(event);
@@ -42,18 +41,27 @@ export const POST: RequestHandler = async (event) => {
 
     const state = await tapState(session.pb, barSlug, tap);
     if (!state.offerItemKey) {
-        emit(locals, barSlug, { type: 'tap-unset', tap, serialId, at });
         return reply({ result: 'no-offer', ...await tapScreens(session, { view: 'unset' }) });
     }
 
     const holder = await lookupCard(session.pb, barSlug, serialId);
     if (!holder) {
-        // The kiosk shows its serial, for mapping it to someone
-        emit(locals, barSlug, { type: 'tap-unknown-card', tap, serialId, at });
         return reply({ result: 'unknown-card', ...await tapScreens(session, { view: 'unknown-card', serial: serialId }) });
     }
 
     const offerItemKey = state.offerItemKey;
+    const drink = await lookupDrink(session.pb, barSlug, offerItemKey);
+    // The buttons answer the servings in order, the ones past the last button are not on offer here
+    const variants = (drink?.servings ?? [])
+        .slice(0, tapButtons(session.tap).length)
+
+    if (!variants.length) {
+        return reply({
+            result: 'no-sizes',
+            ...await tapScreens(session, { view: 'offer', item: offerItemKey, serial: serialId, warn: 'no-sizes' }),
+        });
+    }
+
     const offer = openOffer(barSlug, {
         id: randomUUID(),
         barId: session.tap.bar.id,
@@ -64,36 +72,17 @@ export const POST: RequestHandler = async (event) => {
         at,
         pb: session.pb,
     });
-    const delivered = emit(locals, barSlug, {
-        type: 'pending-offer',
-        id: offer.id,
-        tap,
-        serialId,
-        member: { id: holder.memberId, nickName: holder.nickName },
-        offerItemKey,
-        at,
-    });
-
-    const drink = await lookupDrink(session.pb, barSlug, offerItemKey);
-    const variants = drink?.servings ?? [];
-    // The buttons answer the variants in order, the ones past the last button only a kiosk
-    const sizes = variants
-        .slice(0, tapButtons(session.tap).length)
-        .map((variant) => variant.key)
-    const answerable = delivered > 0 || sizes.length > 0;
 
     return reply({
         result: 'offer',
         offer: offer.id,
         variants,
-        delivered,
         ...await tapScreens(session, {
             view: 'offer',
             item: offerItemKey,
             serial: serialId,
-            sizes: sizes.join(',') || undefined,
-            warn: answerable ? undefined : 'no-kiosk',
-        }, answerable ? OFFER_WAIT_MS : SCREEN_HOLD_MS),
+            variants: variants.map((variant) => variant.key).join(','),
+        }, OFFER_WAIT_MS),
     });
 };
 
@@ -108,33 +97,20 @@ async function unsealPackage(
     const { offerItemKey, quantity } = offerPackage;
     const drink = await lookupDrink(session.pb, barSlug, offerItemKey);
     const name = drink?.name ?? offerItemKey;
-    const label = offerPackage.label || formatQuantity(drink?.measure ?? 'volume', quantity);
+    const label = offerPackage.label || formatQuantity(drink?.measure ?? 'volume', quantity, locals.locale);
 
     // Tapped again, the package is on the tap already
     const before = await tapState(session.pb, barSlug, tap);
     const again = before.stock?.packageId === offerPackage.id;
 
     if (!again) {
-        const id = randomUUID();
         await barDoUnseal({ pb: session.pb }, barSlug, {
             offerItemKey,
             packageId: offerPackage.id,
             quantity,
             tap,
-            clientId: `${TAP_UNSEAL_PREFIX}${id}`,
+            clientId: `${TAP_UNSEAL_PREFIX}${randomUUID()}`,
             occurredAt: at,
-        });
-
-        emit(locals, barSlug, {
-            type: 'tap-unsealed',
-            id,
-            tap,
-            offerItemKey,
-            offerItemName: name,
-            quantity,
-            packageId: offerPackage.id,
-            packageLabel: label,
-            at,
         });
 
         await broadcastTaps(locals, session.pb, barSlug);

@@ -1,11 +1,12 @@
 import { toIsoDate } from "$lib/pocketbase";
 import type { Measure } from "$lib/si/measure";
-import type { Serving, ServingPreset } from "./servings";
+import type { Serving } from "./servings";
 
 export type Bar = {
     id: string;
     slug: string;
     name: string;
+    currency: string;
 }
 
 export type BarOfferItem = {
@@ -13,11 +14,9 @@ export type BarOfferItem = {
     key: string;
     name: string;
 
-    servingPreset?: ServingPreset["key"];
     measure: Measure;
     servings: readonly Serving[];
 
-    pricing: Record<Serving["key"], number>;
     preview_1x1: string | null;
 }
 

@@ -39,12 +39,10 @@ export function computeTotalPrice(
 ): number {
     let total = 0;
     for (const order of orderItems) {
-        const pricing = barOffer[order.key]?.pricing;
-        const price = pricing?.[order.variant];
-        if (price) {
-            total += price;
-        }
+        const price = barOffer[order.key]?.servings.find((serving) => serving.key === order.variant)?.price ?? 0;
+        total += price;
     }
+
     return total
 }
 

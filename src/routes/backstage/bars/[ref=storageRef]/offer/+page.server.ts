@@ -1,7 +1,6 @@
 import { packageState, type BarOfferItem, type BarOfferPackage, type PackageState } from '$lib/bar/BarModel';
 import { ClientResponseError } from 'pocketbase';
 import { formatPbError, type Db } from '$lib/db.server';
-import { SERVING_PRESETS } from '$lib/bar/servings';
 import { normalizeTag } from '$lib/bar/tags';
 import { getFieldErrors, type ValidationError, type ValidationIssue } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
@@ -11,7 +10,9 @@ import { isError, type AppError } from '$lib/errors';
 import { barOfferItemSchema, barOfferPackageSchema } from '$lib/model/bar';
 import * as m from '$lib/paraglide/messages.js';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, parent }) => {
+    const { bar } = await parent()
+
     const [items, packages] = await Promise.all([
         locals.pb.collection<BarOfferItem>('bar_offer_items').getFullList({
             filter: `bar.slug = "${params.ref}"`,
@@ -33,7 +34,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         counts[packageState(offerPackage)]++;
     }
 
-    return { items, packageCounts };
+    return { items, packageCounts, bar };
 };
 
 export const actions: Actions = {
@@ -199,28 +200,17 @@ function readPicture(value: FormDataEntryValue | null): PictureResult | AppError
     return { file: value };
 }
 
-function parseOfferData(formData: FormData) {
-    const requested = formData.get('servingPreset')?.toString() ?? '';
-    const preset = SERVING_PRESETS.index[requested as keyof typeof SERVING_PRESETS["index"]]
-    if (!preset) {
-        throw new Error("invalid-value servingPreset")
-    }
-
-    const pricing: Record<string, number> = {};
-    for (const serving of preset.servings) {
-        const key = `pricing.${serving.key}`
-        const raw = formData.get(key)?.toString()?.trim();
-        if (!raw) continue;
-
-        const price = Number(raw);
-        if (Number.isFinite(price) && price >= 0) {
-            pricing[serving.key] = price;
-        }
+function parseOfferData(formData: FormData): Pick<BarOfferItem, "measure" | "servings"> {
+    let servings: BarOfferItem["servings"] = [];
+    try {
+        servings = JSON.parse(formData.get('servings')?.toString() || '[]');
+    } catch {
+        // Left for the schema to refuse
     }
 
     return {
-        servingPreset: preset.key,
-        pricing,
+        measure: (formData.get('measure')?.toString() ?? '') as BarOfferItem["measure"],
+        servings,
     };
 }
 

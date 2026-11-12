@@ -11,7 +11,6 @@
     import { greetingFor, orderConfirmation } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
-    import { servingPreset, type Serving } from "$lib/bar/servings";
     import { formatQuantity } from "$lib/bar/quantity";
     import { Narrator } from "$lib/speech.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
@@ -25,13 +24,7 @@
     import type { BarOfferItem } from "$lib/bar/BarModel";
     import type { Measure } from "$lib/si/measure";
     import { TapStream, type HeardTap } from "$lib/taps/tapStream.svelte";
-    import {
-        TAP_STALE_MS,
-        type PendingOfferEvent,
-        type TapEvent,
-        type TapUnsealedEvent,
-    } from "$lib/taps/tapEvents";
-    import PendingOffersModal, { type PendingOrder } from "./PendingOffersModal.svelte";
+    import { TAP_STALE_MS } from "$lib/taps/tapEvents";
     import TapLineup from "./TapLineup.svelte";
     import TapBadge from "./TapBadge.svelte";
 
@@ -165,95 +158,7 @@
         if (greeting) narrator?.speak(greeting);
     }
 
-    /** Kept apart from the dialog layers - several customers can wait at the taps at once */
-    let pendingOrders = $state<PendingOrder[]>([]);
     let tapStream = $state<TapStream | undefined>();
-
-    function onTapEvent(event: TapEvent) {
-        switch (event.type) {
-            case "pending-offer":
-                receivePendingOffer(event);
-                return;
-            case "offer-served":
-                // Its tap filed the order, wherever the serving was picked
-                dropPendingOrder(event.id);
-                return;
-            case "offer-dismissed":
-                dropPendingOrder(event.id);
-                return;
-            case "tap-unsealed":
-                unsealAtTap(event);
-                return;
-            case "tap-unset":
-                setStatus("⚠️", m["baroo.bar.status.tap_unset"]({ tap: event.tap }));
-                return;
-            case "tap-unknown-card":
-                reportUnknown(event.serialId);
-                return;
-        }
-    }
-
-    /** The tap filed the package itself, its stock shows with the next pull */
-    function unsealAtTap(event: TapUnsealedEvent) {
-        setStatus("ℹ️", m["baroo.bar.status.tap_unsealed"]({
-            tap: event.tap,
-            name: event.offerItemName,
-            package: event.packageLabel,
-        }));
-    }
-
-    function receivePendingOffer(offer: PendingOfferEvent) {
-        if (pendingOrders.some((pending) => pending.id === offer.id)) return;
-
-        const order = pendingOrderOf(offer);
-        greet(order.mapping, order.label);
-        pendingOrders = [...pendingOrders, order];
-    }
-
-    /** The server knows the member, the mapping may be newer than this kiosk's data */
-    function pendingOrderOf(offer: PendingOfferEvent): PendingOrder {
-        const mapping = store.findMapping(offer.serialId)
-            ?? { serialId: offer.serialId, member: { ...offer.member, seq: 0 } };
-
-        return {
-            id: offer.id,
-            tap: offer.tap,
-            mapping,
-            label: offer.member.nickName || mapping.member.nickName || "???",
-            offerItemKey: offer.offerItemKey,
-        };
-    }
-
-    /** The offer's tap files the order, so this needs the server */
-    async function servePendingOrder(order: PendingOrder, _item: BarOfferItem, serving: Serving) {
-        // Removed before asking so a double press can't pour twice
-        dropPendingOrder(order.id);
-
-        try {
-            if (!tapStream) throw new Error(m["baroo.bar.tap.disconnected"]());
-            await tapStream.serve(order.id, serving.key);
-        } catch (error) {
-            console.error(error);
-            pendingOrders = [order, ...pendingOrders];
-            setStatus("❌", m["baroo.bar.status.pending_order_failed"]({
-                name: order.label,
-                error: errorText(error),
-            }));
-            return;
-        }
-
-        setStatus("✅", m["baroo.bar.status.tap_order_filed"]({ name: order.label }));
-        if (narrationEnabled) narrator?.speak(orderConfirmation());
-    }
-
-    function dismissPendingOrder(order: PendingOrder) {
-        dropPendingOrder(order.id);
-        void tapStream?.dismiss(order.id);
-    }
-
-    function dropPendingOrder(id: string) {
-        pendingOrders = pendingOrders.filter((pending) => pending.id !== id);
-    }
 
     /** The bar's taps, with what is on them - live from the server, or from this device's data */
     const knownTaps = $derived([
@@ -387,13 +292,11 @@
         },
         {
             name: "taps",
-            // After the narrator, so the first offer already gets its greeting
             isEnabled: () => !!store.device?.token && !!store.snapshot?.taps?.length,
             init: async () => {
                 const stream = new TapStream({
                     barSlug: store.barSlug,
                     token: () => store.device?.token ?? null,
-                    onEvent: onTapEvent,
                 });
                 tapStream = stream;
 
@@ -543,7 +446,7 @@
                 type="button"
                 {...btnAttrs}
                 onclick={() => flushPackage(item, packageId, {
-                    measure: servingPreset(item.servingPreset).measure,
+                    measure: item.measure,
                     quantity: tap.stock?.left ?? null,
                 }, tap.tap)}
             >
@@ -552,13 +455,6 @@
         </li>
     {/if}
 {/snippet}
-
-<PendingOffersModal
-    orders={pendingOrders}
-    offerItems={store.offerItems}
-    onServe={servePendingOrder}
-    onDismiss={dismissPendingOrder}
-/>
 
 <style lang="scss">
 @property --hide-rate {

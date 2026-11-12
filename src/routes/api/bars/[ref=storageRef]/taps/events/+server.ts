@@ -13,7 +13,6 @@ export const POST: RequestHandler = async (event) => {
     const listener = await tapListener(event);
     if (!listener) error(401, 'tap-listener-unknown');
 
-    const { role } = listener;
     const barSlug = event.params.ref;
     const taps = await tapStates(listener.pb, barSlug);
 
@@ -24,13 +23,9 @@ export const POST: RequestHandler = async (event) => {
 
         send({ type: 'taps', taps, at: new Date().toISOString() });
 
-        unsubscribe = subscribe(barSlug, role, (tapEvent) => {
+        unsubscribe = subscribe(barSlug, (tapEvent) => {
             const { error: failed } = send(tapEvent);
-            if (!failed) return;
-
-            // Thrown so the hub doesn't count the dead stream as delivered
-            unsubscribe();
-            throw failed;
+            if (failed) unsubscribe();
         });
     }, {
         ping: 10_000,

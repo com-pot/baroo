@@ -3,7 +3,6 @@
     import * as m from "$lib/paraglide/messages.js";
     import type { BarOfflineStore } from "$lib/offline/store.svelte";
     import { packageState } from "$lib/bar/BarModel";
-    import { servingPreset } from "$lib/bar/servings";
     import { formatQuantity, measureLabel, packageLabel } from "$lib/bar/quantity";
     import { newPackageId } from "$lib/bar/stats/barOfferItems";
     import TapPicker from "./TapPicker.svelte";
@@ -34,7 +33,7 @@
     const packages = $derived(store.packages.filter((offerPackage) => offerPackage.offerItemKey === itemKey
         && packageState(offerPackage) === "registered"));
 
-    const measure = $derived(item ? servingPreset(item.servingPreset).measure : null);
+    const measure = $derived(item?.measure ?? null);
 
     let packageId = $state("");
     let quantity = $state("");

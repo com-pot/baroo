@@ -1,6 +1,6 @@
 /// <reference path="../pb_data/types.d.ts" />
 migrate((app) => {
-  const collection = app.findCollectionByNameOrId("pbc_3741736354")
+  const collection = app.findCollectionByNameOrId("bar_offer_items")
 
   // add field
   collection.fields.addAt(5, new Field({
@@ -34,13 +34,9 @@ migrate((app) => {
 
   return app.save(collection)
 }, (app) => {
-  const collection = app.findCollectionByNameOrId("pbc_3741736354")
-
-  // remove field
-  collection.fields.removeById("text2147948837")
-
-  // remove field
-  collection.fields.removeById("json1239158968")
+  const collection = app.findCollectionByNameOrId("bar_offer_items")
+  collection.fields.removeById("measure")
+  collection.fields.removeById("servings")
 
   return app.save(collection)
 })

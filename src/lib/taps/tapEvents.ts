@@ -36,67 +36,10 @@ export type TapStock = {
 /** A serving of the item on tap, labeled for the TapTapper */
 export type TapVariant = Pick<Serving, "key" | "label">
 
-/** Member card tapped at a TapTapper, waits for a serving from a kiosk or the TapTapper's buttons */
-export type PendingOfferEvent = {
-    type: 'pending-offer';
-    /** Minted by the server, the order's clientId derives from it */
-    id: string;
-    tap: string;
-    /** Normalized card serial */
-    serialId: string;
-    member: { id: string; nickName: string };
-    /** What the tap pours */
-    offerItemKey: string;
-    at: string;
-};
-
-/** A pending offer got its serving and the tap filed the order, `source` is where it was picked */
-export type OfferServedEvent = {
-    type: 'offer-served';
-    id: string;
-    tap: string;
-    serialId: string;
-    offerItemKey: string;
-    /** Serving key */
-    variant: string;
-    at: string;
-    source: 'tapper' | 'kiosk';
-};
-
-export type OfferDismissedEvent = {
-    type: 'offer-dismissed';
-    id: string;
-    tap: string;
-    at: string;
-};
-
-/** Package tag tapped at a TapTapper, which unsealed that package onto the tap */
-export type TapUnsealedEvent = {
-    type: 'tap-unsealed';
-    id: string;
-    tap: string;
-    offerItemKey: string;
-    offerItemName: string;
-    quantity: number;
-    packageId: string;
-    packageLabel: string;
-    at: string;
-};
-
-/**
- * Each event carries a unique id or `at` - the kiosk reads them through a svelte store
- * which drops values equal to the previous one.
- */
+/** What the server tells the kiosks and backstage - what is on the taps */
 export type TapEvent =
     /** `at` is the server clock the `lastSeenAt`s are measured against */
-    | { type: 'taps'; taps: TapState[]; at: string }
-    | PendingOfferEvent
-    | OfferServedEvent
-    | OfferDismissedEvent
-    | TapUnsealedEvent
-    | { type: 'tap-unset'; tap: string; serialId: string; at: string }
-    /** A card nobody is mapped to, the kiosk shows its serial */
-    | { type: 'tap-unknown-card'; tap: string; serialId: string; at: string };
+    | { type: 'taps'; taps: TapState[]; at: string };
 
 /** Screen paths for the TapTapper display, ignored by TapTappers without one */
 export type TapScreens = {
@@ -110,24 +53,20 @@ export type TapScanResult = TapScreens & (
     | { result: 'package'; package: { offerItemKey: string; name: string; label: string; quantity: number } }
     | { result: 'no-offer' }
     | { result: 'unknown-card' }
-    /**
-     * `variants` - what the item is offered in, the TapTapper's buttons answer them in order;
-     * `delivered` - number of kiosks listening
-     */
-    | { result: 'offer'; offer: string; variants: readonly TapVariant[]; delivered: number }
+    /** A member's card, but the TapTapper has no buttons for the item's servings */
+    | { result: 'no-sizes' }
+    /** `variants` - what the TapTapper's buttons answer, in their order */
+    | { result: 'offer'; offer: string; variants: readonly TapVariant[] }
 );
 
-/** `gone` - the offer was dismissed, or the server forgot it */
+/** `gone` - the server forgot the offer, or it is another tap's */
 export type TapServeResult = TapScreens & { result: 'served' | 'gone' };
 
 export type TapHelloResult = {
     ok: true;
     /** What the TapTapper shows itself as, in plain ASCII */
     label: string;
-    listeners: number;
     idle: string;
-    /** Only once the offer asked about is not pending any more */
-    offer?: TapScreens & { state: 'served' | 'gone' };
 };
 
 /** Three missed 20 s heartbeats */
@@ -138,7 +77,7 @@ export const servingKey = z.string().regex(/^[0-9a-z_]{1,8}$/);
 export const cardUid = z.string().regex(/^[0-9a-f:]{4,40}$/i);
 
 
-/** clientId of the order filed for a pending offer */
+/** clientId of the order filed for an offer served on a TapTapper's buttons */
 export const TAP_ORDER_PREFIX = 'tap:';
 /** clientId of the unseal filed for a package tag tapped at a TapTapper */
 export const TAP_UNSEAL_PREFIX = 'tap-unseal:';

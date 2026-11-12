@@ -75,12 +75,15 @@ const preStoreValidation: Partial<{
 
 export class BarOfflineStore {
     /** Forward-compatible single point of truth for currency */
-    currency = "czk"
     barSlug = $state('');
     device = $state<DeviceIdentity | null>(null);
     snapshot = $state<BarSnapshot | null>(null);
 
     pending = $state<StoredOp[]>([]);
+
+    get currency() {
+        return this.snapshot?.bar.currency ?? "czk"
+    }
 
     constructor(
         barSlug: string,

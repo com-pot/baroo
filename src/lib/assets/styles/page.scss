@@ -135,6 +135,12 @@
     }
 }
 
+form {
+    > .actions {
+        justify-content: flex-end;
+    }
+}
+
 .page-centered {
     min-height: 100dvh;
     display: grid;

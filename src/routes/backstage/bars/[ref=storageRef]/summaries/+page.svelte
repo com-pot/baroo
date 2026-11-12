@@ -27,6 +27,7 @@
         const timeline = await loadTimeline(summary.member.id)
 
         memberDetailLayer = uiLayers.pushComponent(MemberSummaryCards, {
+            bar: data.bar,
             barOffer: data.barOffer,
             summary,
             timeline,
@@ -184,7 +185,7 @@
                                 <td class="text-end">{summary.standing.totalOrderItems - summary.standing.pendingOrderItems} / {summary.standing.totalOrderItems}</td>
                                 <td class="text-end">
                                     <strong class:text-muted={summary.standing.amountDue <= 0}>
-                                        {renderer.formatCurrency("czk",  summary.standing.amountDue)}
+                                        {renderer.formatCurrency(data.bar.currency,  summary.standing.amountDue)}
                                     </strong>
                                 </td>
                                 <td class="text-end">
@@ -227,15 +228,15 @@
             required
             bind:value={settlementAmount}
         />
-        <span class="input-group-text">{renderer.currencySymbol("czk")}</span>
+        <span class="input-group-text">{renderer.currencySymbol(data.bar.currency)}</span>
         <button type="submit" class="btn btn-primary">{m["baroo.backstage.summaries.settle"]()}</button>
     </div>
     {#if toDue === null}
         <p>{m["baroo.backstage.settlement.nada"]()}</p>
     {:else if toDue > 0}
-        <p>{m["baroo.backstage.settlement.due"]({ amountWithCurrency: renderer.formatCurrency("czk", toDue) })}</p>
+        <p>{m["baroo.backstage.settlement.due"]({ amountWithCurrency: renderer.formatCurrency(data.bar.currency, toDue) })}</p>
     {:else}
-        <p>{m["baroo.backstage.settlement.toReturn"]({ amountWithCurrency: renderer.formatCurrency("czk", -toDue) })}</p>
+        <p>{m["baroo.backstage.settlement.toReturn"]({ amountWithCurrency: renderer.formatCurrency(data.bar.currency, -toDue) })}</p>
     {/if}
 
     {#if form?.error}

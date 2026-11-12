@@ -2,7 +2,6 @@
     import * as m from "$lib/paraglide/messages.js";
     import { onMount, type Snippet } from "svelte";
     import type { BarOfferItem } from "$lib/bar/BarModel";
-    import { servingPreset } from "$lib/bar/servings";
     import { TAP_STALE_MS } from "$lib/taps/tapEvents";
     import type { HeardTap, TapStream } from "$lib/taps/tapStream.svelte";
     import StockCard from "./StockCard.svelte";

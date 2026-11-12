@@ -15,7 +15,6 @@ export type TapStreamOptions = {
      * out, the stream relies on the bar manager's session instead
      */
     token?: () => string | null;
-    onEvent?: (event: TapEvent) => void;
 };
 
 /** Connection to the server's taps, reconnects until stopped */
@@ -65,7 +64,6 @@ export class TapStream {
                     this.taps = heard(event.taps, event.at);
                     this.connected = true;
                 }
-                this.opts.onEvent?.(event);
             });
 
             // Last subscriber leaving closes a sveltekit-sse connection
@@ -83,35 +81,6 @@ export class TapStream {
             disconnect();
             this.connected = false;
         };
-    }
-
-    /** The offer's tap files the order. Throws when it didn't */
-    async serve(offer: string, variant: string): Promise<void> {
-        const response = await this.post(`offers/${encodeURIComponent(offer)}/serve`, { variant });
-        if (!response.ok) {
-            const body = await response.json().catch(() => null) as { message?: string } | null;
-            throw new Error(body?.message ?? `HTTP ${response.status}`);
-        }
-    }
-
-    /** The other kiosks drop the offer too, and its TapTapper stops waiting. Never throws */
-    async dismiss(offer: string): Promise<void> {
-        try {
-            const response = await this.post('dismiss', { offer });
-            if (!response.ok) console.warn(`[taps] dismiss: HTTP ${response.status}`);
-        } catch (err) {
-            console.warn('[taps] dismiss failed:', err);
-        }
-    }
-
-    private post(path: string, body: unknown): Promise<Response> {
-        const token = this.opts.token?.();
-
-        return fetch(this.url(path), {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify(body),
-        });
     }
 
     private url(path: string): string {

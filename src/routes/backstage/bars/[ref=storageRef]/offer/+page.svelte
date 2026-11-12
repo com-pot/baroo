@@ -4,32 +4,53 @@
     import type { BarOfferItem } from '$lib/bar/BarModel';
     import { enhance } from '$app/forms';
     import FileDrop from '$lib/components/FileDrop.svelte';
-    import {
-        SERVING_PRESETS,
-        servingPreset,
-        servingText,
-        type ServingPreset,
-    } from '$lib/bar/servings';
+    import { applyPreset, SERVING_PRESETS, servingText, type Serving } from '$lib/bar/servings';
+    import { measureLabel } from '$lib/bar/quantity';
+    import { knownMeasures, type Measure } from '$lib/si/measure';
+    import { locales } from '$lib/paraglide/runtime.js';
     import { PICTURE_MAX_BYTES } from './offerItem';
     import { getRenderer } from '$lib/rendering.svelte';
     import { getUiLayers, type UiLayerCtrl } from '$lib/ui/uiLayers.svelte';
     import FormErrors from '$lib/components/FormErrors.svelte';
     import { entityFileHref } from '$lib/ui/pbFiles';
+    import SchemaInput from '$lib/ui/zchem/SchemaInput.svelte';
+    import z from 'zod';
+    import type { OptionsList } from '$lib/ui/zchem/optionsLists';
+
+    const servingPresetSchema = z.enum(SERVING_PRESETS.items.map((preset) => preset.key))
+        .meta({
+            optionsList: SERVING_PRESETS.items.map((item) => ({
+                value: item.key,
+                label: item.label,
+             })) satisfies OptionsList
+        })
+    let selectedPreset = $state<typeof SERVING_PRESETS["items"][number]["key"]>()
 
     const renderer = getRenderer()
     const uiLayers = getUiLayers()
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
 
-    let preset = $state<ServingPreset["key"]>(SERVING_PRESETS.items[0].key);
+    /** A serving as edited on the form, with its price */
+    type ServingRow = Serving & { price: number | null };
 
-    const activePreset = $derived(servingPreset(preset));
+    const workingCopy = $state<Pick<BarOfferItem, "measure" | "servings">>({
+        measure: SERVING_PRESETS.items[0].props.measure,
+        servings: [],
+    })
+
+    const servingsInvalid = $derived(Object.keys(form?.errors ?? {})
+        .some((path) => path === 'servings' || path.startsWith('servings.')));
 
     let formLayerCtrl = $state<UiLayerCtrl | null>(null);
     function openItemForm(item: BarOfferItem | null) {
         if (formLayerCtrl) return;
 
-        preset = item?.servingPreset ?? SERVING_PRESETS.items[0].key;
+        if (item) {
+            Object.assign(workingCopy, item)
+        } else {
+            applyPreset(workingCopy, SERVING_PRESETS.items[0].key);
+        }
 
         formLayerCtrl = uiLayers.pushSnippet(offerItemForm, item, {
             heading: item
@@ -37,7 +58,6 @@
                 : m["baroo.backstage.offer.create_item"](),
             onDestroyed: () => {
                 formLayerCtrl = null;
-                preset = SERVING_PRESETS.items[0].key;
             },
         }).ctrl;
     }
@@ -110,13 +130,9 @@
                                 </td>
                                 <td>
                                     <div class="pricing-display">
-                                        {#if item.pricing && Object.keys(item.pricing).length > 0}
-                                            {#each item.servings as serving (serving.key)}
-                                                <span class="badge bg-info">{servingText(serving, item.measure)}: {renderer.formatCurrency("czk", item.pricing[serving.key])}</span>
-                                            {/each}
-                                        {:else}
-                                            <span class="text-muted">{m["baroo.backstage.offer.no_pricing"]()}</span>
-                                        {/if}
+                                        {#each item.servings as serving (serving.key)}
+                                            <span class="badge bg-info">{servingText(serving, item.measure)}: {renderer.formatCurrency(data.bar.currency, serving.price)}</span>
+                                        {/each}
                                     </div>
                                 </td>
                                 <td>
@@ -195,11 +211,11 @@
                 value={failed?.key ?? item?.key ?? ''}
                 required
                 pattern="[a-z0-9\-]+"
-                placeholder={m["baroo.backstage.offer.placeholder_key"]()}
+                placeholder={m["baroo.backstage.offer.key.placeholder"]()}
                 class:error={form?.errors?.key}
             />
             <FormErrors error={form?.errors?.key}/>
-            <small>{m["baroo.backstage.offer.key_help"]()}</small>
+            <small>{m["baroo.backstage.offer.key.help"]()}</small>
         </div>
         <div class="input-pair col-md-7">
             <label for="name" class="form-label">{m["baroo.backstage.offer.name"]()}</label>
@@ -210,7 +226,7 @@
                 class="form-control"
                 value={failed?.name ?? item?.name ?? ''}
                 required
-                placeholder={m["baroo.backstage.offer.placeholder_name"]()}
+                placeholder={m["baroo.backstage.offer.name.placeholder"]()}
                 class:error={form?.errors?.name}
             />
             <FormErrors error={form?.errors?.name}/>
@@ -228,43 +244,127 @@
             />
             <FormErrors error={form?.errors?.preview_1x1}/>
         </div>
-        <div class="input-pair col-md-5">
-            <label for="servingPreset" class="form-label">{m["baroo.backstage.offer.serving_preset"]()}</label>
-            <select
-                id="servingPreset"
-                name="servingPreset"
-                class="form-select"
-                bind:value={preset}
-            >
-                {#each SERVING_PRESETS.items as preset (preset.key)}
-                    <option value={preset.key}>{renderer.print(preset.label)}</option>
+        <div class="input-pair col-md-6">
+            <SchemaInput
+                name="servingPreset" i18nPrefix="baroo.backstage.offer."
+                inputSchema={servingPresetSchema}
+                bind:value={() => selectedPreset, (preset) => {
+                    selectedPreset = preset
+                    selectedPreset && applyPreset(workingCopy, selectedPreset)
+                }}
+            />
+        </div>
+        <div class="input-pair col-md-6">
+            <label for="measure" class="form-label">{m["generic.measure.label"]()}</label>
+            <select id="measure" name="measure" class="form-select" bind:value={workingCopy.measure}>
+                {#each knownMeasures.items as known (known.name)}
+                    <option value={known.name}>{measureLabel(known.name)}</option>
                 {/each}
             </select>
+            <FormErrors error={form?.errors?.measure}/>
         </div>
-        <div class="col-12">
-            <span class="form-label">{m["baroo.backstage.offer.serving_prices"]()}</span>
-            <div class="serving-prices">
-                {#each activePreset.servings as serving (serving.key)}
-                    {@const priceId = `pricing.${serving.key}`}
-                    <label for={priceId}>{servingText(serving, activePreset.measure)}</label>
-                    <div class="input-group">
-                        <input
-                            type="number"
-                            id={priceId}
-                            name={priceId}
-                            class="form-control"
-                            placeholder={m["baroo.backstage.offer.variant_price_placeholder"]()}
-                            value={item?.pricing?.[serving.key]}
-                            step="0.01"
-                            min="0"
-                        />
-                        <span class="input-group-text">{renderer.currencySymbol("czk")}</span>
-                    </div>
-                {/each}
-            </div>
+        <fieldset class="col-12">
+            <legend class="form-label">{m["baroo.backstage.offer.servings"]()}</legend>
+            <input type="hidden" name="servings" value={JSON.stringify(workingCopy.servings)} />
+            <table class="table servings">
+                <thead>
+                    <tr>
+                        <th>{m["baroo.backstage.offer.serving_key"]()}</th>
+                        <th>{m["baroo.backstage.offer.serving_label"]()}</th>
+                        <th>{m["baroo.backstage.offer.serving_quantity"]()}</th>
+                        {#each locales as locale (locale)}
+                            <th>{m["baroo.backstage.offer.serving_name"]({ locale })}</th>
+                        {/each}
+                        <th>{m["baroo.backstage.offer.variant_price"]()}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#each workingCopy.servings as serving, index (index)}
+                        <tr>
+                            <td>
+                                <input
+                                    type="text"
+                                    class="form-control font-monospace"
+                                    bind:value={serving.key}
+                                    required
+                                    pattern={"[0-9a-z_]{1,8}"}
+                                    aria-label={m["baroo.backstage.offer.serving_key"]()}
+                                />
+                            </td>
+                            <td>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    bind:value={serving.label}
+                                    required
+                                    aria-label={m["baroo.backstage.offer.serving_label"]()}
+                                />
+                            </td>
+                            <td>
+                                <div class="input-group">
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        bind:value={serving.quantity}
+                                        min="0"
+                                        step="any"
+                                        required
+                                        inputmode={knownMeasures.index[workingCopy.measure].inputMode}
+                                        aria-label={m["baroo.backstage.offer.serving_quantity"]()}
+                                    />
+                                    <span class="input-group-text">{measureLabel(workingCopy.measure)}</span>
+                                </div>
+                            </td>
+                            {#each locales as locale (locale)}
+                                <td>
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        bind:value={serving.name[locale]}
+                                        required
+                                        aria-label={m["baroo.backstage.offer.serving_name"]({ locale })}
+                                    />
+                                </td>
+                            {/each}
+                            <td>
+                                <div class="input-group">
+                                    <input
+                                        type="number"
+                                        class="form-control"
+                                        name={`pricing.${serving.key}`}
+                                        bind:value={serving.price}
+                                        placeholder={m["baroo.backstage.offer.variant_price_placeholder"]()}
+                                        step="0.01"
+                                        min="0"
+                                        aria-label={`${m["baroo.backstage.offer.variant_price"]()} ${servingText(serving, workingCopy.measure)}`}
+                                    />
+                                    <span class="input-group-text">{renderer.currencySymbol(data.bar.currency)}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <button
+                                    type="button"
+                                    class="btn btn-icon btn-sm"
+                                    title={m["baroo.backstage.offer.remove_serving"]()}
+                                    aria-label={m["baroo.backstage.offer.remove_serving"]()}
+                                    onclick={() => workingCopy.servings = workingCopy.servings.toSpliced(index, 1)}
+                                >✖</button>
+                            </td>
+                        </tr>
+                    {/each}
+                </tbody>
+            </table>
+            <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                onclick={() => workingCopy.servings = [...workingCopy.servings, { key: '', label: '', quantity: 1, name: {}, price: 0 }]}
+            >{m["baroo.backstage.offer.add_serving"]()}</button>
+            {#if servingsInvalid}
+                <p class="error-message">{m["baroo.backstage.offer.servings_invalid"]()}</p>
+            {/if}
             <FormErrors error={form?.errors?.pricing}/>
-            <FormErrors error={form?.errors?.servingPreset}/>
-        </div>
+        </fieldset>
         <div class="col-12 actions">
             <button type="submit" class="btn btn-primary">
                 {item ? m["baroo.backstage.offer.update"]() : m["baroo.backstage.offer.create"]()}
@@ -376,10 +476,15 @@
     gap: 1.5rem;
 }
 
-.serving-prices {
-    display: grid;
-    grid-template-columns: 1fr 160px;
-    gap: 0.5rem;
-    align-items: center;
+.servings {
+    margin-block-end: 0.5rem;
+
+    th, td {
+        vertical-align: middle;
+    }
+
+    .input-group {
+        min-width: 8rem;
+    }
 }
 </style>

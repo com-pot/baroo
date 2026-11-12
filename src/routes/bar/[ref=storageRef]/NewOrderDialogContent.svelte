@@ -1,7 +1,7 @@
 <script lang="ts">
 import * as m from "$lib/paraglide/messages.js";
 import type { BarOfferItem } from "$lib/bar/BarModel";
-import { servingPreset, servingText } from "$lib/bar/servings";
+import { servingText } from "$lib/bar/servings";
 import { compareTaps } from "$lib/bar/stats/barOfferItems";
 import type { TagMapping } from "$lib/bar/tags";
 import type { BarOfflineStore } from "$lib/offline/store.svelte";
@@ -76,14 +76,13 @@ const onTaps = $derived(taps
     })
     .filter((entry, i, all) => all.findIndex((other) => other.tap === entry.tap) === i)
     .sort((a, b) => compareTaps(a.tap, b.tap)));
-const byCount = $derived(store.offerItems.filter((item) => servingPreset(item.servingPreset).measure === "count"));
-const byVolume = $derived(store.offerItems.filter((item) => servingPreset(item.servingPreset).measure === "volume"));
+const byCount = $derived(store.offerItems.filter((item) => item.measure === "count"));
+const byVolume = $derived(store.offerItems.filter((item) => item.measure === "volume"));
 
 </script>
 
 {#snippet offerCard(item: BarOfferItem, tap: { tap: string, label?: string } | null)}
-    {@const itemPreset = servingPreset(item.servingPreset)}
-    {@const servings = itemPreset.servings.filter((serving) => item.pricing?.[serving.key] != null)}
+    {@const servings = item.servings.filter((serving) => item.pricing?.[serving.key] != null)}
     {@const line = lineOf({ key: item.key, tap: tap?.tap })}
     <div class="card item" data-key={item.key} data-tap={tap?.tap}>
         <span class="item-name">
@@ -105,7 +104,7 @@ const byVolume = $derived(store.offerItems.filter((item) => servingPreset(item.s
                     data-value={serving.key}
                     onclick={() => kioskOrderCtrl.addToOrder({ key: item.key, variant: serving.key, tap: tap?.tap ?? null })}
                 >
-                    <kbd>{servingText(serving, itemPreset.measure)}</kbd>
+                    <kbd>{servingText(serving, item.measure)}</kbd>
                     <span class="amount">{currentOrderCounts[`${line}-${serving.key}`] || 0}</span>
                 </button>
             {/each}

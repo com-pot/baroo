@@ -48,8 +48,3 @@ export function describeField(schema: z.ZodType): FieldShape {
     const kind: FieldKind = base.type in kinds ? kinds[base.type as keyof typeof kinds] : "unknown"
     return { kind, base, nullable, meta };
 }
-
-export function messageOf(key: string): string | undefined {
-    const messages = m as unknown as Record<string, (() => string) | undefined>;
-    return key in messages ? messages[key]?.() : undefined;
-}

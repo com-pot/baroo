@@ -2,8 +2,8 @@
 Baroo TapTapper (PípaPípač): a Raspberry Pi Pico W with an RC522 reader, one at each tap.
 
 A package tag unseals a fresh package of its kind onto this tap. A member's card is an
-offer of what the tap pours, waiting for a size: picked on the TapTapper's own size
-buttons, or by the barman on the tablet. The TapTapper knows nothing on purpose and works
+offer of what the tap pours, waiting for a size picked on the TapTapper's own size
+buttons. The TapTapper knows nothing on purpose and works
 online only: the server says which tags are packages, who the card belongs to, what the
 tap pours and how much of it is left, and files whatever happens as this tap — the token
 in config.py, from baroo backstage, says which one.
@@ -37,9 +37,6 @@ PIN_RST = 22
 CARD_GONE_MS = 500
 # The server calls a TapTapper gone after 60 s without hearing from it.
 HELLO_INTERVAL_MS = 20000
-# While an offer waits, the heartbeat asks after it this often: served on the tablet, or
-# dismissed there, it is off the screen at once.
-OFFER_POLL_MS = 1500
 # An RC522 can go deaf after hours of polling. A soft reset is cheap, but it also wakes
 # any card lying on the antenna — so only after the field has been empty a while.
 READER_RESET_INTERVAL_MS = 60000
@@ -169,18 +166,13 @@ def handle_scan(uid):
         unsealed = reply["package"]
         print("now pouring", unsealed["offerItemKey"], "-", unsealed["name"], unsealed["label"])
         signal(PACKAGE_SET)
-    elif result == "offer" and answerable(reply):
+    elif result == "offer":
         signal(POURED)
     else:
-        # Nothing on this tap yet, an unknown card, or nobody to pick the size.
-        print("not offered:", result, "- delivered to", reply.get("delivered"))
+        # Nothing on this tap yet, an unknown card, or no buttons for the sizes.
+        print("not offered:", result)
         signal(FAILED)
     return reply
-
-
-def answerable(reply):
-    """Whether somebody can pick the size of an offer: a kiosk, or these buttons."""
-    return reply.get("delivered", 0) > 0 or bool(buttons and reply.get("variants"))
 
 
 def handle_size(offer, variant):
@@ -199,29 +191,21 @@ def handle_size(offer, variant):
     if reply.get("result") == "served":
         signal(POURED)
     else:
-        # Dismissed on the tablet meanwhile.
+        # The server forgot the offer meanwhile.
         print("not served:", reply.get("result"))
         signal(FAILED)
     return reply
 
 
-def say_hello(listeners, offer=None):
-    """The heartbeat, asking after `offer` too when given.
-
-    Returns the server's reply, or None when there was none.
-    """
-    payload = {"offer": offer} if offer else {}
+def say_hello():
+    """The heartbeat. Returns the server's reply, or None when there was none."""
     try:
-        reply = post("hello", payload)
+        return post("hello", {})
     except NotAuthorized:
         raise
     except Exception as e:
         print("hello failed:", repr(e))
         return None
-
-    if reply.get("listeners") != listeners:
-        print("hello:", reply.get("listeners"), "kiosk(s) listening")
-    return reply
 
 
 # --- the display ------------------------------------------------------------------------
@@ -340,12 +324,12 @@ def read_card(reader):
     return "".join("{:02x}".format(b) for b in uid)
 
 
-def hello_or_halt(display, watchdog, listeners, offer=None):
+def hello_or_halt(display, watchdog):
     """The heartbeat, waiting out a revoked token: until a new config.py comes with the
     tap authorized again, there is nothing this TapTapper may do."""
     while True:
         try:
-            return say_hello(listeners, offer)
+            return say_hello()
         except NotAuthorized:
             print("not authorized: get a new config.py from baroo backstage")
             display.message(["Pipa neni", "autorizovana"], tone="error")
@@ -384,8 +368,7 @@ def main():
     reader = Reader(sck=PIN_SCK, mosi=PIN_MOSI, miso=PIN_MISO, rst=PIN_RST, cs=PIN_CS, spi_id=0)
     reader.init()
 
-    reply = hello_or_halt(display, watchdog, None)
-    listeners = reply.get("listeners") if reply else None
+    reply = hello_or_halt(display, watchdog)
     label = (reply or {}).get("label") or label
     print("tap", label)
     signal(READY if reply else FAILED)
@@ -396,15 +379,14 @@ def main():
     shown = None
     # When a scan's screen gives way to the idle screen again.
     idle_at = None
-    # The offer the size buttons answer and the heartbeat asks after: its id and the sizes
-    # the item on tap is offered in, which the buttons answer in order.
+    # The offer the size buttons answer: its id and the sizes they answer, in order.
     waiting = None
     # The buttons down at the last look, so one held down counts once.
     held = set()
 
     now = time.ticks_ms()
     last_uid, last_seen = None, now
-    last_hello, last_reset, last_poll = now, now, now
+    last_hello, last_reset = now, now
 
     def show_idle():
         nonlocal shown
@@ -472,12 +454,10 @@ def main():
                 reply = handle_scan(uid)
                 watchdog.feed()
                 show_reply(reply)
-                # An offer waits while its screen is up, and only when somebody can pick
-                # its size: a kiosk that heard of it, or the buttons here.
+                # An offer waits on the buttons while its screen is up.
                 waiting = None
-                if reply and reply.get("offer") and answerable(reply):
+                if reply and reply.get("result") == "offer" and buttons:
                     waiting = {"id": reply["offer"], "variants": reply.get("variants") or []}
-                    last_poll = time.ticks_ms()
             last_uid = uid
             # Taken after the scan, which may have spent seconds on the network: a card
             # still lying there is seen again at once and must not count as new.
@@ -497,22 +477,10 @@ def main():
             waiting = None
             blocking(show_idle)
 
-        if waiting and time.ticks_diff(now, last_poll) >= OFFER_POLL_MS:
-            last_poll = now
-            reply = blocking(lambda: hello_or_halt(display, watchdog, listeners, waiting["id"]))
-            if reply:
-                listeners = reply.get("listeners")
-                idle = reply.get("idle") or idle
-                # Served on the tablet — with what is left now — or dismissed there.
-                if reply.get("offer"):
-                    waiting = None
-                    blocking(lambda: show_reply(reply["offer"]))
-
         if time.ticks_diff(now, last_hello) >= HELLO_INTERVAL_MS:
             last_hello = now
-            reply = blocking(lambda: hello_or_halt(display, watchdog, listeners))
+            reply = blocking(lambda: hello_or_halt(display, watchdog))
             if reply:
-                listeners = reply.get("listeners")
                 label = reply.get("label") or label
                 idle = reply.get("idle") or idle
                 # Back on the idle screen, and it changed — the gauge, say — or the server

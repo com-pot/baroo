@@ -12,7 +12,8 @@
     }: {
         closure: ClosureData;
         closedAt: string;
-        offerItem: Pick<BarOfferItem, "measure"|"servings">;
+        /** `null` once the item is gone from the offer */
+        offerItem: Pick<BarOfferItem, "measure"|"servings"> | null;
     } = $props();
 </script>
 
@@ -46,11 +47,11 @@
         <div class="variant-breakdown">
             <strong>Variants:</strong>
             <div class="items-grid -tight">
-                {#each offerItem.servings as serving (serving.key)}
-                    {@const count = closure.variantCounts[serving.key] ?? 0}
+                {#each Object.entries(closure.variantCounts) as [variant, count] (variant)}
+                    {@const serving = offerItem?.servings.find((candidate) => candidate.key === variant)}
                     {#if count > 0}
                     <div class="tile">
-                        <span class="label">{servingText(serving, offerItem.measure)}</span>
+                        <span class="label">{serving ? servingText(serving, closure.measure) : variant}</span>
                         <span role="separator">×</span>
                         <span class="value">{count}</span>
                     </div>

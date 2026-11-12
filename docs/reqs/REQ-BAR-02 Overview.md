@@ -1,7 +1,7 @@
 # REQ-BAR-02 Overview
 Baroo allows to display dashboard-like overview of bar that shows stats about the bar members and offer items.
 
-Stock is kept per package — a keg, a case — in `bar_offer_packages`: its offer item, an optional `label`, the `quantity` it holds in the measure its serving preset uses (30 litres from a tap, 24 bags out of a box), and optionally the NFC `tagSerial` that unseals it at a tap. A package is *registered* (in backstage, *Nabídka*), *unsealed* (`unsealedAt`, `tap` while it is on one) and *flushed* (`flushedAt`) once done with. Unsealing a package nobody registered registers it there and then — a kiosk mints its id before it syncs — so every package an order draws from exists.
+Stock is kept per package — a keg, a case — in `bar_offer_packages`: its offer item, an optional `label`, the `quantity` it holds in its item's `measure` (30 litres from a tap, 24 bags out of a box), and optionally the NFC `tagSerial` that unseals it at a tap. A package is *registered* (in backstage, *Nabídka*), *unsealed* (`unsealedAt`, `tap` while it is on one) and *flushed* (`flushedAt`) once done with. Unsealing a package nobody registered registers it there and then — a kiosk mints its id before it syncs — so every package an order draws from exists.
 
 One package is open per slot: a tap, or an item's packages off the taps. Unsealing another one there flushes what was open; one unsealed later than that stays open, a kiosk syncing late does not get to close it. Flushing closes the package wherever it is.
 
@@ -46,7 +46,7 @@ Taps are prepared in backstage (*Pípy*), one `bar_taps` record each: its `seque
 
 `bar_taps` is an auth collection: a tap acts in PocketBase as itself, with a token that *authorizing* it in backstage issues. Authorizing saves the config, refreshes the tap's token key — which revokes its previous token — and hands back `config.py` with the new token in it; the token is not stored. `configChecksum` is the hash of that file without its token, so backstage tells when the config or the wifi it uses changed since (*Changed config not authorized*). `validThrough` is when the token runs out, a year after authorizing.
 
-TapTappers are online-only. Every request goes through the SvelteKit server to PocketBase as the tap — which also marks it `lastSeen`; the TapTapper says hello every 20 s. Scanning a package tag files its unseal, and an order for a member's card is filed by the tap too, whether its size was picked on the TapTapper's buttons or on a kiosk. Kiosks themselves stay offline-first and sync as before.
+TapTappers are online-only. Every request goes through the SvelteKit server to PocketBase as the tap — which also marks it `lastSeen`; the TapTapper says hello every 20 s. Scanning a package tag files its unseal, and an order for a member's card is filed by the tap too, once its size is picked on the TapTapper's buttons. Kiosks have no part in either: they stay offline-first, watch what is on the taps and get the taps' orders and unseals with their next pull.
 
 Wifi networks the taps may join are kept per bar in `app_settings` (`namespace` `bar:<slug>`, `key` `wifiNetworks`), so a tap's config only picks one.
 
@@ -57,7 +57,7 @@ Initial stats to implement are:
 This stat summarizes the order items of a package grouped by serving. Below the grouped serving counts we'll display the total drawn from it, each serving contributing its own quantity:
 `count(variant=0_5) * 0.5 + count(variant=0_3) * 0.3`
 
-Every preset has a measure, so `unit` items get a total too — 17 ks rather than 17 l. Against the package's `quantity` that gives roughly how much of it is left. Order rows whose variant predates serving presets are grouped under "other" and count for nothing.
+Every item has a measure, so items sold by the piece get a total too — 17 ks rather than 17 l. Against the package's `quantity` that gives roughly how much of it is left. Order rows whose variant is not among the item's servings are grouped under "other" and count for nothing.
 
 ### Total members' order items
 This stat displays "high-score" like list of top purchaser members. It's calculated by loading all members and left-joining count of their orders.

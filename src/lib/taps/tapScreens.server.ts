@@ -1,18 +1,17 @@
 import sharp from 'sharp';
 import z from 'zod';
 import * as m from '$lib/paraglide/messages.js';
-import { getLocale } from '$lib/paraglide/runtime.js';
 import { formatQuantity } from '$lib/bar/quantity';
-import { SERVING_PRESETS, servingText } from '$lib/bar/servings';
+import { servingText } from '$lib/bar/servings';
 import type { Measure } from '$lib/si/measure';
 import { readTapConfig, tapModel } from './models';
 import { buttonColor } from './models/tap-tapper_v1.0/palette';
 import { tapLabel } from './barTap';
 import type { TapSession } from './tapAuth.server';
 import { tapState } from './tapBoard.server';
-import { lookupCard, lookupDrink, type Drink } from './tapLookup.server';
-import type { TapScreens, TapState, TapVariant } from './tapEvents';
-import type { PendingOffer } from './tapHub.server';
+import { lookupCard, lookupDrink } from './tapLookup.server';
+import { servingKey, type TapScreens, type TapState } from './tapEvents';
+import type { PendingOffer } from './tapOffers.server';
 import { imagesVersion, readImage, type StoredImage } from './tapImages.server';
 
 /**
@@ -25,12 +24,11 @@ export const SCREEN_HEIGHT = 320;
 
 /** How long a scan's screen stays before returning to idle */
 export const SCREEN_HOLD_MS = 5000;
-/** How long the TapTapper waits on a pending offer, the kiosk keeps it regardless */
+/** How long the TapTapper waits on its buttons for a pending offer */
 export const OFFER_WAIT_MS = 15000;
 
 const offerItemKey = z.string().regex(/^[a-z0-9-]{1,32}$/);
 const cardSerial = z.string().regex(/^[0-9a-f]{4,40}$/);
-const servingKey = z.string().regex(/^[0-9a-z_]{1,8}$/);
 const quantity = z.coerce.number().min(0).max(100_000);
 
 export const screenSpecSchema = z.discriminatedUnion('view', [
@@ -52,15 +50,16 @@ export const screenSpecSchema = z.discriminatedUnion('view', [
         view: z.literal('offer'),
         item: offerItemKey,
         serial: cardSerial,
-        /** Servings the TapTapper's buttons answer, in their order, comma separated */
-        sizes: z.string().regex(/^[0-9a-z_,]{0,40}$/).optional(),
-        warn: z.literal('no-kiosk').optional(),
+        /** Serving keys the TapTapper's buttons answer, in their order, comma separated */
+        variants: z.string().regex(/^[0-9a-z_,]{0,40}$/).optional(),
+        warn: z.literal('no-sizes').optional(),
     }),
     z.object({
         view: z.literal('served'),
         item: offerItemKey,
         serial: cardSerial,
-        size: servingKey,
+        /** Serving key */
+        variant: servingKey,
         left: quantity.optional(),
         total: quantity.optional(),
     }),
@@ -113,7 +112,7 @@ export async function servedScreens(
         view: 'served',
         item: offer.offerItemKey,
         serial: offer.serialId,
-        size: offer.variant,
+        variant: offer.variant,
         left: stock?.left,
         total: stock?.quantity,
     });
@@ -137,12 +136,15 @@ export function tapButtons(tap: TapSession["tap"]): number[] {
 const CACHE_SIZE = 24;
 const cache = new Map<string, Buffer>();
 
-export async function renderScreen(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: z.output<typeof screenSpecSchema>): Promise<Buffer> {
+/** What drawing a screen needs of the request */
+type ScreenCtx = Pick<App.Locals, "logger" | "i18n">;
+
+export async function renderScreen(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof screenSpecSchema>): Promise<Buffer> {
     const key = [
         session.tap.id,
         tapLabel(session.tap),
         tapButtons(session.tap).join(','),
-        getLocale(),
+        ctx.i18n.locale,
         imagesVersion(),
         JSON.stringify(spec),
     ].join('|');
@@ -179,7 +181,7 @@ const LOW_SHARE = 0.2;
 
 type Layer = { input: Buffer; top: number; left: number };
 
-async function draw(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: z.output<typeof screenSpecSchema>): Promise<Buffer> {
+async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof screenSpecSchema>): Promise<Buffer> {
     const svg: string[] = [];
     const layers: Layer[] = [];
     const { pb } = session;
@@ -193,16 +195,16 @@ async function draw(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: 
 
             if (!spec.item) {
                 await picture(ctx, svg, layers, null, '?', { left: 30, top: 44, size: 180, shape: 'rounded' });
-                svg.push(text(m['baroo.tap_screen.no_drink'](), { y: 262, size: 30, weight: 700, fill: COLORS.text }));
-                svg.push(text(m['baroo.tap_screen.tap_package_tag'](), { y: 302, size: 16, fill: COLORS.muted }));
+                svg.push(text(m['baroo.tap_screen.no_drink']({}, { locale: ctx.i18n.locale }), { y: 262, size: 30, weight: 700, fill: COLORS.text }));
+                svg.push(text(m['baroo.tap_screen.tap_package_tag']({}, { locale: ctx.i18n.locale }), { y: 302, size: 16, fill: COLORS.muted }));
                 break;
             }
 
             const name = drink?.name ?? spec.item;
             await picture(ctx, svg, layers, drink?.image ?? null, name, { left: 45, top: 40, size: 150, shape: 'rounded' });
             svg.push(text(name, { y: 224, size: 28, weight: 700, fill: COLORS.text }));
-            if (spec.total) gauge(svg, 238, spec.left ?? 0, spec.total, drink?.measure);
-            svg.push(text(m['baroo.tap_screen.tap_card'](), { y: 302, size: 16, fill: COLORS.muted }));
+            if (spec.total) gauge(ctx, svg, 238, spec.left ?? 0, spec.total, drink?.measure);
+            svg.push(text(m['baroo.tap_screen.tap_card']({}, { locale: ctx.i18n.locale }), { y: 302, size: 16, fill: COLORS.muted }));
             break;
         }
 
@@ -211,12 +213,12 @@ async function draw(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: 
             const name = drink?.name ?? spec.item;
 
             svg.push(rect(0, 0, SCREEN_WIDTH, 40, COLORS.ok));
-            svg.push(text(`✓ ${m['baroo.tap_screen.unsealed']()}`, { y: 27, size: 18, weight: 700, fill: COLORS.text }));
+            svg.push(text(`✓ ${m['baroo.tap_screen.unsealed']({}, { locale: ctx.i18n.locale })}`, { y: 27, size: 18, weight: 700, fill: COLORS.text }));
 
             await picture(ctx, svg, layers, drink?.image ?? null, name, { left: 50, top: 48, size: 140, shape: 'rounded' });
             svg.push(text(name, { y: 220, size: 26, weight: 700, fill: COLORS.text }));
 
-            if (spec.total) gauge(svg, 232, spec.left ?? spec.total, spec.total, drink?.measure);
+            if (spec.total) gauge(ctx, svg, 232, spec.left ?? spec.total, spec.total, drink?.measure);
             if (spec.label) svg.push(text(spec.label, { y: 292, size: 18, fill: COLORS.accent }));
             break;
         }
@@ -227,7 +229,7 @@ async function draw(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: 
                 lookupCard(pb, barSlug, spec.serial),
                 lookupDrink(pb, barSlug, spec.item),
             ]);
-            const name = holder?.nickName || m['baroo.tap_screen.greeting_unknown']();
+            const name = holder?.nickName || m['baroo.tap_screen.greeting_unknown']({}, { locale: ctx.i18n.locale });
             const drinkName = drink?.name ?? spec.item;
 
             svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
@@ -237,27 +239,25 @@ async function draw(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: 
                 svg.push(text(name, { y: 190, size: 30, weight: 700, fill: COLORS.text }));
                 svg.push(text(drinkName, { y: 216, size: 20, fill: COLORS.accent }));
 
-                if (spec.total) gauge(svg, 226, spec.left ?? 0, spec.total, drink?.measure);
+                if (spec.total) gauge(ctx, svg, 226, spec.left ?? 0, spec.total, drink?.measure);
+
+                const serving = drink?.servings.find((candidate) => candidate.key === spec.variant);
+                const served = serving && drink
+                    ? `${ctx.i18n.pick(serving.name) ?? serving.label} ${servingText(serving, drink.measure, ctx.i18n.locale)}`
+                    : spec.variant;
                 svg.push(rect(0, 262, SCREEN_WIDTH, 58, COLORS.ok));
-                svg.push(text(`✓ ${sizeName(spec.size)}`, { y: 300, size: 24, weight: 700, fill: COLORS.text }));
+                svg.push(text(`✓ ${served}`, { y: 300, size: 24, weight: 700, fill: COLORS.text }));
                 break;
             }
 
             await picture(ctx, svg, layers, holder?.image ?? null, holder?.nickName || '?', { left: 45, top: 42, size: 150, shape: 'circle' });
 
-            const sizes = (spec.sizes ?? '').split(',').filter(Boolean);
-            if (!spec.warn && !sizes.length) {
-                svg.push(text(name, { y: 236, size: 34, weight: 700, fill: COLORS.text }));
-                svg.push(text(drinkName, { y: 270, size: 22, fill: COLORS.accent }));
-                svg.push(text(m['baroo.tap_screen.pick_size'](), { y: 306, size: 15, fill: COLORS.muted }));
-                break;
-            }
-
+            const variants = (spec.variants ?? '').split(',').filter(Boolean);
             svg.push(text(name, { y: 228, size: 34, weight: 700, fill: COLORS.text }));
             svg.push(text(drinkName, { y: 258, size: 22, fill: COLORS.accent }));
 
-            if (spec.warn === 'no-kiosk') {
-                noKiosk(svg, 270);
+            if (spec.warn === 'no-sizes') {
+                noSizes(ctx, svg, 270);
                 break;
             }
 
@@ -266,13 +266,14 @@ async function draw(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: 
             const gap = 12;
             const width = (SCREEN_WIDTH - gap * (buttons.length + 1)) / Math.max(buttons.length, 1);
             buttons.forEach((colorIndex, i) => {
-                const size = sizes[i];
-                if (!size) return;
+                const variant = variants[i];
+                if (!variant) return;
+                const serving = drink?.servings.find((candidate) => candidate.key === variant);
 
                 const color = buttonColor(colorIndex);
                 const x = gap + i * (width + gap);
                 svg.push(`<rect x="${x}" y="274" width="${width}" height="38" rx="19" fill="${color.fill}"/>`);
-                svg.push(text(sizeName(size, false), {
+                svg.push(text(ctx.i18n.pick(serving?.name) ?? variant, {
                     x: x + width / 2, y: 300, size: 22, weight: 700, fill: color.text, maxWidth: width - 16,
                 }));
             });
@@ -282,15 +283,15 @@ async function draw(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: 
         case 'unset': {
             svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
             await picture(ctx, svg, layers, null, '!', { left: 45, top: 42, size: 150, shape: 'circle' });
-            svg.push(text(m['baroo.tap_screen.unset_title'](), { y: 236, size: 26, weight: 700, fill: COLORS.text }));
-            svg.push(text(m['baroo.tap_screen.tap_package_tag'](), { y: 272, size: 18, fill: COLORS.accent }));
+            svg.push(text(m['baroo.tap_screen.unset_title']({}, { locale: ctx.i18n.locale }), { y: 236, size: 26, weight: 700, fill: COLORS.text }));
+            svg.push(text(m['baroo.tap_screen.tap_package_tag']({}, { locale: ctx.i18n.locale }), { y: 272, size: 18, fill: COLORS.accent }));
             break;
         }
 
         case 'unknown-card': {
             svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
             await picture(ctx, svg, layers, null, '?', { left: 45, top: 42, size: 150, shape: 'circle' });
-            svg.push(text(m['baroo.tap_screen.unknown_card'](), { y: 236, size: 26, weight: 700, fill: COLORS.text }));
+            svg.push(text(m['baroo.tap_screen.unknown_card']({}, { locale: ctx.i18n.locale }), { y: 236, size: 26, weight: 700, fill: COLORS.text }));
             svg.push(text(spec.serial, { y: 272, size: 18, fill: COLORS.accent }));
             break;
         }
@@ -304,14 +305,14 @@ async function draw(ctx: Pick<App.Locals, "logger">, session: TapSession, spec: 
     return sharp(Buffer.from(frame)).composite(layers).removeAlpha().raw().toBuffer();
 }
 
-function noKiosk(svg: string[], top: number): void {
+function noSizes(ctx: ScreenCtx, svg: string[], top: number): void {
     svg.push(rect(0, top, SCREEN_WIDTH, SCREEN_HEIGHT - top, COLORS.error));
-    svg.push(text(m['baroo.tap_screen.no_kiosk'](), { y: top + 21, size: 17, weight: 700, fill: COLORS.text }));
-    svg.push(text(m['baroo.tap_screen.no_kiosk_hint'](), { y: top + 41, size: 14, fill: COLORS.text }));
+    svg.push(text(m['baroo.tap_screen.no_sizes']({}, { locale: ctx.i18n.locale }), { y: top + 21, size: 17, weight: 700, fill: COLORS.text }));
+    svg.push(text(m['baroo.tap_screen.no_sizes_hint']({}, { locale: ctx.i18n.locale }), { y: top + 41, size: 14, fill: COLORS.text }));
 }
 
 /** What is left of the package, as a bar with "32,5 / 50 l" on it */
-function gauge(svg: string[], top: number, left: number, total: number, measure: Measure = 'volume'): void {
+function gauge(ctx: ScreenCtx, svg: string[], top: number, left: number, total: number, measure: Measure = 'volume'): void {
     const x = 16;
     const width = SCREEN_WIDTH - 2 * x;
     const height = 26;
@@ -324,8 +325,8 @@ function gauge(svg: string[], top: number, left: number, total: number, measure:
         svg.push(`<rect x="${x}" y="${top}" width="${Math.max(height, width * share)}" height="${height}" rx="${height / 2}" fill="${fill}"/>`);
     }
 
-    const amount = new Intl.NumberFormat(getLocale(), { maximumFractionDigits: measure === 'count' ? 0 : 1 }).format(left);
-    svg.push(text(`${amount} / ${formatQuantity(measure, total)}`, { y: top + 18, size: 15, weight: 700, fill: COLORS.text }));
+    const amount = new Intl.NumberFormat(ctx.i18n.locale, { maximumFractionDigits: measure === 'count' ? 0 : 1 }).format(left);
+    svg.push(text(`${amount} / ${formatQuantity(measure, total, ctx.i18n.locale)}`, { y: top + 18, size: 15, weight: 700, fill: COLORS.text }));
 }
 
 /** Falls back to the name's initial on a colored shape */
@@ -368,19 +369,6 @@ async function cutOut(bytes: Buffer, size: number, shape: 'circle' | 'rounded'):
         .composite([{ input: Buffer.from(mask), blend: 'dest-in' }])
         .png()
         .toBuffer();
-}
-
-/** e.g.: "Malé 0.3l" */
-function sizeName(key: string, withAmount = true): string {
-    for (const preset of SERVING_PRESETS.items) {
-        const serving = preset.props.servings.find(candidate => candidate.key === key);
-        if (!serving) continue;
-
-        const names: Record<string, string> = serving.name;
-        const name = names[getLocale()] ?? names.cs;
-        return withAmount ? `${name} ${servingText(serving, preset.props.measure)}` : name;
-    }
-    return key;
 }
 
 function rect(x: number, y: number, width: number, height: number, fill: string): string {

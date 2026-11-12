@@ -3,7 +3,6 @@
     import { enhance } from '$app/forms';
     import { untrack } from 'svelte';
     import type { BarOfferItem, OfferPackage } from '$lib/bar/BarModel';
-    import { servingPreset } from '$lib/bar/servings';
     import { formatQuantity, measureLabel, packageLabel } from '$lib/bar/quantity';
     import type { TapState } from '$lib/taps/tapEvents';
 
@@ -23,7 +22,7 @@
 
     let offerItemKey = $state(untrack(() => tap.offerItemKey ?? ''));
     const item = $derived(offerItems.find((candidate) => candidate.key === offerItemKey));
-    const measure = $derived(item ? servingPreset(item.servingPreset).measure : 'volume');
+    const measure = $derived(item?.measure ?? 'volume');
     const own = $derived(packages.filter((offerPackage) => offerPackage.offerItemKey === offerItemKey));
 
     // The oldest registered package, the size the tap had last
@@ -102,7 +101,7 @@
         <p class="form-text">
             {m["baroo.staff.unseal_flush_current_hint"]({
                 name: replaced?.name ?? tap.offerItemKey ?? '',
-                left: formatQuantity(replaced ? servingPreset(replaced.servingPreset).measure : 'volume', tap.stock.left),
+                left: formatQuantity(replaced?.measure ?? 'volume', tap.stock.left),
             })}
         </p>
     {/if}

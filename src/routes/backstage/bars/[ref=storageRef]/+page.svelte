@@ -5,7 +5,6 @@
     import { invalidateAll } from '$app/navigation';
     import { onMount } from 'svelte';
     import { formatQuantity } from '$lib/bar/quantity';
-    import { servingPreset } from '$lib/bar/servings';
     import { packageState, type BarOfferItem } from '$lib/bar/BarModel';
     import { compareTaps } from '$lib/bar/stats/barOfferItems';
     import ClosureDetails from './ClosureDetails.svelte';
@@ -13,11 +12,14 @@
     import { getUiLayers } from '$lib/ui/uiLayers.svelte';
     import StockCard from '../../../bar/[ref=storageRef]/StockCard.svelte';
     import TapBadge from '../../../bar/[ref=storageRef]/TapBadge.svelte';
-    import FormErrors from '$lib/components/FormErrors.svelte';
     import { TAP_STALE_MS, type TapState } from '$lib/taps/tapEvents';
     import { TapStream } from '$lib/taps/tapStream.svelte';
+    import SchemaInput from '$lib/ui/zchem/SchemaInput.svelte';
+    import { barSchema } from '$lib/model/bar';
+    import { getUiFeedback } from '$lib/ui/uiFeedback.svelte';
 
     const uiLayers = getUiLayers()
+    const uiFeedback = getUiFeedback()
 
     let { data, form }: { data: PageData; form: ActionData } = $props();
     const snapshot = $derived(data.snapshot)
@@ -102,7 +104,10 @@
             .slice(0, 6)
     })
 
+    let formState = $state<'idle'|'busy'|'done'|'error'>('idle')
+
     onMount(() => {
+        // ts-ignore-next-line
         import("bootstrap/dist/js/bootstrap.bundle.min.js")
     });
 </script>
@@ -114,38 +119,37 @@
 
     {#if data.ref === 'new'}
         <div class="card" style="max-width: 600px; margin-top: 2rem;">
-            <form method="POST" action="?/save" use:enhance class="card-body flow-block">
-                <div class="input-pair">
-                    <label for="slug" class="form-label">{m["baroo.backstage.bar.slug"]()}</label>
-                    <input
-                        type="text"
-                        id="slug"
-                        name="slug"
-                        class="form-control"
-                        value={form?.data?.slug ?? ''}
-                        required
-                        pattern="[a-z0-9\-]+"
-                        placeholder={m["baroo.backstage.bar.placeholder_slug"]()}
-                        class:error={form?.errors?.slug}
-                    />
-                    <FormErrors error={form?.errors?.slug}/>
-                    <small>{m["baroo.backstage.bar.slug_help"]()}</small>
+            <form method="POST" action="?/save" class="card-body flow-block"
+                use:enhance
+            >
+                <div class="row">
+                    <div class="col-md-8">
+                        <SchemaInput
+                            name="name" i18nPrefix="baroo.backstage.bar."
+                            inputSchema={barSchema.shape.name}
+                            value={form?.data?.name ?? data.bar?.name ?? ''}
+                            error={form?.errors?.name}
+                        />
+                    </div>
+                    <div class="col-md-4">
+                        <SchemaInput
+                            name="slug" i18nPrefix="baroo.backstage.bar."
+                            inputSchema={barSchema.shape.slug}
+                            readonly={(data.bar.slug?.length ?? 0) > 0}
+                            value={form?.data?.slug ?? data.bar?.slug ?? ''}
+                            error={form?.errors?.name}
+                        />
+                    </div>
                 </div>
-
-                <div class="input-pair">
-                    <label for="name" class="form-label">{m["baroo.backstage.bar.name"]()}</label>
-                    <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        class="form-control"
-                        value={form?.data?.name ?? ''}
-                        required
-                        placeholder={m["baroo.backstage.bar.placeholder_name"]()}
-                        class:error={form?.errors?.name}
-                    />
-                    <FormErrors error={form?.errors?.name}/>
-                    <small>{m["baroo.backstage.bar.name_help"]()}</small>
+                <div class="row">
+                    <div class="col-md-3">
+                        <SchemaInput
+                            name="currency" i18nPrefix="baroo.backstage.bar."
+                            inputSchema={barSchema.shape.currency}
+                            value={form?.data?.currency ?? data.bar?.currency ?? ''}
+                            error={form?.errors?.currency}
+                        />
+                    </div>
                 </div>
 
                 <div class="actions">
@@ -189,45 +193,57 @@
                         </div>
                     </div>
 
-                    <form method="POST" action="?/save" use:enhance class="card-body flow-block">
-                        <div class="input-pair">
-                            <label for="slug" class="form-label">{m["baroo.backstage.bar.slug"]()}</label>
-                            <input
-                                type="text"
-                                id="slug"
-                                name="slug"
-                                class="form-control"
-                                value={form?.data?.slug ?? data.bar?.slug ?? ''}
-                                required
-                                pattern="[a-z0-9\-]+"
-                                placeholder={m["baroo.backstage.bar.placeholder_slug"]()}
-                                class:error={form?.errors?.slug}
-                            />
-                            <FormErrors error={form?.errors?.slug}/>
-                            <small>{m["baroo.backstage.bar.slug_help"]()}</small>
-                        </div>
+                    <form method="POST" action="?/save" class="card-body flow-block"
+                        use:enhance={({ submitter }) => {
+                            formState = 'busy'
+                            return async ({ update, result }) => {
+                                formState =  result.type === "success" ? "done" : "error"
+                                await update({ reset: false })
+                                uiFeedback.plopResult("Ok", {
+                                    fromEl: submitter!,
+                                    level: "success",
+                                })
 
-                        <div class="input-pair">
-                            <label for="name" class="form-label">{m["baroo.backstage.bar.name"]()}</label>
-                            <input
-                                type="text"
-                                id="name"
-                                name="name"
-                                class="form-control"
-                                value={form?.data?.name ?? data.bar?.name ?? ''}
-                                required
-                                placeholder={m["baroo.backstage.bar.placeholder_name"]()}
-                                class:error={form?.errors?.name}
-                            />
-                            <FormErrors error={form?.errors?.name}/>
-                            <small>{m["baroo.backstage.bar.name_help"]()}</small>
+                            }
+                        }}
+                    >
+                        <div class="row">
+                            <div class="col-md-8">
+                                <SchemaInput
+                                    name="name" i18nPrefix="baroo.backstage.bar."
+                                    inputSchema={barSchema.shape.name}
+                                    value={form?.data?.name ?? data.bar?.name ?? ''}
+                                    error={form?.errors?.name}
+                                />
+                            </div>
+                            <div class="col-md-4">
+                                <SchemaInput
+                                    name="slug" i18nPrefix="baroo.backstage.bar."
+                                    inputSchema={barSchema.shape.slug}
+                                    readonly={(data.bar.slug?.length ?? 0) > 0}
+                                    value={form?.data?.slug ?? data.bar?.slug ?? ''}
+                                    error={form?.errors?.name}
+                                />
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <SchemaInput
+                                    name="currency" i18nPrefix="baroo.backstage.bar."
+                                    inputSchema={barSchema.shape.currency}
+                                    value={form?.data?.currency ?? data.bar?.currency ?? ''}
+                                    error={form?.errors?.currency}
+                                />
+                            </div>
                         </div>
 
                         <div class="actions">
-                            <button type="submit" class="btn btn-primary">{m["baroo.backstage.bar.save_changes"]()}</button>
+                            <button type="submit"class="btn btn-primary"
+                                disabled={formState === 'busy'}
+                        >{m["baroo.backstage.bar.save_changes"]()}</button>
                         </div>
 
-                        {#if form?.success && !form?.action}
+                        {#if form?.success && !form?.action && formState === "idle"}
                             <div class="alert alert-success">{m["baroo.backstage.bar.save_success"]()}</div>
                         {/if}
                     </form>
@@ -300,7 +316,7 @@
                         <StockCard
                             {item}
                             title={item?.name ?? state.offerItemKey ?? m["baroo.bar.tap.nothing_on_tap"]()}
-                            measure={item ? servingPreset(item.servingPreset).measure : "volume"}
+                            measure={item?.measure ?? "volume"}
                             left={state.stock?.left ?? null}
                             total={state.stock?.quantity ?? 0}
                             empty={m["baroo.bar.tap.nothing_on_tap"]()}

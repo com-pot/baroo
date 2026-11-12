@@ -31,9 +31,6 @@ export type TapSession = {
     ref: string;
 };
 
-/** Staff kiosks file unseals and flushes, observers (backstage) only watch */
-export type TapListenerRole = PosDeviceKind | 'observer';
-
 /** The tap behind a request, marked as seen */
 export async function requireTap(event: RequestEvent): Promise<TapSession> {
     const pb = await Promise.resolve()
@@ -61,13 +58,13 @@ export async function requireTapKiosk(event: RequestEvent): Promise<{ deviceId: 
 }
 
 /** Kiosks by their device token, backstage by the bar manager's session */
-export async function tapListener(event: RequestEvent): Promise<{ role: TapListenerRole; pb: Db } | null> {
+export async function tapListener(event: RequestEvent): Promise<{ pb: Db } | null> {
     if (bearer(event)) {
         const kiosk = await requireTapKiosk(event);
-        return { role: kiosk.kind, pb: kiosk.pb };
+        return { pb: kiosk.pb };
     }
 
-    return event.locals.acl.hasRole('bar-manager') ? { role: 'observer', pb: event.locals.pb } : null;
+    return event.locals.acl.hasRole('bar-manager') ? { pb: event.locals.pb } : null;
 }
 
 function bearer(event: RequestEvent): string | undefined {

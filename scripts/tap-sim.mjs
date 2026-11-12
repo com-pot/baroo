@@ -1,15 +1,14 @@
 /**
- * Pretends to be a TapTapper, so the kiosk side can be tried without a Pico.
+ * Pretends to be a TapTapper, so the server side can be tried without a Pico.
  *
  *   npm run tap-sim -- scan <uid>
  *   npm run tap-sim -- serve <size>
- *   npm run tap-sim -- hello [--offer]
+ *   npm run tap-sim -- hello
  *
  * Like a real TapTapper it knows nothing of its own: the server says what the tap pours, and
  * which tap it is - by its token, from the config.py backstage hands out on authorizing it.
  * A scan that made an offer is remembered - per token, in node_modules/.cache - so
- * `serve 0_3` (or `0_5`) presses that size for it, and `hello --offer` asks after it the way
- * a waiting TapTapper does.
+ * `serve 0_3` (or `0_5`) presses that size for it.
  *
  * `--out screen.png` saves what the TapTapper's display would show: the screen a scan or a
  * serve produced, or the idle screen a hello handed back.
@@ -27,7 +26,6 @@ const USAGE = `usage: npm run tap-sim -- <scan <uid> | serve <size> | hello> [op
   --config <config.py> token, bar and server from a config file from backstage
   --bar <slug>         bar slug (default: TAP_SIM_BAR)
   --token <token>      the tap's token (default: TAP_SIM_TOKEN)
-  --offer              hello asking after the last offer, as a waiting TapTapper does
   --url <origin>       baroo server (default: TAP_SIM_URL or https://localhost:5173)
   --out <file.png>     save the TapTapper display's screen as a picture`;
 
@@ -45,7 +43,6 @@ const { values: flags, positionals } = parseArgs({
         url: { type: 'string' },
         bar: { type: 'string' },
         token: { type: 'string' },
-        offer: { type: 'boolean', default: false },
         out: { type: 'string' },
     },
 });
@@ -91,7 +88,7 @@ switch (command) {
         break;
     }
     default:
-        body = flags.offer && memory[offerKey] ? { offer: memory[offerKey] } : {};
+        body = {};
 }
 
 const response = await fetch(new URL(`/api/bars/${encodeURIComponent(flags.bar)}/taps/${command}`, origin), {
@@ -113,16 +110,16 @@ const reply = JSON.parse(text);
 
 // Like a TapTapper, a size answers only the last offer, and only once.
 if (reply.result === 'offer') memory[offerKey] = reply.offer;
-if (command === 'serve' || reply.offer?.state) delete memory[offerKey];
+if (command === 'serve') delete memory[offerKey];
 
-if (command !== 'hello' || flags.offer) {
+if (command !== 'hello') {
     await mkdir(dirname(MEMORY_FILE), { recursive: true });
     await writeFile(MEMORY_FILE, JSON.stringify(memory, null, 2));
 }
 
 console.log(describe(reply));
 
-if (flags.out) await saveScreen(reply.screen ?? reply.offer?.screen ?? reply.idle, flags.out);
+if (flags.out) await saveScreen(reply.screen ?? reply.idle, flags.out);
 
 /** Fetches a TapTapper screen and writes it out as a PNG, the way the display would show it. */
 async function saveScreen(path, file) {
@@ -151,11 +148,10 @@ async function saveScreen(path, file) {
 /** What a real TapTapper would signal, in words. */
 function describe(reply) {
     if (command === 'hello') {
-        const offer = reply.offer ? ` — the offer is ${reply.offer.state}` : flags.offer ? ' — the offer still waits' : '';
-        return `hello from ${reply.label} — ${reply.listeners} kiosk(s) listening${offer}`;
+        return `hello from ${reply.label}`;
     }
     if (command === 'serve') {
-        if (reply.result === 'gone') return 'beeeeep — the offer was dismissed or forgotten: nothing served';
+        if (reply.result === 'gone') return 'beeeeep — the offer was forgotten: nothing served';
         return `beep — size ${argument} filed`;
     }
 
@@ -164,8 +160,10 @@ function describe(reply) {
             return `beep beep — the tap now pours ${reply.package.name}, ${reply.package.label} (${reply.package.offerItemKey})`;
         case 'offer': {
             const sizes = reply.variants.map((variant) => `${variant.key} (${variant.label})`).join(', ');
-            return `beep — offer sent to ${reply.delivered} kiosk(s), sizes ${sizes || 'none'}`;
+            return `beep — offer waits on the buttons, sizes ${sizes}`;
         }
+        case 'no-sizes':
+            return 'beeeeep — the TapTapper has no buttons for what the tap pours';
         case 'no-offer':
             return 'beeeeep — nothing on this tap: tap a package tag first';
         case 'unknown-card':

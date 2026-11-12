@@ -1,6 +1,5 @@
 import { createContext } from "svelte";
-import type { Printable } from "./i18n";
-import { SvelteMap } from "svelte/reactivity";
+import { isMessageRef, printMessageRef, type Printable } from "./i18n";
 
 type Currency = NonNullable<Intl.NumberFormatOptions["currency"]>
 
@@ -67,6 +66,9 @@ export class Renderer {
     public print(s: Printable) {
         if (!s) return ""
         if (typeof s === "string") return s
+        if (isMessageRef(s)) {
+            return printMessageRef(s)
+        }
         if (typeof s === "object") {
             return s[this.opts.locale] ?? ""
         }

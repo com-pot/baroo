@@ -36,7 +36,7 @@ async function readTapStates(pb: Db, barSlug: string): Promise<TapState[]> {
             filter: pb.filter('offerItem.bar.slug = {:barSlug} && tap != "" && unsealedAt != "" && flushedAt = ""', { barSlug }),
             sort: '-unsealedAt',
             expand: 'offerItem',
-            fields: 'id,tap,quantity,unsealedAt,expand.offerItem.key,expand.offerItem.servingPreset',
+            fields: 'id,tap,quantity,unsealedAt,expand.offerItem.key,expand.offerItem.servings',
         }),
     ]);
 

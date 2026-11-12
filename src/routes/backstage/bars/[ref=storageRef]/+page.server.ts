@@ -106,7 +106,8 @@ export const actions: Actions = {
         const formData = await request.formData();
         const data = {
             slug: formData.get('slug')?.toString() || '',
-            name: formData.get('name')?.toString() || ''
+            name: formData.get('name')?.toString() || '',
+            currency: formData.get('currency')?.toString() || '',
         };
 
         const validationResult = barSchema.safeParse(data);
@@ -128,7 +129,7 @@ export const actions: Actions = {
 
             const bar = await locals.pb.collection('bars').getFirstListItem(`slug="${ref}"`);
             const updatedBar = await locals.pb.collection('bars').update(bar.id, validationResult.data);
-            return { success: true, data: { slug: updatedBar.slug, name: updatedBar.name } };
+            return { success: true, data: updatedBar };
         } catch (err) {
             const formattedError = formatPbError(err)
             if (formattedError) return fail(400, formattedError);

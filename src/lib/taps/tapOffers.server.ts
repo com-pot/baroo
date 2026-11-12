@@ -1,13 +1,46 @@
 import { error } from '@sveltejs/kit';
 import { ClientResponseError } from 'pocketbase';
+import type { Db } from '$lib/db.server';
 import { broadcastTaps } from './tapBoard.server';
-import { emit, settleOffer, type PendingOffer } from './tapHub.server';
 import { TAP_ORDER_PREFIX } from './tapEvents';
 import { resolveOrderSource } from '$lib/bar/ops/orderPackage.server';
 
+/** Member card tapped at a TapTapper, until a serving on its buttons settles it */
+export type PendingOffer = {
+    id: string;
+    barId: string;
+    tap: string;
+    serialId: string;
+    memberId: string;
+    offerItemKey: string;
+    at: string;
+    state: 'pending' | 'served';
+    /** The serving it got */
+    variant?: string;
+    /** The tap's own session, it files the order */
+    pb: Db;
+};
+
+/** Long past any TapTapper's wait on its buttons */
+const OFFER_FORGET_MS = 5 * 60_000;
+
+const OFFERS_KEY = Symbol.for('baroo.tapOffers');
+
+/** Offers per bar slug, keyed by id - on `globalThis` to survive vite hot reloads */
+const offersByBar: Map<string, Map<string, PendingOffer>> = ((globalThis as unknown as Record<symbol, Map<string, Map<string, PendingOffer>> | undefined>)[OFFERS_KEY] ??= new Map());
+
+export function openOffer(barSlug: string, offer: Omit<PendingOffer, 'state'>): PendingOffer {
+    const pending: PendingOffer = { ...offer, state: 'pending' };
+    offers(barSlug).set(offer.id, pending);
+    return pending;
+}
+
+export function findOffer(barSlug: string, id: string): PendingOffer | undefined {
+    return offers(barSlug).get(id);
+}
+
 /**
- * Files the order of a pending offer as its tap - whether the serving was picked on the
- * TapTapper's buttons or on a kiosk - and tells the kiosks
+ * Files the order of a pending offer as its tap
  *
  * `null` when the offer is not pending any more.
  */
@@ -16,11 +49,12 @@ export async function serveOffer(
     barSlug: string,
     offerId: string,
     variant: string,
-    source: 'tapper' | 'kiosk',
 ): Promise<PendingOffer | null> {
-    // Settled first, so a second press or a kiosk at the same time can't pour twice
-    const offer = settleOffer(barSlug, offerId, 'served', variant);
-    if (!offer) return null;
+    // Settled first, so a second press can't pour twice
+    const offer = offers(barSlug).get(offerId);
+    if (!offer || offer.state !== 'pending') return null;
+    offer.state = 'served';
+    offer.variant = variant;
 
     const at = new Date().toISOString();
     try {
@@ -41,26 +75,19 @@ export async function serveOffer(
         error(502, 'order-not-filed');
     }
 
-    emit(ctx, barSlug, {
-        type: 'offer-served',
-        id: offer.id,
-        tap: offer.tap,
-        serialId: offer.serialId,
-        offerItemKey: offer.offerItemKey,
-        variant,
-        at,
-        source,
-    });
-
     await broadcastTaps(ctx, offer.pb, barSlug).catch((err) => ctx.logger.error(err, '[taps] could not tell what is on the taps'));
 
     return offer;
 }
 
-/** The other kiosks drop the offer too, the TapTapper waiting on it hears with its next poll */
-export function dismissOffer(ctx: Pick<App.Locals, "logger">, barSlug: string, offerId: string): void {
-    const offer = settleOffer(barSlug, offerId, 'dismissed');
-    if (!offer) return;
+function offers(barSlug: string): Map<string, PendingOffer> {
+    const known = offersByBar.get(barSlug) ?? new Map<string, PendingOffer>();
+    offersByBar.set(barSlug, known);
 
-    emit(ctx, barSlug, { type: 'offer-dismissed', id: offer.id, tap: offer.tap, at: new Date().toISOString() });
+    const forgetBefore = Date.now() - OFFER_FORGET_MS;
+    for (const [id, offer] of known) {
+        if (Date.parse(offer.at) < forgetBefore) known.delete(id);
+    }
+
+    return known;
 }

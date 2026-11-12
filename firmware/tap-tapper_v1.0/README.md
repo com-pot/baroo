@@ -4,17 +4,15 @@ A **tap** is a line at the bar — *Pípa 1*, *Pípa 2* — pouring whatever was
 onto it, prepared in baroo backstage (*Pípy*). A **TapTapper** is the NFC station mounted
 at a tap; this folder is the `tap-tapper_v1.0` model of it. Tap a **package tag** on it
 (*Plzeň, sud 50 l*) and a fresh package of that kind is on the tap: no form, no typing.
-Tap a **member card** and the kiosk tablet shows who it is and what the tap pours, with a
-big button for each size the drink is offered in. The customer's press on the TapTapper's
-own buttons — or the barman's, on the tablet — and the tap files an ordinary order. A
-TapTapper with a display shows the drink on tap with a gauge of what is left of it, and
-the customer's name and photo when they tap.
+Tap a **member card**, press the size on the TapTapper's own buttons, and the tap files an
+ordinary order. A TapTapper with a display shows the drink on tap with a gauge of what is
+left of it, and the customer's name and photo when they tap.
 
 ```
 Pico (tap 1..n) ── POST /api/bars/<bar>/taps/scan|serve|hello ──►  baroo ──► PocketBase, as the tap
                      Authorization: Bearer TAP_TOKEN                  │
-Kiosk tablet ◄──── SSE /api/bars/<bar>/taps/events ───────────────────┤
-   └ POST /api/bars/<bar>/taps/offers/<id>/serve|dismiss: the size picked, filed by the tap
+Kiosk tablet ◄──── SSE /api/bars/<bar>/taps/events ───────────────────┘
+   └ what is on the taps, how much is left
 ```
 
 TapTappers work **online only**. Each has its own token, which backstage issues when it
@@ -24,15 +22,15 @@ on the tap and how much of it is left, and gets the tap's unseals and orders str
 The server draws every screen; the TapTapper only streams the pixels to its panel. It never
 works anything out itself — not even what is left on its tap.
 
-The kiosks stay offline-first as ever. Only the pending offers from the taps need them
-online: picking a size on the tablet asks the server to file it as the tap.
+The kiosks stay offline-first as ever and have no part in what happens at a tap: they only
+watch what is on the taps, and get the taps' orders and unseals with their next pull.
 
 ## How much is left
 
 What PocketBase has: the item's open stock since it was last unsealed, less every order
 filed since — by the taps, and by the kiosks once they sync. A TapTapper gets the numbers
 in the screens the server hands it — after each serve, and with every heartbeat, every
-20 s; while an offer waits on it, it asks every 1.5 s.
+20 s.
 
 Stock is per offer item: two kegs of the same beer on two taps share one gauge.
 
@@ -118,12 +116,11 @@ server cannot be reached, the TapTapper falls back to plain text of its own.
 
 A membrane keypad lets the customer pick the size at the TapTapper: tap the card, then
 press the button of the size while the screen shows them in the buttons' colors. The
-buttons answer the sizes the drink on tap is offered in (has a price for), in order: the
+buttons answer the servings of the drink on tap, in the order the offer lists them: the
 first button the smallest size, the second the next one — a drink sold in *Malé* and
 *Velké* puts *Malé* on the first button. A button past the drink's last size does nothing.
-The tap files the order right away — the offer on the tablet disappears, and the display
-says *✓ Malé 0.3l* over what is left on the tap now. No press within 15 s, and the offer
-waits on the tablet; picked there, the tap files it all the same.
+The tap files the order right away, and the display says *✓ Malé 0.3l* over what is left
+on the tap now. No press within 15 s, and the offer is gone: tap the card again.
 
 | Keypad | Pico W | Pin |
 |---|---|---|
@@ -133,8 +130,8 @@ waits on the tablet; picked there, the tap files it all the same.
 
 - The buttons are part of the tap's config in backstage (*Tlačítka velikostí*): each its
   GPIO pin and its color, left to right — so any free pins will do.
-  A TapTapper without the keypad has none: the screen then tells the customer to pick on
-  the tablet.
+  A TapTapper without the keypad has none, and takes no orders: the screen then tells the
+  customer to ask the barman.
 - The Pico's own pull-ups do the rest — no resistors, no power wire.
 - The tail's tabs fit a 3-pin 2.54 mm female header, or male header pins and the usual
   jumper wires. **Do not solder to the tail**: its tracks are printed silver ink.
@@ -270,7 +267,7 @@ The console (Thonny's shell, or `mpremote`) prints every card's UID as it is rea
    not wipe), and deploy `data/pb_hooks` with it. It adds the `bar_taps` and `app_settings`
    collections, and the hooks that authorize taps and keep what each one pours.
 2. Run it reachable from the wifi: `HOST=0.0.0.0 PORT=3000 node build`, under pm2 in
-   **fork** mode — the taps' pending offers and the kiosks' streams meet in the server's
+   **fork** mode — the taps' pending offers and the kiosks' streams live in the server's
    memory, and `cluster` would split them between workers. If Caddy sits in front, allow
    `/api/bars/*/taps/*`.
 3. Give the RPi a fixed address (a DHCP reservation in the router). The TapTappers'
@@ -290,14 +287,14 @@ The console (Thonny's shell, or `mpremote`) prints every card's UID as it is rea
 **The packages:**
 
 1. Tap the package's tag on any TapTapper. It gives a long beep (it's not a package yet),
-   and the kiosk shows *Neznámý štítek 04a1b2…* — that's its UID. The TapTapper's console
+   and its display shows *Neznámá karta 04a1b2…* — that's its UID. The TapTapper's console
    prints it too.
 2. Backstage → the bar → *Nabídka* → *Balení* → *Přidat balení*: the item, what the
    package holds (50, in litres for a drink on tap), a label such as *Sud*, and the UID as
    its *NFC štítek balení* → save. One tag per package kind, not per keg: the same tag
    taps on every 50 l keg of Plzeň.
-3. Tap the tag on a TapTapper: two beeps, the tap files the package, and the kiosks say
-   *Pípa 1: naraženo …*. Tapping the tag again before anything got poured is still the
+3. Tap the tag on a TapTapper: two beeps, the tap files the package, and the kiosks' *Pípy*
+   board shows it on the tap. Tapping the tag again before anything got poured is still the
    same package.
 
 Besides a package tag, the staff kiosk's *Otevřít nové balení* and backstage's *Otevřít
@@ -335,10 +332,10 @@ npm run tap-sim -- scan <a member's card serial> --config config.py
 npm run tap-sim -- serve 0_5 --config config.py
 ```
 
-The first taps the package onto the tap, the second puts an offer on the kiosk, the third
-presses the size for it. `--config` takes the token, bar and server from the file; another
-tap's file is another tap. `hello` makes the TapTapper check in without scanning anything,
-and `hello --offer` asks after the last offer as a waiting TapTapper does. Add
+The first taps the package onto the tap, the second opens an offer waiting on the buttons,
+the third presses the size for it. `--config` takes the token, bar and server from the file;
+another tap's file is another tap. `hello` makes the TapTapper check in without scanning
+anything. Add
 `--out screen.png` to any of them to see what the display would show. Its config's
 `SERVER` is likely a LAN address: `--url https://localhost:5173` overrides it.
 
@@ -367,9 +364,9 @@ New-NetFirewallRule -DisplayName "baroo dev server" -Direction Inbound -Protocol
 | `HTTP 404` | Wrong `BAR` slug, or a server without this feature. |
 | `OSError` / `ETIMEDOUT` / `ECONNREFUSED` | Wrong `SERVER`, the firewall, or the dev server started without `--host`. |
 | `not offered: no-offer …` | Nothing is on this tap: tap a package tag on it first. |
-| `not offered: offer - delivered to 0` | No kiosk is listening and the tap has no size buttons. Open the kiosk and start it; its *Pípy* board should list the tap. |
-| `not offered: unknown-card …` | Nobody has this card: the kiosk shows its UID, map it to a member there or in backstage. |
-| `not served: gone …` | The offer was dismissed on the tablet before the button press. |
+| `not offered: no-sizes` | The tap's config has no size buttons, or the drink on tap has no servings. |
+| `not offered: unknown-card` | Nobody has this card: the display shows its UID, map it to a member in backstage. |
+| `not served: gone` | The server forgot the offer, e.g. it restarted since the card was tapped. |
 | `display failed: …` | `display.py` is missing on the Pico, or the panel is not answering. The TapTapper carries on without it. |
 | `screen failed: …` | A screen could not be fetched; the TapTapper shows plain text instead. Same causes as the HTTP rows above. |
 

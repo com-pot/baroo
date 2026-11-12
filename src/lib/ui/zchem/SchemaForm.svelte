@@ -1,6 +1,6 @@
 <script lang="ts">
     import z from "zod";
-    import { messageOf } from "$lib/zchem/field";
+    import { messageOf } from "$lib/i18n";
     import SchemaInput from "./SchemaInput.svelte";
 
     let {
@@ -12,10 +12,13 @@
         fieldId = (name: string) => (idSuffix ? `${name}-${idSuffix}` : name),
         wrapperClasses = {},
         layout = "stack",
+
+        ...attrs
     }: {
         schema: z.ZodObject,
         data: Record<string, any>,
         i18nPrefix: string,
+        readonly?: boolean,
         idSuffix?: string,
         fieldId?: (name: string) => string,
         wrapperClasses?: Record<string, string | undefined>,
@@ -28,8 +31,7 @@
         <SchemaInput
             inputSchema={inputSchema as z.ZodType}
             {name}
-            caption={messageOf(`${i18nPrefix}${name}`) ?? name}
-            help={messageOf(`${i18nPrefix}${name}.help`)}
+            readonly={attrs.readonly}
             {fieldId}
             {i18nPrefix}
 

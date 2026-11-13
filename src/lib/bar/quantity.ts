@@ -1,10 +1,10 @@
 import * as m from '$lib/paraglide/messages.js';
 import { getLocale, type Locale } from '$lib/paraglide/runtime.js';
-import { knownMeasures, type Measure } from '$lib/si/measure';
+import { getMeasure, knownMeasures, type Measure } from '$lib/si/measure';
 
 export function formatQuantity(measure: Measure, quantity: number, locale: Locale = getLocale()): string {
     const quantityStr = new Intl.NumberFormat(locale, {
-        maximumFractionDigits: measure === 'count' ? 0 : 1,
+        maximumFractionDigits: getMeasure(measure).maximumFractionDigits,
     }).format(quantity);
 
     return `${quantityStr} ${measureLabel(measure, locale)}`;

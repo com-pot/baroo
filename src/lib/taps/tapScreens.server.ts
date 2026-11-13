@@ -3,7 +3,7 @@ import z from 'zod';
 import * as m from '$lib/paraglide/messages.js';
 import { formatQuantity } from '$lib/bar/quantity';
 import { servingText } from '$lib/bar/servings';
-import type { Measure } from '$lib/si/measure';
+import { type Measure } from '$lib/si/measure';
 import { readTapConfig, tapModel } from './models';
 import { buttonColor } from './models/tap-tapper_v1.0/palette';
 import { tapLabel } from './barTap';
@@ -70,7 +70,7 @@ export const screenSpecSchema = z.discriminatedUnion('view', [
 export type ScreenSpec = z.input<typeof screenSpecSchema>;
 
 /** TapTappers redraw only when the path changes, hence `v` - and the gauge's numbers in it */
-export function screenPath(barSlug: string, spec: ScreenSpec): string {
+function screenPath(barSlug: string, spec: ScreenSpec): string {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(spec)) {
         if (value !== undefined && value !== null) query.set(key, String(value));
@@ -325,8 +325,10 @@ function gauge(ctx: ScreenCtx, svg: string[], top: number, left: number, total: 
         svg.push(`<rect x="${x}" y="${top}" width="${Math.max(height, width * share)}" height="${height}" rx="${height / 2}" fill="${fill}"/>`);
     }
 
-    const amount = new Intl.NumberFormat(ctx.i18n.locale, { maximumFractionDigits: measure === 'count' ? 0 : 1 }).format(left);
-    svg.push(text(`${amount} / ${formatQuantity(measure, total, ctx.i18n.locale)}`, { y: top + 18, size: 15, weight: 700, fill: COLORS.text }));
+    svg.push(text(
+        `${formatQuantity(measure, left, ctx.i18n.locale)} / ${formatQuantity(measure, total, ctx.i18n.locale)}`,
+        { y: top + 18, size: 15, weight: 700, fill: COLORS.text },
+    ));
 }
 
 /** Falls back to the name's initial on a colored shape */

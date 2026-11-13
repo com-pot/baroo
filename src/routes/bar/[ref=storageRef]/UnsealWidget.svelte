@@ -6,6 +6,7 @@
     import { formatQuantity, measureLabel, packageLabel } from "$lib/bar/quantity";
     import { newPackageId } from "$lib/bar/stats/barOfferItems";
     import TapPicker from "./TapPicker.svelte";
+    import { getMeasure } from "$lib/si/measure";
 
     let {
         store,
@@ -33,7 +34,7 @@
     const packages = $derived(store.packages.filter((offerPackage) => offerPackage.offerItemKey === itemKey
         && packageState(offerPackage) === "registered"));
 
-    const measure = $derived(item?.measure ?? null);
+    const measure = $derived(getMeasure(item?.measure));
 
     let packageId = $state("");
     let quantity = $state("");
@@ -96,27 +97,25 @@
         {/if}
     </div>
 
-    {#if measure && packages.length}
-        <div class="input-pair">
-            <label for="unseal.package">{m["baroo.staff.unseal_package"]()}</label>
-            <select class="form-select" id="unseal.package" bind:value={packageId}>
-                <option value="">{m["baroo.staff.unseal_package_new"]()}</option>
-                {#each packages as offerPackage (offerPackage.id)}
-                    <option value={offerPackage.id}>{packageLabel(offerPackage, measure)}{offerPackage.tagSerial ? " 📶" : ""}</option>
-                {/each}
-            </select>
-        </div>
-    {/if}
+    <div class="input-pair">
+        <label for="unseal.package">{m["baroo.staff.unseal_package"]()}</label>
+        <select class="form-select" id="unseal.package" bind:value={packageId}>
+            <option value="">{m["baroo.staff.unseal_package_new"]()}</option>
+            {#each packages as offerPackage (offerPackage.id)}
+                <option value={offerPackage.id}>{packageLabel(offerPackage, measure.name)}{offerPackage.tagSerial ? " 📶" : ""}</option>
+            {/each}
+        </select>
+    </div>
 
     {#if !packageId}
         <div class="input-pair">
-            <label for="unseal.quantity">{m["baroo.staff.unseal_quantity"]({ measure: measure ? measureLabel(measure) : "..." })}</label>
+            <label for="unseal.quantity">{m["baroo.staff.unseal_quantity"]({ measure: measureLabel(measure.name) })}</label>
             <input
                 id="unseal.quantity" class="form-control"
                 type="number"
-                inputmode={measure === "volume" ? "decimal" : "numeric"}
-                min={measure === "volume" ? 0.1 : 1}
-                step={measure === "volume" ? 0.1 : 1}
+                inputmode={measure.inputMode}
+                min={measure.step}
+                step={measure.step}
                 onfocus={(e) => e.currentTarget.select()}
                 bind:value={quantity}
                 required

@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
-import Pocketbase, { ClientResponseError, getTokenPayload, isTokenExpired } from 'pocketbase';
+import Pocketbase, { ClientResponseError, isTokenExpired } from 'pocketbase';
 import { appError } from './errors';
 
 export type Db = Pocketbase;

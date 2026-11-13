@@ -5,6 +5,7 @@
     import type { BarOfferItem, OfferPackage } from '$lib/bar/BarModel';
     import { formatQuantity, measureLabel, packageLabel } from '$lib/bar/quantity';
     import type { TapState } from '$lib/taps/tapEvents';
+    import { getMeasure } from '$lib/si/measure';
 
     const {
         tap,
@@ -22,7 +23,7 @@
 
     let offerItemKey = $state(untrack(() => tap.offerItemKey ?? ''));
     const item = $derived(offerItems.find((candidate) => candidate.key === offerItemKey));
-    const measure = $derived(item?.measure ?? 'volume');
+    const measure = $derived(getMeasure(item?.measure));
     const own = $derived(packages.filter((offerPackage) => offerPackage.offerItemKey === offerItemKey));
 
     // The oldest registered package, the size the tap had last
@@ -61,7 +62,7 @@
             <select class="form-select" id="unseal.package" name="packageId" bind:value={packageId}>
                 <option value="">{m["baroo.staff.unseal_package_new"]()}</option>
                 {#each own as offerPackage (offerPackage.id)}
-                    <option value={offerPackage.id}>{packageLabel(offerPackage, measure)}{offerPackage.tagSerial ? ' 📶' : ''}</option>
+                    <option value={offerPackage.id}>{packageLabel(offerPackage, measure.name)}{offerPackage.tagSerial ? ' 📶' : ''}</option>
                 {/each}
             </select>
         </div>
@@ -71,14 +72,14 @@
 
     {#if !packageId}
         <div class="input-pair">
-            <label for="unseal.quantity" class="form-label">{m["baroo.backstage.bar.unseal_quantity"]({ measure: measureLabel(measure) })}</label>
+            <label for="unseal.quantity" class="form-label">{m["baroo.backstage.bar.unseal_quantity"]({ measure: measureLabel(measure.name) })}</label>
             <input
                 type="number"
                 id="unseal.quantity"
                 name="quantity"
                 class="form-control"
-                min={measure === 'count' ? 1 : 0.1}
-                step={measure === 'count' ? 1 : 0.1}
+                min={measure.step}
+                step={measure.step}
                 required
                 bind:value={quantity}
             />

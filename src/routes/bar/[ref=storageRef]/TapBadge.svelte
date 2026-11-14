@@ -3,9 +3,12 @@
 
     const {
         tap,
+        label,
         alive = null,
     }: {
         tap: string,
+        /** The tap's name, when known */
+        label?: string,
         /** Whether the TapTapper at the tap checks in, `null` for a tap without one */
         alive?: boolean | null,
     } = $props();
@@ -19,7 +22,7 @@
     {#if alive !== null}
         <span class="dot" aria-hidden="true"></span>
     {/if}
-    {m["baroo.bar.tap.title"]({ tap })}
+    {label || m["baroo.bar.tap.title"]({ tap })}
 </span>
 
 <style lang="scss">

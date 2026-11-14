@@ -16,7 +16,7 @@ display_pcb = [50, 86];
 // From the front of the glass to the back of the board.
 display_stack = 6.4;
 display_pcb_t = 1.6;
-// Where the pin header ends up. Picture upside down: DISPLAY_MADCTL = 0x88 in config.py.
+// Where the pin header ends up. Picture upside down: the tap config's display orientation in backstage.
 display_header = "bottom"; // [bottom, top]
 // The picture, centred across the board.
 display_view = [43.2, 57.6];

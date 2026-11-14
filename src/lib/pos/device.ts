@@ -28,7 +28,7 @@ export const configSchema = z.object({
     theme: z.enum(['plain']).default("plain"),
     genZToy: z.boolean().default(false),
     idInput: z.enum(['', 'member', 'member-serial']).default('').meta({
-        enumI18nPrefix: "baroo.pos.config.idInput.value."
+        optionsI18nPrefix: "baroo.pos.config.idInput.value."
     }),
 
     greetingTemplate: z.string().default("Ave, {name}"),

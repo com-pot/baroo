@@ -1,22 +1,20 @@
 import { error } from '@sveltejs/kit';
 import { produce } from 'sveltekit-sse';
 import type { RequestHandler } from './$types';
-import { tapListenerRole, tapsEnabled } from '$lib/taps/tapAuth.server';
+import { tapListener } from '$lib/taps/tapAuth.server';
 import { tapStates } from '$lib/taps/tapBoard.server';
 import { subscribe } from '$lib/taps/tapHub.server';
 import type { TapEvent } from '$lib/taps/tapEvents';
 
 /**
- * Stream of tap events, for kiosks by their tap ticket and for backstage by the bar manager's session
+ * Stream of tap events, for kiosks by their device token and for backstage by the bar manager's session
  */
 export const POST: RequestHandler = async (event) => {
-    if (!tapsEnabled()) error(503, 'taps-disabled');
-
-    const role = tapListenerRole(event);
-    if (!role) error(401, 'tap-ticket-invalid');
+    const listener = await tapListener(event);
+    if (!listener) error(401, 'tap-listener-unknown');
 
     const barSlug = event.params.ref;
-    const taps = await tapStates(event.locals, barSlug);
+    const taps = await tapStates(listener.pb, barSlug);
 
     let unsubscribe = () => {};
 
@@ -25,13 +23,9 @@ export const POST: RequestHandler = async (event) => {
 
         send({ type: 'taps', taps, at: new Date().toISOString() });
 
-        unsubscribe = subscribe(barSlug, role, (tapEvent) => {
+        unsubscribe = subscribe(barSlug, (tapEvent) => {
             const { error: failed } = send(tapEvent);
-            if (!failed) return;
-
-            // Thrown so the hub doesn't count the dead stream as delivered
-            unsubscribe();
-            throw failed;
+            if (failed) unsubscribe();
         });
     }, {
         ping: 10_000,

@@ -1,42 +1,43 @@
 import type { AppEvent } from "$lib/model/event";
-import { toPbDate } from "$lib/pocketbase";
+import { toIsoDate, toPbDate } from "$lib/pocketbase";
 import type { Measure } from "$lib/si/measure";
-import { type Bar, type BarOfferItem, type BarOrderItemRecord } from "../BarModel";
-import { findServing, servingPreset } from "../servings";
-import { flushStockEvent, replayStock, roundQuantity, unsealStockEvent, type StockEvent, type StockRun } from "../stats/barOfferItems";
-import type { UnsealEvent } from "./unseal";
+import { tapRef, type BarTap } from "$lib/taps/barTap";
+import { packageState, type Bar, type BarOfferItem, type BarOfferPackage, type BarOrderItemRecord } from "../BarModel";
+import { roundQuantity } from "../stats/barOfferItems";
 
 type Pb = NonNullable<App.Locals['pb']>;
 
 export type FlushEvent = AppEvent<{
     offerItemKey: string;
-    /** The tap the item came off, if it was on one */
-    tap?: string | null;
+    tap?: BarTap["id"] | null;
+    packageId?: BarOfferPackage["id"] | null;
     closureData: ClosureData;
 }>
 
 /**
- * Closes the open stock of an offer item, keeping what it came to as its closure data
+ * Closes an unsealed package, keeping what it came to as its closure data
  *
- * Does nothing when the item has no open stock, or when the flush is recorded already.
+ * Does nothing when the package is not open, or when the flush is recorded already.
  */
 export async function barDoFlush(
     ctx: Pick<App.Locals, "pb">,
     slug: Bar["slug"],
-    data: { offerItemKey: string; tap?: string | null; clientId?: string; occurredAt?: string },
+    data: { packageId: string; clientId?: string; occurredAt?: string },
 ): Promise<FlushEvent | null> {
     const { pb } = ctx;
     const occurredAt = data.occurredAt ?? new Date().toISOString();
 
     if (data.clientId && await eventExists(pb, data.clientId)) return null;
 
-    const { runs, taps } = replayStock(await getStockEvents(pb, { slug }, data.offerItemKey, occurredAt));
-    const run = runs[data.offerItemKey];
-    if (!run) return null;
+    const offerPackage = await pb.collection<BarOfferPackage & { expand?: { offerItem?: BarOfferItem; tap?: BarTap } }>('bar_offer_packages').getFirstListItem(
+        pb.filter('id = {:id} && offerItem.bar.slug = {:slug}', { id: data.packageId, slug }),
+        { expand: 'offerItem,tap' },
+    ).catch(() => null);
+    const offerItem = offerPackage?.expand?.offerItem;
+    if (!offerPackage || !offerItem || packageState(offerPackage) !== 'unsealed') return null;
 
-    const tap = data.tap
-        ?? Object.values(taps).find((assignment) => assignment.offerItemKey === data.offerItemKey)?.tap
-        ?? null;
+    const closureData = await collectClosureData(pb, offerItem, offerPackage);
+    await pb.collection('bar_offer_packages').update(offerPackage.id, { flushedAt: toPbDate(occurredAt) });
 
     return await pb.collection<FlushEvent>('events').create({
         type: 'flush',
@@ -44,11 +45,12 @@ export async function barDoFlush(
         occurredAt,
         clientId: data.clientId,
         data: {
-            offerItemKey: data.offerItemKey,
-            tap,
-            closureData: await collectClosureData(pb, { slug }, data.offerItemKey, run, occurredAt),
+            offerItemKey: offerItem.key,
+            tap: offerPackage.expand?.tap ? tapRef(offerPackage.expand.tap) : null,
+            packageId: offerPackage.id,
+            closureData,
         },
-    } satisfies Omit<FlushEvent, "id">)
+    } satisfies Omit<FlushEvent, "id" | "created">)
 }
 
 export type ClosureData = {
@@ -71,17 +73,16 @@ type MemberConsumption = {
     quantity: number;
 };
 
+/** What the package's orders drew from it */
 export async function collectClosureData(
     pb: Pb,
-    bar: Pick<Bar, "slug">,
-    offerItemKey: string,
-    run: StockRun,
-    until: string,
+    offerItem: BarOfferItem,
+    offerPackage: Pick<BarOfferPackage, "id" | "quantity" | "unsealedAt">,
 ): Promise<ClosureData> {
-    const offerItem = await pb.collection<BarOfferItem>('bar_offer_items')
-        .getFirstListItem(pb.filter('bar.slug = {:slug} && key = {:key}', { slug: bar.slug, key: offerItemKey }));
-
-    const orderItems = await getOrderItemsBetween(pb, bar, offerItemKey, run.openedAt, until);
+    const orderItems = await pb.collection<BarOrderItemRecord>('bar_order_items').getFullList({
+        filter: pb.filter('package = {:package}', { package: offerPackage.id }),
+        expand: 'customer',
+    });
 
     const variantCounts: Record<string, number> = {};
     for (const orderItem of orderItems) {
@@ -90,7 +91,7 @@ export async function collectClosureData(
 
     let totalQuantity = 0;
     for (const [variant, count] of Object.entries(variantCounts)) {
-        totalQuantity += (findServing(offerItem.servingPreset, variant)?.quantity ?? 0) * count;
+        totalQuantity += (offerItem.servings.find((serving) =>serving.key === variant)?.quantity ?? 0) * count;
     }
 
     const memberStats = Object.values(calculateMemberConsumption(offerItem, orderItems))
@@ -101,11 +102,11 @@ export async function collectClosureData(
         .sort((a, b) => b.quantity - a.quantity);
 
     return {
-        offerItemKey,
+        offerItemKey: offerItem.key,
         offerItemName: offerItem.name,
-        unsealedAt: run.openedAt,
-        quantity: roundQuantity(run.quantity),
-        measure: servingPreset(offerItem.servingPreset).measure,
+        unsealedAt: toIsoDate(offerPackage.unsealedAt) || null,
+        quantity: roundQuantity(offerPackage.quantity),
+        measure: offerItem.measure,
         variantCounts,
         totalQuantity: roundQuantity(totalQuantity),
         totalOrders: orderItems.length,
@@ -133,51 +134,10 @@ function calculateMemberConsumption(offerItem: BarOfferItem, orderItems: BarOrde
         }
 
         memberConsumption[memberId].count += 1;
-        memberConsumption[memberId].quantity += findServing(offerItem.servingPreset, orderItem.variant)?.quantity ?? 0;
+        memberConsumption[memberId].quantity += offerItem.servings.find((serving) => serving.key === orderItem.variant)?.quantity ?? 0;
     }
 
     return memberConsumption
-}
-
-/** The item's unseals and flushes up to `until` */
-async function getStockEvents(
-    pb: Pb,
-    bar: Pick<Bar, "slug">,
-    offerItemKey: string,
-    until: string,
-): Promise<StockEvent[]> {
-    const events = await pb.collection<UnsealEvent | FlushEvent>('events')
-        .getFullList({
-            filter: pb.filter('(type = "unseal" || type = "flush") && target = {:target} && data.offerItemKey = {:key} && occurredAt <= {:until}', {
-                target: `bar:${bar.slug}`,
-                key: offerItemKey,
-                until: toPbDate(until),
-            }),
-            sort: 'occurredAt',
-        });
-
-    return events.map((event) => event.type === 'flush'
-        ? flushStockEvent(event as FlushEvent)
-        : unsealStockEvent(event as UnsealEvent));
-}
-
-export async function getOrderItemsBetween(
-    pb: Pb,
-    bar: Pick<Bar, "slug">,
-    offerItemKey: string,
-    since: string,
-    until: string,
-) {
-    return await pb.collection<BarOrderItemRecord>('bar_order_items')
-        .getFullList({
-            filter: pb.filter('key = {:key} && customer.bar.slug = {:slug} && orderedAt >= {:since} && orderedAt < {:until}', {
-                key: offerItemKey,
-                slug: bar.slug,
-                since: toPbDate(since),
-                until: toPbDate(until),
-            }),
-            expand: 'customer',
-        });
 }
 
 async function eventExists(pb: Pb, clientId: string): Promise<boolean> {

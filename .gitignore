@@ -22,9 +22,6 @@ data/_*
 !.env.example
 !.env.test
 
-# TapTapper credentials (wifi password, TAP_SECRET)
-firmware/taptapper/config.py
-
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

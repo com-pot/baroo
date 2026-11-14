@@ -1,7 +1,6 @@
-import type { BarOfferItem, BarOfferPackage } from '$lib/bar/BarModel';
+import { packageState, type BarOfferItem, type BarOfferPackage, type PackageState } from '$lib/bar/BarModel';
 import { ClientResponseError } from 'pocketbase';
 import { formatPbError, type Db } from '$lib/db.server';
-import { SERVING_PRESETS } from '$lib/bar/servings';
 import { normalizeTag } from '$lib/bar/tags';
 import { getFieldErrors, type ValidationError, type ValidationIssue } from '$lib/validation/validator';
 import type { PageServerLoad, Actions } from './$types';
@@ -11,15 +10,17 @@ import { isError, type AppError } from '$lib/errors';
 import { barOfferItemSchema, barOfferPackageSchema } from '$lib/model/bar';
 import * as m from '$lib/paraglide/messages.js';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, parent }) => {
+    const { bar } = await parent()
+
     const [items, packages] = await Promise.all([
         locals.pb.collection<BarOfferItem>('bar_offer_items').getFullList({
             filter: `bar.slug = "${params.ref}"`,
             sort: 'name'
         }),
         locals.pb.collection<BarOfferPackage>('bar_offer_packages').getFullList({
-            filter: `offerItem.bar.slug = "${params.ref}"`,
-            sort: 'quantity',
+            filter: locals.pb.filter('offerItem.bar.slug = {:slug}', { slug: params.ref }),
+            fields: 'offerItem,unsealedAt,flushedAt',
         }).catch((err: unknown) => {
             // Until pb_schema.json is imported
             if (err instanceof ClientResponseError && err.status === 404) return [];
@@ -27,7 +28,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         }),
     ]);
 
-    return { items, packages };
+    const packageCounts: Record<BarOfferItem["id"], Record<PackageState, number>> = {};
+    for (const offerPackage of packages) {
+        const counts = packageCounts[offerPackage.offerItem] ??= { registered: 0, unsealed: 0, flushed: 0 };
+        counts[packageState(offerPackage)]++;
+    }
+
+    return { items, packageCounts, bar };
 };
 
 export const actions: Actions = {
@@ -129,12 +136,11 @@ export const actions: Actions = {
         }
     },
 
-    savePackage: async ({ request, params, locals }) => {
+    createPackage: async ({ request, params, locals }) => {
         const { pb } = locals;
-        const bar = await pb.collection('bars').getFirstListItem(`slug="${params.ref}"`);
+        const bar = await pb.collection('bars').getFirstListItem(pb.filter('slug = {:slug}', { slug: params.ref }));
 
         const formData = await request.formData();
-        const packageId = formData.get('packageId')?.toString() || undefined;
         const data = {
             offerItem: formData.get('offerItem')?.toString() || '',
             label: formData.get('label')?.toString().trim() || '',
@@ -145,47 +151,27 @@ export const actions: Actions = {
         const validationResult = barOfferPackageSchema.safeParse(data);
         if (!validationResult.success) {
             return fail(400, {
-                data: { ...data, packageId },
+                data,
                 errors: getFieldErrors(validationResult.error.issues),
-                action: 'savePackage'
+                action: 'createPackage'
             });
         }
 
-        const errors = await packageConflicts(pb, bar.id, validationResult.data, packageId);
+        const errors = await packageConflicts(pb, bar.id, validationResult.data);
         if (errors) {
-            return fail(400, { data: { ...data, packageId }, errors, action: 'savePackage' });
+            return fail(400, { data, errors, action: 'createPackage' });
         }
 
         try {
-            if (packageId) {
-                await pb.collection('bar_offer_packages').update(packageId, validationResult.data);
-            } else {
-                await pb.collection('bar_offer_packages').create(validationResult.data);
-            }
-            return { success: true, action: 'savePackage' };
+            await pb.collection('bar_offer_packages').create(validationResult.data);
+            return { success: true, action: 'createPackage' };
         } catch (err) {
             const formattedError = formatPbError(err)
-            if (formattedError) return fail(400, { ...formattedError, action: 'savePackage' });
+            if (formattedError) return fail(400, { ...formattedError, action: 'createPackage' });
 
             throw err;
         }
     },
-
-    deletePackage: async ({ request, locals }) => {
-        const formData = await request.formData();
-        const packageId = formData.get('packageId')?.toString();
-
-        if (!packageId) {
-            return fail(400, { error: 'Package ID is required' });
-        }
-
-        try {
-            await locals.pb.collection('bar_offer_packages').delete(packageId);
-            return { success: true, action: 'deletePackage' };
-        } catch (error) {
-            return fail(500, { error: 'Failed to delete package' });
-        }
-    }
 };
 
 function collectErrors(
@@ -214,37 +200,25 @@ function readPicture(value: FormDataEntryValue | null): PictureResult | AppError
     return { file: value };
 }
 
-function parseOfferData(formData: FormData) {
-    const requested = formData.get('servingPreset')?.toString() ?? '';
-    const preset = SERVING_PRESETS.index[requested as keyof typeof SERVING_PRESETS["index"]]
-    if (!preset) {
-        throw new Error("invalid-value servingPreset")
-    }
-
-    const pricing: Record<string, number> = {};
-    for (const serving of preset.servings) {
-        const key = `pricing.${serving.key}`
-        const raw = formData.get(key)?.toString()?.trim();
-        if (!raw) continue;
-
-        const price = Number(raw);
-        if (Number.isFinite(price) && price >= 0) {
-            pricing[serving.key] = price;
-        }
+function parseOfferData(formData: FormData): Pick<BarOfferItem, "measure" | "servings"> {
+    let servings: BarOfferItem["servings"] = [];
+    try {
+        servings = JSON.parse(formData.get('servings')?.toString() || '[]');
+    } catch {
+        // Left for the schema to refuse
     }
 
     return {
-        servingPreset: preset.key,
-        pricing,
+        measure: (formData.get('measure')?.toString() ?? '') as BarOfferItem["measure"],
+        servings,
     };
 }
 
-/** The package's item must be the bar's, and its tag no other package's nor a member's card */
+/** The package's item must be the bar's, and its tag no other package's still in use nor a member's card */
 async function packageConflicts(
     pb: Db,
     barId: string,
     data: Pick<BarOfferPackage, 'offerItem' | 'tagSerial'>,
-    exceptPackageId?: string,
 ): Promise<Record<string, ValidationError[]> | null> {
     const item = await pb.collection<BarOfferItem>('bar_offer_items').getFirstListItem(
         pb.filter('id = {:id} && bar = {:bar}', { id: data.offerItem, bar: barId }),
@@ -255,12 +229,12 @@ async function packageConflicts(
 
     if (!data.tagSerial) return null;
 
-    // One tag, one package kind - otherwise a TapTapper would unseal whichever it read last
+    // One tag, one package at a time - otherwise a TapTapper would unseal whichever it read last.
+    // Once that one is flushed, the tag may go on a new one.
     const owner = await pb.collection<BarOfferPackage & { expand?: { offerItem?: BarOfferItem } }>('bar_offer_packages').getFirstListItem(
-        pb.filter('offerItem.bar = {:bar} && tagSerial = {:tagSerial} && id != {:packageId}', {
+        pb.filter('offerItem.bar = {:bar} && tagSerial = {:tagSerial} && flushedAt = ""', {
             bar: barId,
             tagSerial: data.tagSerial,
-            packageId: exceptPackageId ?? '',
         }),
         { expand: 'offerItem' },
     ).catch(() => null);

@@ -3,9 +3,6 @@
     import type { BarOfferItem } from "$lib/bar/BarModel";
     import { compareTaps } from "$lib/bar/stats/barOfferItems";
 
-    /** Can't clash with a tap id */
-    const NEW_TAP = "+";
-
     let {
         id,
         name,
@@ -38,53 +35,12 @@
                     : m["baroo.bar.tap.nothing_on_tap"](),
             }));
     });
-
-    // Taps live only in the events unsealing onto them, so a new one is just an id nobody used yet
-    let creating = $state(false);
-    const picked = $derived(creating || (value && !options.some((option) => option.tap === value)) ? NEW_TAP : value);
-
-    function pick(e: Event & { currentTarget: HTMLSelectElement }) {
-        creating = e.currentTarget.value === NEW_TAP;
-        value = creating ? "" : e.currentTarget.value;
-    }
 </script>
 
-<div class="tap-picker">
-    <select class="form-select" {id} value={picked} onchange={pick}>
-        <option value="">{m["baroo.bar.tap.none"]()}</option>
-        {#each options as option (option.tap)}
-            <option value={option.tap}>{m["baroo.bar.tap.title"]({ tap: option.tap })} — {option.onTap}</option>
-        {/each}
-        <option value={NEW_TAP}>{m["baroo.bar.tap.create"]()}</option>
-    </select>
-
-    {#if picked === NEW_TAP}
-        <input
-            class="form-control"
-            type="text"
-            required
-            maxlength="16"
-            pattern={"[a-z0-9\\-]{1,16}"}
-            autocomplete="off"
-            aria-label={m["baroo.bar.tap.create_label"]()}
-            placeholder={m["baroo.bar.tap.create_placeholder"]()}
-            {value}
-            oninput={(e) => (value = e.currentTarget.value.trim().toLowerCase())}
-        />
-    {/if}
-
-    {#if name}
-        <input type="hidden" {name} {value} />
-    {/if}
-</div>
-
-<style lang="scss">
-    .tap-picker {
-        display: flex;
-        gap: 0.5rem;
-
-        > * {
-            flex: 1;
-        }
-    }
-</style>
+<!-- Taps are prepared in backstage, a tap the kiosk doesn't know of yet comes with the next pull -->
+<select class="form-select" {id} {name} bind:value>
+    <option value="">{m["baroo.bar.tap.none"]()}</option>
+    {#each options as option (option.tap)}
+        <option value={option.tap}>{m["baroo.bar.tap.title"]({ tap: option.tap })} — {option.onTap}</option>
+    {/each}
+</select>

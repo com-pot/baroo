@@ -11,7 +11,6 @@
     import { greetingFor, orderConfirmation } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import { normalizeTag, type TagMapping } from "$lib/bar/tags";
-    import { offeredServings, servingPreset, type Serving } from "$lib/bar/servings";
     import { formatQuantity } from "$lib/bar/quantity";
     import { Narrator } from "$lib/speech.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
@@ -25,19 +24,12 @@
     import type { BarOfferItem } from "$lib/bar/BarModel";
     import type { Measure } from "$lib/si/measure";
     import { TapStream, type HeardTap } from "$lib/taps/tapStream.svelte";
-    import {
-        TAP_ORDER_PREFIX,
-        TAP_STALE_MS,
-        TAP_UNSEAL_PREFIX,
-        type OfferServedEvent,
-        type PendingOfferEvent,
-        type TapEvent,
-        type TapUnsealedEvent,
-    } from "$lib/taps/tapEvents";
-    import PendingOffersModal, { type PendingOrder } from "./PendingOffersModal.svelte";
+    import { TAP_STALE_MS } from "$lib/taps/tapEvents";
     import TapLineup from "./TapLineup.svelte";
     import TapBadge from "./TapBadge.svelte";
+    import { getUiFeedback } from "$lib/ui/uiFeedback.svelte";
 
+    const uiFeedback = getUiFeedback()
     const uiLayers = getUiLayers()
 
     const {
@@ -59,8 +51,9 @@
             label: m["baroo.bar.pos.action.summary"],
         },
     ] as const
+    type DialogMode = typeof modes[number]["name"]
 
-    let mode = $state<typeof modes[number]["name"]>("order");
+    let mode = $state<DialogMode>("order");
     let userIdInput = $state("");
     function selectMode(opt: typeof modes[number]) {
         if (userIdInput.length) {
@@ -75,10 +68,21 @@
         const layer = uiLayers.pushComponent(NewOrderDialogContent, {
             store,
             activeMapping: mapping,
+            taps: tapStream?.connected
+                ? tapStream.taps
+                : store.taps.map((assignment) => ({ tap: assignment.tap, offerItemKey: assignment.offerItemKey })),
             items: [],
             onOrderDone() {
                 if (narrationEnabled) narrator?.speak(orderConfirmation());
                 layer.ctrl.close()
+
+                const orderButton = document.querySelector(`[data-name="submitMode"] [data-mode="${"order" satisfies DialogMode}"]`) as HTMLButtonElement
+                if (orderButton) {
+                    uiFeedback.plopResult("Ok", {
+                        fromEl: orderButton,
+                        level: "success",
+                    })
+                }
             },
         }, { scope: "dialog", onDestroyed })
 
@@ -165,147 +169,13 @@
         if (greeting) narrator?.speak(greeting);
     }
 
-    /** Kept apart from the dialog layers - several customers can wait at the taps at once */
-    let pendingOrders = $state<PendingOrder[]>([]);
     let tapStream = $state<TapStream | undefined>();
 
-    function onTapEvent(event: TapEvent) {
-        switch (event.type) {
-            case "pending-offer":
-                receivePendingOffer(event);
-                return;
-            case "offer-served":
-                offerServed(event);
-                return;
-            case "offer-dismissed":
-                dropPendingOrder(event.id);
-                return;
-            case "tap-unsealed":
-                void unsealAtTap(event);
-                return;
-            case "tap-unset":
-                setStatus("⚠️", m["baroo.bar.status.tap_unset"]({ tap: event.tap }));
-                return;
-        }
-    }
-
-    /** Staff kiosks file the package right away, every one of them under the same clientId */
-    async function unsealAtTap(event: TapUnsealedEvent) {
-        setStatus("ℹ️", m["baroo.bar.status.tap_unsealed"]({
-            tap: event.tap,
-            name: event.offerItemName,
-            package: event.packageLabel,
-        }));
-
-        const clientId = `${TAP_UNSEAL_PREFIX}${event.id}`;
-        if (!store.isStaffDevice || store.hasOp(clientId)) return;
-
-        try {
-            await store.process("unseal", {
-                clientId,
-                occurredAt: event.at,
-                offerItemKey: event.offerItemKey,
-                offerItemName: event.offerItemName,
-                quantity: event.quantity,
-                tap: event.tap,
-                packageId: event.packageId,
-                flushCurrent: true,
-            });
-        } catch (error) {
-            console.error(error);
-            setStatus("❌", m["baroo.bar.status.tap_unseal_failed"]({ tap: event.tap, error: errorText(error) }));
-        }
-    }
-
-    function receivePendingOffer(offer: PendingOfferEvent) {
-        if (pendingOrders.some((pending) => pending.id === offer.id)) return;
-
-        const order = pendingOrderOf(offer);
-        if (!order) {
-            reportUnknown(offer.serialId);
-            return;
-        }
-
-        greet(order.mapping, order.label);
-        pendingOrders = [...pendingOrders, order];
-    }
-
-    function pendingOrderOf(offer: Pick<PendingOfferEvent, "id" | "tap" | "serialId" | "offerItemKey">): PendingOrder | null {
-        const mapping = store.findMapping(offer.serialId);
-        if (!mapping) return null;
-
-        return {
-            id: offer.id,
-            tap: offer.tap,
-            mapping,
-            label: mapping.member.nickName || "???",
-            offerItemKey: offer.offerItemKey,
-        };
-    }
-
-    async function servePendingOrder(order: PendingOrder, item: BarOfferItem, serving: Serving, occurredAt?: string) {
-        // Removed before the outbox write so a double press can't pour twice
-        dropPendingOrder(order.id);
-
-        try {
-            await store.process("order", {
-                // Kiosks answering the same offer land one order, sync dedupes on clientId
-                clientId: `${TAP_ORDER_PREFIX}${order.id}`,
-                occurredAt,
-                serialId: order.mapping.serialId,
-                memberId: order.mapping.member.id,
-                memberLabel: order.label,
-                items: [{ key: item.key, variant: serving.key }],
-            });
-        } catch (error) {
-            console.error(error);
-            pendingOrders = [order, ...pendingOrders];
-            setStatus("❌", m["baroo.bar.status.pending_order_failed"]({
-                name: order.label,
-                error: errorText(error),
-            }));
-            return;
-        }
-
-        setStatus("✅", m["baroo.offline.pending"]({ count: String(store.pending.length) }));
-        if (narrationEnabled) narrator?.speak(orderConfirmation());
-    }
-
-    /**
-     * Served on another kiosk, which filed the order - or at the TapTapper, then every kiosk
-     * files it, even one that came along after the card was tapped
-     */
-    function offerServed(event: OfferServedEvent) {
-        const filed = event.source === "kiosk" || store.hasOp(`${TAP_ORDER_PREFIX}${event.id}`);
-        const order = pendingOrders.find((pending) => pending.id === event.id) ?? pendingOrderOf(event);
-        if (filed || !order) {
-            dropPendingOrder(event.id);
-            return;
-        }
-
-        const item = store.offerItems.find((candidate) => candidate.key === event.offerItemKey);
-        const serving = item && offeredServings(item).find((candidate) => candidate.key === event.variant);
-        if (!item || !serving) {
-            setStatus("⚠️", m["baroo.bar.status.tap_size_unavailable"]({ tap: event.tap }));
-            return;
-        }
-
-        void servePendingOrder(order, item, serving, event.at);
-    }
-
-    function dismissPendingOrder(order: PendingOrder) {
-        dropPendingOrder(order.id);
-        void tapStream?.dismiss(order.id);
-    }
-
-    function dropPendingOrder(id: string) {
-        pendingOrders = pendingOrders.filter((pending) => pending.id !== id);
-    }
-
-    /** The taps this device knows of, from the venue server and from its own data */
+    /** The bar's taps, with what is on them - live from the server, or from this device's data */
     const knownTaps = $derived([
         ...(tapStream?.taps ?? []).map((state) => ({ tap: state.tap, offerItemKey: state.offerItemKey })),
         ...store.taps.map((assignment) => ({ tap: assignment.tap, offerItemKey: assignment.offerItemKey })),
+        ...(store.snapshot?.taps ?? []).map((tap) => ({ tap: String(tap.sequence), offerItemKey: null })),
     ]);
 
     function openUnseal(opts: { itemKey?: string, tap?: string }) {
@@ -321,7 +191,12 @@
         });
     }
 
-    async function flushOffer(item: BarOfferItem, left: { measure: Measure, quantity: number | null }, tap?: string) {
+    async function flushPackage(
+        item: BarOfferItem,
+        packageId: string,
+        left: { measure: Measure, quantity: number | null },
+        tap?: string | null,
+    ) {
         const confirmed = confirm(m["baroo.bar.stock.flush_confirm"]({
             name: item.name,
             left: left.quantity === null ? "?" : formatQuantity(left.measure, left.quantity),
@@ -330,6 +205,7 @@
 
         try {
             await store.process("flush", {
+                packageId,
                 offerItemKey: item.key,
                 offerItemName: item.name,
                 tap: tap ?? null,
@@ -427,24 +303,16 @@
         },
         {
             name: "taps",
-            // After the narrator, so the first offer already gets its greeting
-            isEnabled: () => !!store.device?.tapTicket,
+            isEnabled: () => !!store.device?.token && !!store.snapshot?.taps?.length,
             init: async () => {
                 const stream = new TapStream({
                     barSlug: store.barSlug,
-                    ticket: () => store.device?.tapTicket ?? null,
-                    onEvent: onTapEvent,
+                    token: () => store.device?.token ?? null,
                 });
                 tapStream = stream;
 
-                const stopRelaying = store.onOp((op) => stream.relay(op));
                 // Not awaiting the connection, it keeps retrying in the background
-                const stop = stream.start();
-
-                return () => {
-                    stopRelaying();
-                    stop();
-                };
+                return stream.start();
             },
         },
     ], {
@@ -495,6 +363,7 @@
                         {#each modes as opt (opt.name)}
                         <button class="btn btn-baroo {opt.name === mode ? 'btn-primary' : 'btn-outline-primary'}"
                             type="button"
+                            data-mode={opt.name}
                             onclick={() => selectMode(opt)}
                         >
                             <span class="text">{opt.label()}</span>
@@ -553,12 +422,13 @@
                             {m["baroo.bar.stock.unseal_new"]()}
                         </button>
                     </li>
-                    {#if entry.unsealedAt}
+                    {#if entry.package}
+                        {@const offerPackage = entry.package}
                         <li>
                             <button
                                 type="button"
                                 {...btnAttrs}
-                                onclick={() => flushOffer(entry.item, { measure: entry.measure, quantity: entry.left }, entry.taps[0])}
+                                onclick={() => flushPackage(entry.item, offerPackage.id, { measure: entry.measure, quantity: entry.left }, offerPackage.tap)}
                             >
                                 {m["baroo.bar.stock.flush"]()}
                             </button>
@@ -572,6 +442,7 @@
 
 {#snippet tapActions(tap: HeardTap, btnAttrs: Record<string, unknown>)}
     {@const item = tap.offerItemKey ? store.barOffer[tap.offerItemKey] : undefined}
+    {@const packageId = tap.stock?.packageId ?? store.taps.find((assignment) => assignment.tap === tap.tap)?.packageId}
     <li>
         <button
             type="button"
@@ -581,13 +452,13 @@
             {m["baroo.bar.tap.unseal_onto"]()}
         </button>
     </li>
-    {#if item}
+    {#if item && packageId}
         <li>
             <button
                 type="button"
                 {...btnAttrs}
-                onclick={() => flushOffer(item, {
-                    measure: servingPreset(item.servingPreset).measure,
+                onclick={() => flushPackage(item, packageId, {
+                    measure: item.measure,
                     quantity: tap.stock?.left ?? null,
                 }, tap.tap)}
             >
@@ -596,13 +467,6 @@
         </li>
     {/if}
 {/snippet}
-
-<PendingOffersModal
-    orders={pendingOrders}
-    offerItems={store.offerItems}
-    onServe={servePendingOrder}
-    onDismiss={dismissPendingOrder}
-/>
 
 <style lang="scss">
 @property --hide-rate {

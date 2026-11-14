@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { deflateSync } from 'node:zlib';
 import type { RequestHandler } from './$types';
-import { requireTapper } from '$lib/taps/tapAuth.server';
+import { requireTap } from '$lib/taps/tapAuth.server';
 import { renderScreen, screenSpecSchema, SCREEN_HEIGHT, SCREEN_WIDTH } from '$lib/taps/tapScreens.server';
 
 /**
@@ -10,7 +10,7 @@ import { renderScreen, screenSpecSchema, SCREEN_HEIGHT, SCREEN_WIDTH } from '$li
  * `z=1` compresses with a 4 KB zlib window, small enough for a Pico to inflate while streaming
  */
 export const GET: RequestHandler = async (event) => {
-    requireTapper(event);
+    const session = await requireTap(event);
 
     const { searchParams } = event.url;
     const spec = screenSpecSchema.safeParse(Object.fromEntries(
@@ -18,7 +18,7 @@ export const GET: RequestHandler = async (event) => {
     ));
     if (!spec.success) error(400, 'bad screen');
 
-    const pixels = await renderScreen(event.locals, event.params.ref, spec.data);
+    const pixels = await renderScreen(event.locals, session, spec.data);
     const compressed = searchParams.get('z') === '1';
     const body = compressed ? deflateSync(pixels, { windowBits: 12 }) : pixels;
 

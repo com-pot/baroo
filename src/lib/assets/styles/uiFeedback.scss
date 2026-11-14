@@ -1,0 +1,37 @@
+.ui-plop {
+    position: absolute;
+    z-index: 99999;
+    left: var(--x); top: var(--y);
+
+    font-size: 1rem;
+    rotate: calc(var(--rotate-norm, 0) * 15deg);
+
+    animation: ui-plop forwards 3s ease-in-out;
+
+    pointer-events: none;
+}
+
+@keyframes ui-plop {
+    0% {
+        translate: -50% -50%;
+        scale: 0;
+    }
+    5% {
+        scale: 1;
+    }
+    12% {
+        translate: calc(-50% + var(--target-x) * 0.5) calc(-50% + var(--target-y) * 0.5 - var(--y-hop));
+    }
+
+    50% {
+        translate: calc(-50% + var(--target-x)) calc(-50% + var(--target-y));
+    }
+    90% {
+        scale: 1;
+    }
+    100% {
+        scale: 0;
+        translate: calc(-50% + var(--target-x)) calc(-50% + var(--target-y));
+    }
+
+}

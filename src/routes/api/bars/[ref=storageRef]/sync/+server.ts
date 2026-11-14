@@ -7,11 +7,14 @@ import type { Bar } from '$lib/bar/BarModel';
 import { type OutboxOp } from '$lib/offline/op';
 import { type SyncOpResult, type SyncResponse } from '$lib/offline/sync';
 import { applyOp } from './barOpHandler';
+import { broadcastTaps } from '$lib/taps/tapBoard.server';
 import z from 'zod';
 
 const syncBodySchema = z.object({
     ops: z.array(z.looseObject({})).min(1),
 })
+
+const TAP_OP_KINDS = new Set<OutboxOp["kind"]>(['order', 'unseal', 'flush']);
 
 export const POST: RequestHandler = async ({ params, request, locals}) => {
     const barSlug = params.ref;
@@ -51,6 +54,12 @@ export const POST: RequestHandler = async ({ params, request, locals}) => {
                 error: err instanceof Error ? err.message : String(err),
             });
         }
+    }
+
+    // Orders drain the packages on taps, unseals and flushes change what is on them
+    const tapsChanged = body.data.ops.some((op, i) => results[i].status === 'applied' && TAP_OP_KINDS.has((op as unknown as OutboxOp).kind));
+    if (tapsChanged) {
+        await broadcastTaps(locals, pb, barSlug).catch((err) => locals.logger.error(err, '[taps] could not tell what is on the taps'));
     }
 
     const response: SyncResponse = {

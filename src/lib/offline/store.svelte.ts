@@ -1,11 +1,13 @@
-import type { BarMember, BarOfferItem, OfferPackage } from '$lib/bar/BarModel';
+import { packageState, type BarMember, type BarOfferItem, type OfferPackage, type PackageState } from '$lib/bar/BarModel';
 import {
+    applyFlush,
+    applyUnseal,
     computeOfferStock,
-    replayStock,
-    snapshotStockEvents,
+    orderPackage,
+    tapAssignments,
     type BarOfferIndex,
     type OfferStock,
-    type StockEvent,
+    type StockOrder,
     type TapAssignment,
 } from '$lib/bar/stats/barOfferItems';
 import {
@@ -73,12 +75,15 @@ const preStoreValidation: Partial<{
 
 export class BarOfflineStore {
     /** Forward-compatible single point of truth for currency */
-    currency = "czk"
     barSlug = $state('');
     device = $state<DeviceIdentity | null>(null);
     snapshot = $state<BarSnapshot | null>(null);
 
     pending = $state<StoredOp[]>([]);
+
+    get currency() {
+        return this.snapshot?.bar.currency ?? "czk"
+    }
 
     constructor(
         barSlug: string,
@@ -128,8 +133,41 @@ export class BarOfflineStore {
         return indexBy("key", this.offerItems);
     }
 
+    /** Registered and unsealed, with this device's unseals and flushes on top */
     get packages(): OfferPackage[] {
-        return this.snapshot?.packages ?? [];
+        let packages = this.snapshot?.packages ?? [];
+
+        for (const op of this.pending.toSorted((a, b) => a.occurredAt.localeCompare(b.occurredAt))) {
+            if (op.kind === 'unseal') {
+                packages = applyUnseal(packages, {
+                    packageId: op.packageId,
+                    offerItemKey: op.offerItemKey,
+                    quantity: op.quantity,
+                    label: op.label,
+                    tap: op.tap ?? null,
+                    at: op.occurredAt,
+                });
+            } else if (op.kind === 'flush' && op.packageId) {
+                packages = applyFlush(packages, { packageId: op.packageId, at: op.occurredAt });
+            }
+        }
+
+        return packages;
+    }
+
+    /** How many packages of each item are registered, unsealed and flushed */
+    get packageCounts(): Record<BarOfferItem['key'], Record<PackageState, number>> {
+        const counts: Record<string, Record<PackageState, number>> = {};
+        const countsOf = (key: string) => counts[key] ??= { registered: 0, unsealed: 0, flushed: 0 };
+
+        for (const [key, flushed] of Object.entries(this.snapshot?.flushedPackages ?? {})) {
+            countsOf(key).flushed = flushed;
+        }
+        for (const offerPackage of this.packages) {
+            countsOf(offerPackage.offerItemKey)[packageState(offerPackage)]++;
+        }
+
+        return counts;
     }
 
     get mappings(): TagMapping[] {
@@ -242,8 +280,9 @@ export class BarOfflineStore {
         }))
     }
 
-    private get orderItems(): { key: string; variant: string; orderedAt: string }[] {
-        const items: { key: string; variant: string; orderedAt: string }[] = [];
+    /** The server tells the package of a synced order, this device guesses it for its own */
+    private get orderItems(): StockOrder[] {
+        const items: StockOrder[] = [];
 
         for (const timeline of Object.values(this.snapshot?.timelines ?? {})) {
             for (const entry of timeline) {
@@ -252,56 +291,33 @@ export class BarOfflineStore {
             }
         }
 
+        const packages = this.packages;
         for (const op of this.pending) {
             if (op.kind !== 'order') continue;
             for (const item of op.items) {
-                items.push({ ...item, orderedAt: op.occurredAt });
+                items.push({
+                    key: item.key,
+                    variant: item.variant,
+                    orderedAt: op.occurredAt,
+                    package: orderPackage(packages, { key: item.key, tap: item.tap, at: op.occurredAt })?.id ?? null,
+                });
             }
         }
 
         return items;
     }
 
-    private get stockEvents(): StockEvent[] {
-        const events = this.snapshot ? snapshotStockEvents(this.snapshot) : [];
-
-        for (const op of this.pending) {
-            if (op.kind === 'unseal') {
-                events.push({
-                    type: 'unseal',
-                    offerItemKey: op.offerItemKey,
-                    occurredAt: op.occurredAt,
-                    clientId: op.clientId,
-                    tap: op.tap ?? null,
-                    quantity: op.quantity,
-                    packageId: op.packageId ?? null,
-                    flushCurrent: op.flushCurrent,
-                });
-            } else if (op.kind === 'flush') {
-                events.push({
-                    type: 'flush',
-                    offerItemKey: op.offerItemKey,
-                    occurredAt: op.occurredAt,
-                    clientId: op.clientId,
-                    tap: op.tap ?? null,
-                });
-            }
-        }
-
-        return events;
-    }
-
     get stock(): OfferStock[] {
         return computeOfferStock({
             offerItems: this.offerItems,
-            events: this.stockEvents,
+            packages: this.packages,
             orderItems: this.orderItems,
         });
     }
 
     /** What is on which tap, as far as this device knows */
     get taps(): TapAssignment[] {
-        return Object.values(replayStock(this.stockEvents).taps);
+        return tapAssignments(this.packages);
     }
 
     unknownTags = $state<string[]>([]);
@@ -341,21 +357,8 @@ export class BarOfflineStore {
         }
 
         this.opts?.onProcessed?.()
-        for (const listener of this.opListeners) listener(stored);
 
         return stored;
-    }
-
-    private opListeners = new Set<(op: StoredOp) => unknown>();
-    /** Hears of every op stored from now on, returns the unsubscribe */
-    onOp(listener: (op: StoredOp) => unknown): () => void {
-        this.opListeners.add(listener);
-        return () => this.opListeners.delete(listener);
-    }
-
-    /** Ops filed from a shared event share its clientId, as each listening device files them */
-    hasOp(clientId: string): boolean {
-        return this.pending.some((op) => op.clientId === clientId);
     }
 
     private async adoptConfig(config: PosDeviceConfig, keepSeq: number) {

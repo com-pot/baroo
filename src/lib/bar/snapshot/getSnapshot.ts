@@ -1,24 +1,24 @@
 import { ClientResponseError } from 'pocketbase';
 import { loadBarData } from '$lib/bar/storage.server';
+import { toIsoDate } from '$lib/pocketbase';
 import { effectiveDate, type Bar, type BarOfferPackage, type BarOrderItemRecord, type OfferPackage } from '$lib/bar/BarModel';
 import { buildMemberTimeline, type MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
 import type { BarSnapshot } from '$lib/offline/types';
-import type { UnsealEvent } from '../ops/unseal';
-import type { FlushEvent } from '../ops/flush';
 import type { SettlementEvent } from '$lib/offline/ops/SettlementOp';
+import { BarTapsCollection, tapRef, type BarTap } from '$lib/taps/barTap';
 
 export default async function getSnapshot(ctx: Pick<App.Locals, "pb">, barSlug: Bar["slug"]): Promise<BarSnapshot> {
     const { pb } = ctx
     const { bar, offerItems, members, mappings } = await loadBarData(ctx, barSlug);
 
-    const [orderItems, settlementsByMember, unseals, flushes, packages] = await Promise.all([
+    const [orderItems, settlementsByMember, packages, flushed, taps] = await Promise.all([
         pb.collection<BarOrderItemRecord>('bar_order_items').getFullList({
             filter: `customer.bar.slug = "${barSlug}"`,
         }),
         getSettlements(ctx, barSlug).then((settlements) => groupByMember(settlements)),
-        getStockEvents<UnsealEvent>(ctx, barSlug, 'unseal'),
-        getStockEvents<FlushEvent>(ctx, barSlug, 'flush'),
         getPackages(ctx, barSlug),
+        getFlushedPackages(ctx, barSlug),
+        getTaps(ctx, barSlug),
     ]);
 
     const ordersByMember = new Map<string, BarOrderItemRecord[]>();
@@ -42,20 +42,35 @@ export default async function getSnapshot(ctx: Pick<App.Locals, "pb">, barSlug: 
     }
 
     const itemKeys = new Map(offerItems.map((item) => [item.id, item.key]));
+    const tapRefs = new Map(taps.map((tap) => [tap.id, tapRef(tap)]));
+
+    const flushedPackages: Record<string, number> = {};
+    for (const { offerItem } of flushed) {
+        const offerItemKey = itemKeys.get(offerItem);
+        if (offerItemKey) flushedPackages[offerItemKey] = (flushedPackages[offerItemKey] ?? 0) + 1;
+    }
 
     const snapshot: BarSnapshot = {
         capturedAt: new Date().toISOString(),
         bar,
         offerItems,
-        packages: packages.flatMap(({ offerItem, ...offerPackage }): OfferPackage[] => {
+        packages: packages.flatMap(({ offerItem, tap, ...offerPackage }): OfferPackage[] => {
             const offerItemKey = itemKeys.get(offerItem);
-            return offerItemKey ? [{ ...offerPackage, offerItemKey }] : [];
+            return offerItemKey
+                ? [{
+                    ...offerPackage,
+                    offerItemKey,
+                    tap: tapRefs.get(tap) ?? null,
+                    unsealedAt: toIsoDate(offerPackage.unsealedAt),
+                    flushedAt: toIsoDate(offerPackage.flushedAt),
+                }]
+                : [];
         }),
+        flushedPackages,
         members,
         mappings,
         timelines,
-        unseals,
-        flushes,
+        taps: taps.map(({ sequence, name }) => ({ sequence, name })),
     };
 
     return snapshot
@@ -79,33 +94,26 @@ function groupByMember(settlements: SettlementEvent[]) {
     return settlementsByMember
 }
 
-/** Unseals or flushes per offer item, oldest first */
-async function getStockEvents<E extends UnsealEvent | FlushEvent>(ctx: Pick<App.Locals, "pb">, barSlug: Bar["slug"], type: E["type"]) {
-    const stockEvents = await ctx.pb.collection<E>('events').getFullList({
-        filter: `type = "${type}" && target = "bar:${barSlug}"`,
-        sort: 'occurredAt,created',
-    })
-
-    const byItem: Record<string, E[]> = {};
-    for (const event of stockEvents) {
-        const key = event.data.offerItemKey;
-        if (!key) continue;
-        if (!byItem[key]) byItem[key] = []
-
-        byItem[key].push(event)
-    }
-
-    return byItem
-}
-
 async function getPackages(ctx: Pick<App.Locals, "pb">, barSlug: Bar["slug"]) {
     return ctx.pb.collection<BarOfferPackage>('bar_offer_packages').getFullList({
-        filter: `offerItem.bar.slug = "${barSlug}"`,
+        // Flushed ones are done with, their orders know them
+        filter: ctx.pb.filter('offerItem.bar.slug = {:barSlug} && flushedAt = ""', { barSlug }),
         sort: 'quantity',
-        fields: 'id,offerItem,label,quantity,tagSerial',
-    }).catch((err: unknown) => {
-        // Until pb_schema.json is imported, kiosks must keep pulling
-        if (err instanceof ClientResponseError && err.status === 404) return [];
-        throw err;
+        fields: 'id,offerItem,label,quantity,tagSerial,tap,unsealedAt,flushedAt',
+    })
+}
+
+async function getFlushedPackages(ctx: Pick<App.Locals, "pb">, barSlug: Bar["slug"]) {
+    return ctx.pb.collection<Pick<BarOfferPackage, 'offerItem'>>('bar_offer_packages').getFullList({
+        filter: ctx.pb.filter('offerItem.bar.slug = {:barSlug} && flushedAt != ""', { barSlug }),
+        fields: 'offerItem',
+    })
+}
+
+async function getTaps(ctx: Pick<App.Locals, "pb">, barSlug: Bar["slug"]) {
+    return ctx.pb.collection<BarTap>(BarTapsCollection).getFullList({
+        filter: ctx.pb.filter('bar.slug = {:barSlug}', { barSlug }),
+        sort: 'sequence',
+        fields: 'id,sequence,name',
     })
 }

@@ -2,9 +2,11 @@
     import { untrack } from "svelte";
     import * as m from "$lib/paraglide/messages.js";
     import type { BarOfflineStore } from "$lib/offline/store.svelte";
-    import { servingPreset } from "$lib/bar/servings";
+    import { packageState } from "$lib/bar/BarModel";
     import { formatQuantity, measureLabel, packageLabel } from "$lib/bar/quantity";
+    import { newPackageId } from "$lib/bar/stats/barOfferItems";
     import TapPicker from "./TapPicker.svelte";
+    import { getMeasure } from "$lib/si/measure";
 
     let {
         store,
@@ -22,32 +24,35 @@
         onDone?: () => void;
     } = $props();
 
-    let pickedKey = $state("");
+    let pickedKey = $state(untrack(() => preselectedTap
+        ? store.packages.find((offerPackage) => offerPackage.tap === preselectedTap && packageState(offerPackage) === "unsealed")?.offerItemKey ?? ""
+        : ""));
 
     const itemKey = $derived(lockedItemKey ?? pickedKey);
     const item = $derived(store.barOffer[itemKey]);
-    const stock = $derived(store.stock.find((entry) => entry.item.key === itemKey));
-    const packages = $derived(store.packages.filter((offerPackage) => offerPackage.offerItemKey === itemKey));
+    /** Registered ones, waiting to be unsealed */
+    const packages = $derived(store.packages.filter((offerPackage) => offerPackage.offerItemKey === itemKey
+        && packageState(offerPackage) === "registered"));
 
-    const measure = $derived(item ? servingPreset(item.servingPreset).measure : null);
+    const measure = $derived(getMeasure(item?.measure));
 
     let packageId = $state("");
     let quantity = $state("");
     let tap = $state("");
-    let flushCurrent = $state(true);
 
-    /** An item's own guesses: the package kind it had last, the tap it is on */
+    /** What gets flushed by the unseal: the package on the tap, or the item's one off the taps */
+    const replaced = $derived(store.stock.find((entry) => entry.package
+        && (tap ? entry.package.tap === tap : !entry.package.tap && entry.item.key === itemKey)));
+
+    /** An item's own guesses: its oldest registered package, the size it had last, the tap it is on */
     function guessFor(key: string) {
-        const entry = store.stock.find((candidate) => candidate.item.key === key);
         const own = store.packages.filter((offerPackage) => offerPackage.offerItemKey === key);
-        const usual = own.find((offerPackage) => offerPackage.id === entry?.packageId) ?? own[0];
+        const registered = own.filter((offerPackage) => packageState(offerPackage) === "registered");
+        const open = own.find((offerPackage) => packageState(offerPackage) === "unsealed");
 
-        packageId = usual?.id ?? "";
-        quantity = usual
-            ? String(usual.quantity)
-            : entry?.unsealedAt && entry.unsealQuantity > 0 ? String(entry.unsealQuantity) : "";
-        tap = preselectedTap ?? entry?.taps[0] ?? "";
-        flushCurrent = true;
+        packageId = registered[0]?.id ?? "";
+        quantity = open ? String(open.quantity) : "";
+        tap = preselectedTap ?? open?.tap ?? "";
     }
     untrack(() => guessFor(itemKey));
 
@@ -56,24 +61,18 @@
         guessFor(pickedKey);
     }
 
-    function pickPackage(e: Event & { currentTarget: HTMLSelectElement }) {
-        packageId = e.currentTarget.value;
-        const picked = packages.find((offerPackage) => offerPackage.id === packageId);
-        if (picked) quantity = String(picked.quantity);
-    }
-
     async function submit(e: SubmitEvent) {
         e.preventDefault();
         if (!item) return;
 
+        const registered = packages.find((offerPackage) => offerPackage.id === packageId);
         await store.process("unseal", {
             offerItemKey: item.key,
             offerItemName: item.name,
-            quantity: parseFloat(quantity) || 0,
+            // A new package gets registered by the op, under an id minted here
+            packageId: registered?.id ?? newPackageId(),
+            quantity: registered?.quantity ?? (parseFloat(quantity) || 0),
             tap: tap || null,
-            packageId: packageId || null,
-            // Stock opened on another device meanwhile is no reason to keep it
-            flushCurrent: stock?.unsealedAt ? flushCurrent : true,
         });
 
         pickedKey = "";
@@ -98,31 +97,31 @@
         {/if}
     </div>
 
-    {#if measure && packages.length}
+    <div class="input-pair">
+        <label for="unseal.package">{m["baroo.staff.unseal_package"]()}</label>
+        <select class="form-select" id="unseal.package" bind:value={packageId}>
+            <option value="">{m["baroo.staff.unseal_package_new"]()}</option>
+            {#each packages as offerPackage (offerPackage.id)}
+                <option value={offerPackage.id}>{packageLabel(offerPackage, measure.name)}{offerPackage.tagSerial ? " 📶" : ""}</option>
+            {/each}
+        </select>
+    </div>
+
+    {#if !packageId}
         <div class="input-pair">
-            <label for="unseal.package">{m["baroo.staff.unseal_package"]()}</label>
-            <select class="form-select" id="unseal.package" value={packageId} onchange={pickPackage}>
-                <option value="">{m["baroo.staff.unseal_package_custom"]()}</option>
-                {#each packages as offerPackage (offerPackage.id)}
-                    <option value={offerPackage.id}>{packageLabel(offerPackage, measure)}</option>
-                {/each}
-            </select>
+            <label for="unseal.quantity">{m["baroo.staff.unseal_quantity"]({ measure: measureLabel(measure.name) })}</label>
+            <input
+                id="unseal.quantity" class="form-control"
+                type="number"
+                inputmode={measure.inputMode}
+                min={measure.step}
+                step={measure.step}
+                onfocus={(e) => e.currentTarget.select()}
+                bind:value={quantity}
+                required
+            />
         </div>
     {/if}
-
-    <div class="input-pair">
-        <label for="unseal.quantity">{m["baroo.staff.unseal_quantity"]({ measure: measure ? measureLabel(measure) : "..." })}</label>
-        <input
-            id="unseal.quantity" class="form-control"
-            type="number"
-            inputmode={measure === "volume" ? "decimal" : "numeric"}
-            min={measure === "volume" ? 0.1 : 1}
-            step={measure === "volume" ? 0.1 : 1}
-            onfocus={(e) => e.currentTarget.select()}
-            bind:value={quantity}
-            required
-        />
-    </div>
 
     <div class="input-pair">
         <label for="unseal.tap">{m["baroo.staff.unseal_tap"]()}</label>
@@ -131,18 +130,13 @@
         {/key}
     </div>
 
-    {#if stock?.unsealedAt}
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="unseal.flushCurrent" bind:checked={flushCurrent} />
-            <label class="form-check-label" for="unseal.flushCurrent">
-                {m["baroo.staff.unseal_flush_current"]()}
-                <small>
-                    {flushCurrent
-                        ? m["baroo.staff.unseal_flush_current_hint"]({ left: formatQuantity(stock.measure, stock.left ?? 0) })
-                        : m["baroo.staff.unseal_top_up_hint"]()}
-                </small>
-            </label>
-        </div>
+    {#if replaced?.package}
+        <p class="form-text">
+            {m["baroo.staff.unseal_flush_current_hint"]({
+                name: replaced.item.name,
+                left: formatQuantity(replaced.measure, replaced.left ?? 0),
+            })}
+        </p>
     {/if}
 
     <button class="btn btn-primary" type="submit" disabled={!itemKey}>

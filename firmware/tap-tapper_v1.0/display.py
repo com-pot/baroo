@@ -1,7 +1,7 @@
 """
 The TapTapper's display: a 2.8" ILI9341 panel, 240x320, on SPI1. Wiring in README.md.
 
-The venue server draws every screen, and the TapTapper streams the pixels to the panel as
+The server draws every screen, and the TapTapper streams the pixels to the panel as
 they arrive without looking at them. The only screens drawn here are the ones that have
 to work without a server: starting up, server unreachable. They use MicroPython's own
 8x8 font, which has no diacritics, so they are plain ASCII.

@@ -10,14 +10,19 @@
         "action": {
             "open": "Otevřít",
             "copy": "kopírovat",
-            "save": "Uložit"
+            "save": "Uložit",
+            "add": "Přidat",
+            "remove": "Odebrat"
         },
         "list": {
             "no_items": "Žádné položky k zobrazení."
         },
         "measure": {
-            "volume": "l",
-            "count": "ks"
+            "label": "Měrná jednotka",
+            "mode": {
+                "volume": "l",
+                "count": "ks"
+            }
         },
         "file_drop": {
             "prompt": "Přetáhni sem soubor nebo klikni pro výběr",
@@ -27,5 +32,13 @@
             "bad_aspect": "Poměr stran musí být {ratio}; tenhle obrázek je {width}×{height}.",
             "unreadable": "Soubor se nepodařilo načíst jako obrázek."
         }
+    },
+    "color": {
+        "yellow": "Žlutá",
+        "red": "Červená",
+        "green": "Zelená",
+        "blue": "Modrá",
+        "white": "Bílá",
+        "black": "Černá"
     }
 }

@@ -1,3 +1,4 @@
+import z from "zod";
 import type { BarMember } from "./BarModel"
 
 export type TagMapping = {
@@ -14,8 +15,13 @@ export function isValidMapping(data: unknown): data is TagMapping {
         && typeof d.nickName === 'string' && d.nickName.length > 0
 }
 
-export function normalizeTag(serialId: string): string {
-    return serialId.trim()
+
+export const tagSerialSchema = z.string()
+    .transform(normalizeTag)
+    .pipe(z.string().regex(/^[0-9a-f]{4,40}$/))
+
+export function normalizeTag(serial: string): string {
+    return serial.trim()
         .replaceAll(/\:/g, '')
         .toLowerCase()
 }

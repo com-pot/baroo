@@ -1,166 +1,161 @@
 import sharp from 'sharp';
 import z from 'zod';
+import { env } from '$env/dynamic/private';
 import * as m from '$lib/paraglide/messages.js';
-import { getLocale } from '$lib/paraglide/runtime.js';
 import { formatQuantity } from '$lib/bar/quantity';
-import { SERVING_PRESETS, servingText } from '$lib/bar/servings';
-import type { Measure } from '$lib/si/measure';
+import { servingText } from '$lib/bar/servings';
+import { type Measure } from '$lib/si/measure';
+import { tagSerialSchema } from '$lib/bar/tags';
+import { readTapConfig, tapModel } from './models';
+import { buttonColor } from '$lib/taps/models/palette';
+import { tapLabel } from './barTap';
+import type { TapSession } from './tapAuth.server';
 import { tapState } from './tapBoard.server';
-import { directoryVersion, lookupCard, lookupDrink, type StoredImage } from './tapDirectory.server';
-import { tapIdSchema, type TapScreens, type TapState } from './tapEvents';
-import type { PendingOffer } from './tapHub.server';
-import { imagesVersion, readImage } from './tapImages.server';
+import { barMemberImage, lookupCard, offerItemImageRef } from './tapLookup.server';
+import { servingKey, type TapScreen } from './tapEvents';
+import type { PendingOffer } from './tapOffers.server';
+import { toIsoDate, type PbImageRef } from '$lib/pocketbase';
+import { getBarOfferItem } from '$lib/bar/stats/barOfferItems';
 
 /**
- * TapTapper display screens, rendered by the venue server as raw RGB565 pixels (high byte first)
+ * TapTapper display screens, rendered by the server as raw RGB565 pixels (high byte first)
  * which the TapTapper streams to the panel as they are
  */
 
 export const SCREEN_WIDTH = 240;
 export const SCREEN_HEIGHT = 320;
 
-/** How long a scan's screen stays before returning to idle */
 export const SCREEN_HOLD_MS = 5000;
-/** How long the TapTapper waits on a pending offer, the kiosk keeps it regardless */
-export const OFFER_WAIT_MS = 15000;
+/** The confirmed serving, just long enough to read before the idle screen shows what is left */
+const SERVED_HOLD_MS = 1500;
 
 const offerItemKey = z.string().regex(/^[a-z0-9-]{1,32}$/);
-const cardSerial = z.string().regex(/^[0-9a-f]{4,40}$/);
-const servingKey = z.string().regex(/^[0-9a-z_]{1,8}$/);
 const quantity = z.coerce.number().min(0).max(100_000);
 
+/** Screens in reply to what was just done at the tap, all they show is in their path */
 export const screenSpecSchema = z.discriminatedUnion('view', [
     z.object({
-        view: z.literal('idle'),
-        tap: tapIdSchema,
-        item: offerItemKey.optional(),
-        left: quantity.optional(),
-        total: quantity.optional(),
-    }),
-    z.object({
         view: z.literal('unsealed'),
-        tap: tapIdSchema,
         item: offerItemKey,
         /** Package label */
         label: z.string().max(40).optional(),
         left: quantity.optional(),
         total: quantity.optional(),
-        warn: z.literal('no-staff').optional(),
     }),
     z.object({
         view: z.literal('offer'),
-        tap: tapIdSchema,
         item: offerItemKey,
-        serial: cardSerial,
-        /** Buttons to draw, comma separated serving keys */
-        sizes: z.string().regex(/^[0-9a-z_,]{0,40}$/).optional(),
-        warn: z.literal('no-kiosk').optional(),
+        serial: tagSerialSchema,
+        /** Serving keys the TapTapper's buttons answer, in their order, comma separated */
+        variants: z.string().regex(/^[0-9a-z_,]{0,40}$/).optional(),
     }),
     z.object({
         view: z.literal('served'),
-        tap: tapIdSchema,
         item: offerItemKey,
-        serial: cardSerial,
-        size: servingKey,
-        left: quantity.optional(),
-        total: quantity.optional(),
-        warn: z.literal('no-kiosk').optional(),
+        serial: tagSerialSchema,
+        /** Serving key */
+        variant: servingKey,
     }),
-    z.object({ view: z.literal('unset'), tap: tapIdSchema }),
+    z.object({ view: z.literal('unknown-card'), serial: tagSerialSchema }),
+    z.object({
+        view: z.literal('error'),
+        text: z.string().min(1).max(60),
+        hint: z.string().max(60).optional(),
+    }),
 ]);
-
-/** TapTapper's size buttons left to right, as the keypad has them */
-const BUTTONS = [
-    { size: '0_5', fill: '#dc2626', text: '#f9fafb' },
-    { size: '0_3', fill: '#facc15', text: '#111827' },
-];
 
 export type ScreenSpec = z.input<typeof screenSpecSchema>;
 
-/** TapTappers redraw only when the path changes, hence `v` - and the gauge's numbers in it */
-export function screenPath(barSlug: string, spec: ScreenSpec): string {
+function screenPath(barSlug: string, spec: ScreenSpec): string {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(spec)) {
         if (value !== undefined && value !== null) query.set(key, String(value));
     }
-    query.set('v', `${directoryVersion()}.${imagesVersion()}`);
     return `/api/bars/${encodeURIComponent(barSlug)}/taps/screen?${query}`;
 }
 
-export function idleSpec(state: TapState): ScreenSpec {
-    return {
-        view: 'idle',
-        tap: state.tap,
-        item: state.offerItemKey ?? undefined,
-        left: state.stock?.left,
-        total: state.stock?.quantity,
-    };
+export function tapScreen(session: TapSession, spec: ScreenSpec, hold = SCREEN_HOLD_MS): TapScreen {
+    return { path: screenPath(session.tap.bar.slug, spec), hold };
 }
 
-export async function idleScreen(ctx: Pick<App.Locals, "logger">, barSlug: string, tap: string): Promise<string> {
-    return screenPath(barSlug, idleSpec(await tapState(ctx, barSlug, tap)));
-}
-
-export async function tapScreens(
-    ctx: Pick<App.Locals, "logger">,
-    barSlug: string,
-    tap: string,
-    now: ScreenSpec,
-    hold = SCREEN_HOLD_MS,
-): Promise<TapScreens> {
-    return {
-        screen: screenPath(barSlug, now),
-        idle: await idleScreen(ctx, barSlug, tap),
-        hold,
-    };
-}
-
-/** The serving an offer got, over what is left on the tap after it */
-export async function servedScreens(
-    ctx: Pick<App.Locals, "logger">,
-    barSlug: string,
-    offer: Pick<PendingOffer, 'tap' | 'serialId' | 'offerItemKey'> & { variant: string },
-    warn?: 'no-kiosk',
-): Promise<TapScreens> {
-    const state = await tapState(ctx, barSlug, offer.tap);
-    const stock = state.offerItemKey === offer.offerItemKey ? state.stock : null;
-
-    return tapScreens(ctx, barSlug, offer.tap, {
+export function servedScreen(
+    session: TapSession,
+    offer: Pick<PendingOffer, 'serialId' | 'offerItemKey'> & { variant: string },
+): TapScreen {
+    return tapScreen(session, {
         view: 'served',
-        tap: offer.tap,
         item: offer.offerItemKey,
         serial: offer.serialId,
-        size: offer.variant,
-        left: stock?.left,
-        total: stock?.quantity,
-        warn,
-    });
+        variant: offer.variant,
+    }, SERVED_HOLD_MS);
 }
 
-/** Straight back to idle, for an offer nobody waits on any more */
-export async function goneScreens(ctx: Pick<App.Locals, "logger">, barSlug: string, tap: string): Promise<TapScreens> {
-    const idle = await idleScreen(ctx, barSlug, tap);
-    return { screen: idle, idle, hold: 0 };
+/** The tap as it is now - what it pours and how much is left */
+type IdleScreen = { view: 'idle'; item: string | null; left?: number; total?: number };
+
+export async function idleScreen(session: TapSession): Promise<IdleScreen> {
+    const state = await tapState(session.pb, session.tap.bar.slug, session.ref);
+    return { view: 'idle', item: state.offerItemKey, left: state.stock?.left, total: state.stock?.quantity };
 }
 
-const CACHE_SIZE = 24;
-const cache = new Map<string, Buffer>();
+/**
+ * When the idle screen last changed, as the latest of what it shows: unseals and flushes on
+ * the tap, orders poured from it, and the drink on it. `null` for a tap that never had any.
+ *
+ * All of them are filed by the server or PocketBase - from the tap, a kiosk or backstage - so
+ * their times only ever move on, and a TapTapper asking with the one it has is told whether
+ * its panel is still right. The tap's name is not among them, a renamed tap shows it once
+ * something else changes or it reboots.
+ */
+export async function idleScreenUpdatedAt(session: TapSession): Promise<string | null> {
+    const { pb, tap, ref } = session;
+    const latest = { sort: '-updated', fields: 'updated' };
 
-export async function renderScreen(ctx: Pick<App.Locals, "logger">, barSlug: string, spec: z.output<typeof screenSpecSchema>): Promise<Buffer> {
-    const key = [barSlug, getLocale(), directoryVersion(), imagesVersion(), JSON.stringify(spec)].join('|');
+    const [events, orders, onTap] = await Promise.all([
+        pb.collection<{ created: string }>('events').getList(1, 1, {
+            filter: pb.filter('target = {:target} && (type = "unseal" || type = "flush") && data.tap = {:tap}', {
+                target: `bar:${tap.bar.slug}`,
+                tap: ref,
+            }),
+            sort: '-created',
+            fields: 'created',
+        }),
+        pb.collection<{ updated: string }>('bar_order_items').getList(1, 1, {
+            filter: pb.filter('tap = {:tap}', { tap: tap.id }),
+            ...latest,
+        }),
+        pb.collection<{ expand?: { offerItem?: { updated: string } } }>('bar_offer_packages').getList(1, 1, {
+            filter: pb.filter('tap = {:tap} && unsealedAt != "" && flushedAt = ""', { tap: tap.id }),
+            sort: '-unsealedAt',
+            expand: 'offerItem',
+            fields: 'expand.offerItem.updated',
+        }),
+    ]);
 
-    const hit = cache.get(key);
-    if (hit) {
-        cache.delete(key);
-        cache.set(key, hit);
-        return hit;
-    }
+    const times = [
+        events.items[0]?.created,
+        orders.items[0]?.updated,
+        onTap.items[0]?.expand?.offerItem?.updated,
+    ].map((at) => toIsoDate(at)).filter(Boolean);
 
-    const pixels = toRgb565(await draw(ctx, barSlug, spec));
-    cache.set(key, pixels);
-    if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
+    return times.sort().at(-1) ?? null;
+}
 
-    return pixels;
+/** Colors of the tap's size buttons, in their order */
+export function tapButtons(tap: TapSession["tap"]): number[] {
+    const model = tapModel(tap.model);
+    if (!model) return [];
+
+    const { buttons } = readTapConfig(model, tap.config) as { buttons?: { color: number }[] };
+    return (buttons ?? []).map((button) => button.color);
+}
+
+/** What drawing a screen needs of the request */
+type ScreenCtx = Pick<App.Locals, "logger" | "i18n">;
+
+/** Drawn afresh every time: TapTappers ask for a screen only once it changed */
+export async function renderScreen(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof screenSpecSchema> | IdleScreen): Promise<Buffer> {
+    return toRgb565(await draw(ctx, session, spec));
 }
 
 const FONT = 'DejaVu Sans, Segoe UI, Arial, sans-serif';
@@ -181,53 +176,44 @@ const LOW_SHARE = 0.2;
 
 type Layer = { input: Buffer; top: number; left: number };
 
-async function draw(ctx: Pick<App.Locals, "logger">, barSlug: string, spec: z.output<typeof screenSpecSchema>): Promise<Buffer> {
+async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof screenSpecSchema> | IdleScreen): Promise<Buffer> {
     const svg: string[] = [];
     const layers: Layer[] = [];
-    const tapLabel = m['baroo.bar.tap.title']({ tap: spec.tap });
+    const { pb } = session;
+    const barSlug = session.tap.bar.slug;
+    const label = tapLabel(session.tap);
 
     switch (spec.view) {
         case 'idle': {
-            const drink = spec.item ? await lookupDrink(ctx, barSlug, spec.item) : null;
-            svg.push(text(tapLabel, { y: 26, size: 16, fill: COLORS.muted }));
+            const drink = spec.item ? await getBarOfferItem(pb, barSlug, spec.item) : null;
+            svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
 
             if (!spec.item) {
                 await picture(ctx, svg, layers, null, '?', { left: 30, top: 44, size: 180, shape: 'rounded' });
-                svg.push(text(m['baroo.tap_screen.no_drink'](), { y: 262, size: 30, weight: 700, fill: COLORS.text }));
-                svg.push(text(m['baroo.tap_screen.tap_package_tag'](), { y: 302, size: 16, fill: COLORS.muted }));
+                svg.push(text(m['baroo.tap_screen.no_drink']({}, { locale: ctx.i18n.locale }), { y: 262, size: 30, weight: 700, fill: COLORS.text }));
+                svg.push(text(m['baroo.tap_screen.tap_package_tag']({}, { locale: ctx.i18n.locale }), { y: 302, size: 16, fill: COLORS.muted }));
                 break;
             }
 
             const name = drink?.name ?? spec.item;
-            await picture(ctx, svg, layers, drink?.image ?? null, name, { left: 45, top: 40, size: 150, shape: 'rounded' });
+            await picture(ctx, svg, layers, offerItemImageRef(drink), name, { left: 45, top: 40, size: 150, shape: 'rounded' });
             svg.push(text(name, { y: 224, size: 28, weight: 700, fill: COLORS.text }));
-            if (spec.total) gauge(svg, 238, spec.left ?? 0, spec.total, drink?.measure);
-            svg.push(text(m['baroo.tap_screen.tap_card'](), { y: 302, size: 16, fill: COLORS.muted }));
+            if (spec.total) gauge(ctx, svg, 238, spec.left ?? 0, spec.total, drink?.measure);
+            svg.push(text(m['baroo.tap_screen.tap_card']({}, { locale: ctx.i18n.locale }), { y: 302, size: 16, fill: COLORS.muted }));
             break;
         }
 
         case 'unsealed': {
-            const drink = await lookupDrink(ctx, barSlug, spec.item);
+            const drink = await getBarOfferItem(pb, barSlug, spec.item);
             const name = drink?.name ?? spec.item;
 
-            if (spec.warn === 'no-staff') {
-                svg.push(rect(0, 0, SCREEN_WIDTH, 40, COLORS.error));
-                svg.push(text(m['baroo.tap_screen.not_unsealed'](), { y: 27, size: 18, weight: 700, fill: COLORS.text }));
-            } else {
-                svg.push(rect(0, 0, SCREEN_WIDTH, 40, COLORS.ok));
-                svg.push(text(`✓ ${m['baroo.tap_screen.unsealed']()}`, { y: 27, size: 18, weight: 700, fill: COLORS.text }));
-            }
+            svg.push(rect(0, 0, SCREEN_WIDTH, 40, COLORS.ok));
+            svg.push(text(`✓ ${m['baroo.tap_screen.unsealed']({}, { locale: ctx.i18n.locale })}`, { y: 27, size: 18, weight: 700, fill: COLORS.text }));
 
-            await picture(ctx, svg, layers, drink?.image ?? null, name, { left: 50, top: 48, size: 140, shape: 'rounded' });
+            await picture(ctx, svg, layers, offerItemImageRef(drink), name, { left: 50, top: 48, size: 140, shape: 'rounded' });
             svg.push(text(name, { y: 220, size: 26, weight: 700, fill: COLORS.text }));
 
-            if (spec.warn === 'no-staff') {
-                svg.push(text(m['baroo.tap_screen.no_staff'](), { y: 262, size: 17, weight: 700, fill: COLORS.accent }));
-                svg.push(text(m['baroo.tap_screen.no_staff_hint'](), { y: 290, size: 15, fill: COLORS.muted }));
-                break;
-            }
-
-            if (spec.total) gauge(svg, 232, spec.left ?? spec.total, spec.total, drink?.measure);
+            if (spec.total) gauge(ctx, svg, 232, spec.left ?? spec.total, spec.total, drink?.measure);
             if (spec.label) svg.push(text(spec.label, { y: 292, size: 18, fill: COLORS.accent }));
             break;
         }
@@ -235,67 +221,65 @@ async function draw(ctx: Pick<App.Locals, "logger">, barSlug: string, spec: z.ou
         case 'offer':
         case 'served': {
             const [holder, drink] = await Promise.all([
-                lookupCard(ctx, barSlug, spec.serial),
-                lookupDrink(ctx, barSlug, spec.item),
+                lookupCard(pb, barSlug, spec.serial),
+                getBarOfferItem(pb, barSlug, spec.item),
             ]);
-            // Cards mapped on the tablet since the last pull are unknown here
-            const name = holder?.nickName || m['baroo.tap_screen.greeting_unknown']();
+            const name = holder?.nickName || m['baroo.tap_screen.greeting_unknown']({}, { locale: ctx.i18n.locale });
             const drinkName = drink?.name ?? spec.item;
 
-            svg.push(text(tapLabel, { y: 26, size: 16, fill: COLORS.muted }));
-
-            if (spec.view === 'served') {
-                await picture(ctx, svg, layers, holder?.image ?? null, holder?.nickName || '?', { left: 60, top: 38, size: 120, shape: 'circle' });
-                svg.push(text(name, { y: 190, size: 30, weight: 700, fill: COLORS.text }));
-                svg.push(text(drinkName, { y: 216, size: 20, fill: COLORS.accent }));
-
-                if (spec.warn === 'no-kiosk') {
-                    noKiosk(svg, 262);
-                    break;
-                }
-                if (spec.total) gauge(svg, 226, spec.left ?? 0, spec.total, drink?.measure);
-                svg.push(rect(0, 262, SCREEN_WIDTH, 58, COLORS.ok));
-                svg.push(text(`✓ ${sizeName(spec.size)}`, { y: 300, size: 24, weight: 700, fill: COLORS.text }));
-                break;
-            }
-
-            await picture(ctx, svg, layers, holder?.image ?? null, holder?.nickName || '?', { left: 45, top: 42, size: 150, shape: 'circle' });
-
-            const sizes = (spec.sizes ?? '').split(',').filter(Boolean);
-            if (!spec.warn && !sizes.length) {
-                svg.push(text(name, { y: 236, size: 34, weight: 700, fill: COLORS.text }));
-                svg.push(text(drinkName, { y: 270, size: 22, fill: COLORS.accent }));
-                svg.push(text(m['baroo.tap_screen.pick_size'](), { y: 306, size: 15, fill: COLORS.muted }));
-                break;
-            }
-
+            // The same for both, so confirming a serving changes only the row of buttons
+            svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
+            await picture(ctx, svg, layers, barMemberImage(holder) ?? null, holder?.nickName || '?', { left: 45, top: 42, size: 150, shape: 'circle' });
             svg.push(text(name, { y: 228, size: 34, weight: 700, fill: COLORS.text }));
             svg.push(text(drinkName, { y: 258, size: 22, fill: COLORS.accent }));
 
-            if (spec.warn === 'no-kiosk') {
-                noKiosk(svg, 270);
+            const gap = 12;
+
+            if (spec.view === 'served') {
+                const serving = drink?.servings.find((candidate) => candidate.key === spec.variant);
+                const served = serving && drink
+                    ? `${ctx.i18n.pick(serving.name) ?? serving.label} ${servingText(serving, drink.measure, ctx.i18n.locale)}`
+                    : spec.variant;
+                const width = SCREEN_WIDTH - 2 * gap;
+                svg.push(`<rect x="${gap}" y="274" width="${width}" height="38" rx="19" fill="${COLORS.ok}"/>`);
+                svg.push(text(`✓ ${served}`, { y: 300, size: 22, weight: 700, fill: COLORS.text, maxWidth: width - 16 }));
                 break;
             }
 
-            // Each in its place above its key, the ones the item isn't offered in left out
-            const width = (SCREEN_WIDTH - 36) / BUTTONS.length;
-            BUTTONS.forEach((button, i) => {
-                if (!sizes.includes(button.size)) return;
+            const variants = (spec.variants ?? '').split(',').filter(Boolean);
 
-                const x = 12 + i * (width + 12);
-                svg.push(`<rect x="${x}" y="274" width="${width}" height="38" rx="19" fill="${button.fill}"/>`);
-                svg.push(text(sizeName(button.size, false), {
-                    x: x + width / 2, y: 300, size: 22, weight: 700, fill: button.text, maxWidth: width - 16,
+            // Each in its place above its key, in the key's color
+            const buttons = tapButtons(session.tap);
+            const width = (SCREEN_WIDTH - gap * (buttons.length + 1)) / Math.max(buttons.length, 1);
+            buttons.forEach((colorIndex, i) => {
+                const variant = variants[i];
+                if (!variant) return;
+                const serving = drink?.servings.find((candidate) => candidate.key === variant);
+
+                const color = buttonColor(colorIndex);
+                const x = gap + i * (width + gap);
+                svg.push(`<rect x="${x}" y="274" width="${width}" height="38" rx="19" fill="${color.fill}"/>`);
+                svg.push(text(ctx.i18n.pick(serving?.name) ?? variant, {
+                    x: x + width / 2, y: 300, size: 22, weight: 700, fill: color.text, maxWidth: width - 16,
                 }));
             });
             break;
         }
 
-        case 'unset': {
-            svg.push(text(tapLabel, { y: 26, size: 16, fill: COLORS.muted }));
+        case 'unknown-card': {
+            svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
+            await picture(ctx, svg, layers, null, '?', { left: 45, top: 42, size: 150, shape: 'circle' });
+            svg.push(text(m['baroo.tap_screen.unknown_card']({}, { locale: ctx.i18n.locale }), { y: 236, size: 26, weight: 700, fill: COLORS.text }));
+            svg.push(text(spec.serial, { y: 272, size: 18, fill: COLORS.accent }));
+            break;
+        }
+
+        case 'error': {
+            svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
             await picture(ctx, svg, layers, null, '!', { left: 45, top: 42, size: 150, shape: 'circle' });
-            svg.push(text(m['baroo.tap_screen.unset_title'](), { y: 236, size: 26, weight: 700, fill: COLORS.text }));
-            svg.push(text(m['baroo.tap_screen.tap_package_tag'](), { y: 272, size: 18, fill: COLORS.accent }));
+            svg.push(rect(0, 214, SCREEN_WIDTH, SCREEN_HEIGHT - 214, COLORS.error));
+            svg.push(text(spec.text, { y: spec.hint ? 254 : 270, size: 24, weight: 700, fill: COLORS.text }));
+            if (spec.hint) svg.push(text(spec.hint, { y: 288, size: 16, fill: COLORS.text }));
             break;
         }
     }
@@ -308,14 +292,8 @@ async function draw(ctx: Pick<App.Locals, "logger">, barSlug: string, spec: z.ou
     return sharp(Buffer.from(frame)).composite(layers).removeAlpha().raw().toBuffer();
 }
 
-function noKiosk(svg: string[], top: number): void {
-    svg.push(rect(0, top, SCREEN_WIDTH, SCREEN_HEIGHT - top, COLORS.error));
-    svg.push(text(m['baroo.tap_screen.no_kiosk'](), { y: top + 21, size: 17, weight: 700, fill: COLORS.text }));
-    svg.push(text(m['baroo.tap_screen.no_kiosk_hint'](), { y: top + 41, size: 14, fill: COLORS.text }));
-}
-
 /** What is left of the package, as a bar with "32,5 / 50 l" on it */
-function gauge(svg: string[], top: number, left: number, total: number, measure: Measure = 'volume'): void {
+function gauge(ctx: ScreenCtx, svg: string[], top: number, left: number, total: number, measure: Measure = 'volume'): void {
     const x = 16;
     const width = SCREEN_WIDTH - 2 * x;
     const height = 26;
@@ -328,8 +306,10 @@ function gauge(svg: string[], top: number, left: number, total: number, measure:
         svg.push(`<rect x="${x}" y="${top}" width="${Math.max(height, width * share)}" height="${height}" rx="${height / 2}" fill="${fill}"/>`);
     }
 
-    const amount = new Intl.NumberFormat(getLocale(), { maximumFractionDigits: measure === 'count' ? 0 : 1 }).format(left);
-    svg.push(text(`${amount} / ${formatQuantity(measure, total)}`, { y: top + 18, size: 15, weight: 700, fill: COLORS.text }));
+    svg.push(text(
+        `${formatQuantity(measure, left, ctx.i18n.locale)} / ${formatQuantity(measure, total, ctx.i18n.locale)}`,
+        { y: top + 18, size: 15, weight: 700, fill: COLORS.text },
+    ));
 }
 
 /** Falls back to the name's initial on a colored shape */
@@ -337,18 +317,16 @@ async function picture(
     ctx: Pick<App.Locals, "logger">,
     svg: string[],
     layers: Layer[],
-    image: StoredImage | null,
+    image: PbImageRef | null,
     name: string,
     box: { left: number; top: number; size: number; shape: 'circle' | 'rounded' },
 ): Promise<void> {
-    const bytes = image ? await readImage(ctx, image) : null;
-
-    if (bytes) {
+    if (image) {
         try {
-            layers.push({ input: await cutOut(bytes, box.size, box.shape), top: box.top, left: box.left });
+            layers.push({ input: await fetchImage(image, box.size, box.shape), top: box.top, left: box.left });
             return;
         } catch (err) {
-            ctx.logger.warn(`[taps] unreadable picture: ${err instanceof Error ? err.message : err}`);
+            ctx.logger.warn(`[taps] picture ${image.filename} unavailable: ${err instanceof Error ? err.message : err}`);
         }
     }
 
@@ -359,6 +337,24 @@ async function picture(
 
     const initial = [...name.trim()][0]?.toLocaleUpperCase() ?? '?';
     svg.push(`<text x="${left + size / 2}" y="${top + size / 2}" dy="0.35em" font-family="${FONT}" font-size="${Math.round(size * 0.5)}" font-weight="700" fill="${COLORS.background}" text-anchor="middle">${escapeXml(initial)}</text>`);
+}
+
+const IMAGE_TIMEOUT_MS = 3000;
+/**
+ * PocketBase's thumb rather than the upload, which it makes once and keeps on disk.
+ * Must be among the field's `thumbs`, or PocketBase hands over the original
+ */
+const THUMB = '250x250';
+
+async function fetchImage(image: PbImageRef, size: number, shape: 'circle' | 'rounded'): Promise<Buffer> {
+    const base = env.PB_BASE_URL?.replace(/\/$/, '');
+    if (!base) throw new Error('PB_BASE_URL not set');
+
+    const url = `${base}/api/files/${image.collection}/${image.recordId}/${encodeURIComponent(image.filename)}?thumb=${THUMB}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    return cutOut(Buffer.from(await response.arrayBuffer()), size, shape);
 }
 
 async function cutOut(bytes: Buffer, size: number, shape: 'circle' | 'rounded'): Promise<Buffer> {
@@ -372,19 +368,6 @@ async function cutOut(bytes: Buffer, size: number, shape: 'circle' | 'rounded'):
         .composite([{ input: Buffer.from(mask), blend: 'dest-in' }])
         .png()
         .toBuffer();
-}
-
-/** e.g.: "Malé 0.3l" */
-function sizeName(key: string, withAmount = true): string {
-    for (const preset of SERVING_PRESETS.items) {
-        const serving = preset.servings.find(candidate => candidate.key === key);
-        if (!serving) continue;
-
-        const names: Record<string, string> = serving.name;
-        const name = names[getLocale()] ?? names.cs;
-        return withAmount ? `${name} ${servingText(serving, preset.measure)}` : name;
-    }
-    return key;
 }
 
 function rect(x: number, y: number, width: number, height: number, fill: string): string {

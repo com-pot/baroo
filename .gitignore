@@ -4,6 +4,9 @@ node_modules
 project.inlang/cache
 project.inlang/project_id
 
+.*
+!.gitignore
+
 # Output
 .output
 .vercel
@@ -21,9 +24,6 @@ data/_*
 .env.*
 !.env.example
 !.env.test
-
-# TapTapper credentials (wifi password, TAP_SECRET)
-firmware/taptapper/config.py
 
 # Vite
 vite.config.js.timestamp-*

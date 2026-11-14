@@ -9,42 +9,46 @@
     let {
         item,
         title,
-        measure,
-        left,
-        total,
-        empty,
+        measure = "volume",
+        left = null,
+        total = 0,
+        empty = "",
         highlight = false,
         badge,
         actionsMenu,
+        children,
     }: {
         /** Lends the card its picture */
         item: Pick<BarOfferItem, "id" | "preview_1x1"> | null,
         title: string,
-        measure: Measure,
+        measure?: Measure,
         /** `null` while nothing is unsealed */
-        left: number | null,
-        total: number,
+        left?: number | null,
+        total?: number,
         /** Shown on the gauge while nothing is unsealed */
-        empty: string,
+        empty?: string,
         highlight?: boolean,
         badge?: Snippet,
         actionsMenu?: Snippet<[Record<string, unknown>]>,
+        /** Shown in place of the gauge */
+        children?: Snippet,
     } = $props();
 
     const uid = $props.id();
     const anchor = `--stock-${uid}`;
     const popoverId = `${uid}-actions`;
+
+    const level = $derived.by(() => {
+        if (left === null) return "unknown"
+        if (!left) return "empty"
+        if (left <= total * 0.2) return "low"
+        return "ok"
+    })
 </script>
 
 <article
     class="card stock-card"
-    data-level={left === null
-        ? "unknown"
-        : left === 0
-            ? "empty"
-            : left <= total * 0.2
-            ? "low"
-            : "ok"}
+    data-level={level}
     data-highlight={highlight || undefined}
 >
     <div class="bg frame">
@@ -72,7 +76,9 @@
     </div>
 
     <div class="body">
-        {#if left === null}
+        {#if children}
+            {@render children()}
+        {:else if left === null}
             <div class="gauge">
                 <progress></progress>
                 <div class="label">

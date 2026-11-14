@@ -3,39 +3,39 @@
     import { enhance } from '$app/forms';
     import { untrack } from 'svelte';
     import type { BarOfferItem, OfferPackage } from '$lib/bar/BarModel';
-    import type { OfferStock } from '$lib/bar/stats/barOfferItems';
     import { formatQuantity, measureLabel, packageLabel } from '$lib/bar/quantity';
-    import TapPicker from '../../../bar/[ref=storageRef]/TapPicker.svelte';
+    import type { TapState } from '$lib/taps/tapEvents';
+    import { getMeasure } from '$lib/si/measure';
 
     const {
-        entry,
-        packages,
-        taps,
+        tap,
         offerItems,
+        packages,
         onSuccess,
     }: {
-        entry: OfferStock,
+        /** The tap to unseal onto, with what is on it */
+        tap: TapState,
+        offerItems: BarOfferItem[],
+        /** Registered ones, waiting to be unsealed */
         packages: OfferPackage[],
-        /** Taps to pick from, with what is on them */
-        taps: { tap: string, offerItemKey: string | null }[],
-        offerItems: Pick<BarOfferItem, 'key' | 'name'>[],
         onSuccess: () => unknown,
     } = $props();
 
-    const own = $derived(packages.filter((offerPackage) => offerPackage.offerItemKey === entry.item.key));
+    let offerItemKey = $state(untrack(() => tap.offerItemKey ?? ''));
+    const item = $derived(offerItems.find((candidate) => candidate.key === offerItemKey));
+    const measure = $derived(getMeasure(item?.measure));
+    const own = $derived(packages.filter((offerPackage) => offerPackage.offerItemKey === offerItemKey));
 
-    // The package kind it had last, the tap it is on
-    const usual = untrack(() => own.find((offerPackage) => offerPackage.id === entry.packageId) ?? own[0]);
-    let packageId = $state(usual?.id ?? '');
-    let quantity = $state(usual ? String(usual.quantity) : '');
-    let tap = $state(untrack(() => entry.taps[0] ?? ''));
-    let flushCurrent = $state(true);
+    // The oldest registered package, the size the tap had last
+    let packageId = $state(untrack(() => own[0]?.id ?? ''));
+    let quantity = $state(untrack(() => tap.stock ? String(tap.stock.quantity) : ''));
 
-    function pickPackage(e: Event & { currentTarget: HTMLSelectElement }) {
-        packageId = e.currentTarget.value;
-        const picked = own.find((offerPackage) => offerPackage.id === packageId);
-        if (picked) quantity = String(picked.quantity);
+    function pickItem(e: Event & { currentTarget: HTMLSelectElement }) {
+        offerItemKey = e.currentTarget.value;
+        packageId = own[0]?.id ?? '';
     }
+
+    const replaced = $derived(tap.stock ? offerItems.find((candidate) => candidate.key === tap.offerItemKey) : undefined);
 </script>
 
 <form method="POST" action="?/unseal" class="flow-block" use:enhance={() => {
@@ -44,15 +44,25 @@
         if (result.type === 'success') onSuccess()
     }
 }}>
-    <input type="hidden" name="offerItemKey" value={entry.item.key} />
+    <input type="hidden" name="tap" value={tap.tap} />
+
+    <div class="input-pair">
+        <label for="unseal.offerItemKey" class="form-label">{m["baroo.staff.unseal_item"]()}</label>
+        <select class="form-select" id="unseal.offerItemKey" name="offerItemKey" value={offerItemKey} onchange={pickItem} required>
+            <option value="" disabled>—</option>
+            {#each offerItems as offer (offer.key)}
+                <option value={offer.key}>{offer.name}</option>
+            {/each}
+        </select>
+    </div>
 
     {#if own.length}
         <div class="input-pair">
             <label for="unseal.package" class="form-label">{m["baroo.staff.unseal_package"]()}</label>
-            <select class="form-select" id="unseal.package" name="packageId" value={packageId} onchange={pickPackage}>
-                <option value="">{m["baroo.staff.unseal_package_custom"]()}</option>
+            <select class="form-select" id="unseal.package" name="packageId" bind:value={packageId}>
+                <option value="">{m["baroo.staff.unseal_package_new"]()}</option>
                 {#each own as offerPackage (offerPackage.id)}
-                    <option value={offerPackage.id}>{packageLabel(offerPackage, entry.measure)}</option>
+                    <option value={offerPackage.id}>{packageLabel(offerPackage, measure.name)}{offerPackage.tagSerial ? ' 📶' : ''}</option>
                 {/each}
             </select>
         </div>
@@ -60,44 +70,45 @@
         <input type="hidden" name="packageId" value="" />
     {/if}
 
-    <div class="input-pair">
-        <label for="unseal.quantity" class="form-label">{m["baroo.backstage.bar.unseal_quantity"]({ measure: measureLabel(entry.measure) })}</label>
-        <input
-            type="number"
-            id="unseal.quantity"
-            name="quantity"
-            class="form-control"
-            min={entry.measure === 'count' ? 1 : 0.1}
-            step={entry.measure === 'count' ? 1 : 0.1}
-            required
-            bind:value={quantity}
-        />
-    </div>
-
-    <div class="input-pair">
-        <label for="unseal.tap" class="form-label">{m["baroo.staff.unseal_tap"]()}</label>
-        <TapPicker id="unseal.tap" name="tap" {taps} {offerItems} bind:value={tap} />
-    </div>
-
-    {#if entry.unsealedAt}
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="unseal.flushCurrent" name="flushCurrent" bind:checked={flushCurrent} />
-            <label class="form-check-label" for="unseal.flushCurrent">
-                {m["baroo.staff.unseal_flush_current"]()}
-                <small>
-                    {flushCurrent
-                        ? m["baroo.staff.unseal_flush_current_hint"]({ left: formatQuantity(entry.measure, entry.left ?? 0) })
-                        : m["baroo.staff.unseal_top_up_hint"]()}
-                </small>
-            </label>
+    {#if !packageId}
+        <div class="input-pair">
+            <label for="unseal.quantity" class="form-label">{m["baroo.backstage.bar.unseal_quantity"]({ measure: measureLabel(measure.name) })}</label>
+            <input
+                type="number"
+                id="unseal.quantity"
+                name="quantity"
+                class="form-control"
+                min={measure.step}
+                step={measure.step}
+                required
+                bind:value={quantity}
+            />
         </div>
-    {:else}
-        <!-- Nothing open to keep, but whatever got opened meanwhile goes -->
-        <input type="hidden" name="flushCurrent" value="on" />
+
+        <div class="input-pair">
+            <label for="unseal.label" class="form-label">{m["baroo.backstage.offer.package_label"]()}</label>
+            <input
+                type="text"
+                id="unseal.label"
+                name="label"
+                class="form-control"
+                maxlength="40"
+                placeholder={m["baroo.backstage.offer.package_label_placeholder"]()}
+            />
+        </div>
+    {/if}
+
+    {#if tap.stock}
+        <p class="form-text">
+            {m["baroo.staff.unseal_flush_current_hint"]({
+                name: replaced?.name ?? tap.offerItemKey ?? '',
+                left: formatQuantity(replaced?.measure ?? 'volume', tap.stock.left),
+            })}
+        </p>
     {/if}
 
     <div class="actions">
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-primary" disabled={!offerItemKey}>
             {m["baroo.backstage.bar.unseal"]()}
         </button>
     </div>

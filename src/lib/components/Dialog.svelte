@@ -1,7 +1,7 @@
 <script lang="ts">
 import * as m from "$lib/paraglide/messages";
 import type { LayerComponentProps } from "$lib/ui/uiLayers.svelte";
-import { onMount } from "svelte";
+import { onMount, untrack } from "svelte";
 
 const {
     ctrl,
@@ -18,7 +18,6 @@ const {
 let dialogEl = $state<HTMLDialogElement>()
 
 export function open() {
-    console.log("open", dialogEl)
     dialogEl!.showModal()
 }
 export function close() {

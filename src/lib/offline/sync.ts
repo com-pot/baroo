@@ -9,7 +9,6 @@ import {
     patchDevice,
     writeLastSyncAt,
     writeSnapshot,
-    writeTapTicket,
 } from './idb';
 import type { StoredOp } from './op';
 import type { BarSnapshot, DeviceIdentity } from './types';
@@ -53,13 +52,11 @@ export async function pullSnapshot(barSlug?: string): Promise<BarSnapshot> {
         snapshot: BarSnapshot;
         token: string;
         config: PosDeviceConfig;
-        tapTicket: string | null;
     };
 
     await writeSnapshot(data.snapshot);
     await refreshDeviceToken(data.token);
     await patchDevice({ config: data.config });
-    await writeTapTicket(data.tapTicket);
 
     return data.snapshot;
 }

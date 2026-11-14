@@ -9,6 +9,7 @@
     import { pullSnapshot } from "$lib/offline/sync";
     import type { DeviceIdentity } from "$lib/offline/types";
     import type { ActionData } from "./$types";
+    import { messageOf } from "$lib/i18n";
 
     let { form }: { form: ActionData } = $props();
 
@@ -55,12 +56,7 @@
             });
         }
 
-        const key = `baroo.enroll.errors.${form.error}`
-        if (key in m) {
-            return m[key]()
-        }
-
-        return m["baroo.enroll.errors.unavailable"]()
+        return messageOf(`baroo.enroll.errors.${form.error}`) ?? m["baroo.enroll.errors.unavailable"]()
     })
 </script>
 

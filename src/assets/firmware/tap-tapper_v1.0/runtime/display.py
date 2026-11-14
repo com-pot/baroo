@@ -1,7 +1,7 @@
 """
 The TapTapper's display: a 2.8" ILI9341 panel, 240x320, on SPI1. Wiring in README.md.
 
-The venue server draws every screen, and the TapTapper streams the pixels to the panel as
+The server draws every screen, and the TapTapper streams the pixels to the panel as
 they arrive without looking at them. The only screens drawn here are the ones that have
 to work without a server: starting up, server unreachable. They use MicroPython's own
 8x8 font, which has no diacritics, so they are plain ASCII.
@@ -72,6 +72,14 @@ _PLAIN = {
 }
 
 
+def _header(response, name):
+    # requests keeps the header names as the server sent them.
+    for key, value in (response.headers or {}).items():
+        if key.lower() == name:
+            return value
+    return None
+
+
 class Display:
     def __init__(self, madctl=0x48, baudrate=40000000):
         self.cs = Pin(PIN_CS, Pin.OUT, value=1)
@@ -103,13 +111,20 @@ class Display:
     # --- screens from the server --------------------------------------------------------
 
     def show_remote(self, url, headers, timeout):
-        """Streams a screen the server rendered onto the panel. Raises if it falls short."""
+        """Streams a screen the server rendered onto the panel. Raises if it falls short.
+
+        Returns the screen's ETag, None when it has none. Asked `If-None-Match`, the server
+        may answer 304 Not Modified: the panel stays as it is, and the ETag asked with holds.
+        """
         if deflate:
-            url += "&z=1"
+            url += ("&" if "?" in url else "?") + "z=1"
         response = requests.get(url, headers=headers, timeout=timeout)
         try:
+            if response.status_code == 304:
+                return headers.get("If-None-Match")
             if response.status_code != 200:
                 raise RuntimeError("screen: HTTP {}".format(response.status_code))
+            etag = _header(response, "etag")
 
             if deflate:
                 # The decompressor reads only native streams, and requests hands the body
@@ -131,6 +146,7 @@ class Display:
                     left -= n
             finally:
                 self._end()
+            return etag
         finally:
             response.close()
 

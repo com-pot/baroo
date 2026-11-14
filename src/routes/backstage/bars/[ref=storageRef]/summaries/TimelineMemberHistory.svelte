@@ -3,12 +3,15 @@
     import type { MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
     import * as m from '$lib/paraglide/messages.js';
     import { getRenderer } from '$lib/rendering.svelte';
+    import type { Bar } from "$lib/bar/BarModel";
 
     const renderer = getRenderer()
 
     const {
+        bar,
         timeline,
     }: {
+        bar: Pick<Bar, "currency">;
         timeline: MemberTimelineEntry[];
     } = $props();
 </script>
@@ -32,8 +35,8 @@
                             <header class="action-header">
                                 <strong>{m["baroo.backstage.summaries.settled_event"]()}</strong>
                             </header>
-                            <div class="amount">{m["baroo.backstage.summaries.due"]({ amountWithCurrency: renderer.formatCurrency("czk", event.data.amountDue) })}</div>
-                            <div class="amount">{m["baroo.backstage.summaries.paid"]({ amountWithCurrency: renderer.formatCurrency("czk", event.data.amountPaid) })}</div>
+                            <div class="amount">{m["baroo.backstage.summaries.due"]({ amountWithCurrency: renderer.formatCurrency(bar.currency, event.data.amountDue) })}</div>
+                            <div class="amount">{m["baroo.backstage.summaries.paid"]({ amountWithCurrency: renderer.formatCurrency(bar.currency, event.data.amountPaid) })}</div>
                             <time>{renderer.formatDate(event.date)}</time>
                         </article>
                     {:else if event.type === 'order'}

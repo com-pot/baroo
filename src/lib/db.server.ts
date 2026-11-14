@@ -1,18 +1,19 @@
-import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
 import Pocketbase, { ClientResponseError, getTokenPayload, isTokenExpired } from 'pocketbase';
 import { appError } from './errors';
 
 export type Db = Pocketbase;
 
-export function createAnonymousDb(): Db {
+const USERS_COLLECTION_ID = '_pb_users_auth_';
+
+export function createAnonymousDb(env: NodeJS.ProcessEnv): Db {
     const pb = new Pocketbase(env.PB_BASE_URL);
     pb.autoCancellation(false);
 
     return pb;
 }
 
-export function createTokenDb(token: string | undefined): Db {
+export function createTokenDb(env: NodeJS.ProcessEnv, token: string | undefined): Db {
     if (!token) {
         throw appError('missing-authorisation', {status: 401})
     }
@@ -20,19 +21,27 @@ export function createTokenDb(token: string | undefined): Db {
         throw appError('authorisation-expired', {status: 401})
     }
 
-    const pb = createAnonymousDb();
+    const pb = createAnonymousDb(env);
     pb.authStore.save(token);
 
     return pb;
 }
 
-export async function createDb(auth: { token: string }): Promise<Db> {
+/** Acting as whoever the `Authorization` header's bearer token is of, users with their roles */
+export async function createDb(env: NodeJS.ProcessEnv, auth: { header: string | null }): Promise<Db> {
+    const token = auth.header?.replace(/^Bearer /i, '').trim();
+    if (!token) error(401, 'missing-authorisation');
+    if (isTokenExpired(token)) error(401, 'authorisation-expired');
+
     try {
-        const pb = createAnonymousDb()
-        pb.authStore.save(auth.token);
-        await pb.collection('users').authRefresh({
-            expand: 'roles',
-        })
+        const pb = createAnonymousDb(env)
+        pb.authStore.save(token);
+        // Only the token is known here, so the users collection goes by its id
+        if (getTokenPayload(token).collectionId === USERS_COLLECTION_ID) {
+            await pb.collection('users').authRefresh({
+                expand: 'roles',
+            })
+        }
 
         return pb
     } catch (e) {

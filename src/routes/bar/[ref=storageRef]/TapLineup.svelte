@@ -2,7 +2,6 @@
     import * as m from "$lib/paraglide/messages.js";
     import { onMount, type Snippet } from "svelte";
     import type { BarOfferItem } from "$lib/bar/BarModel";
-    import { servingPreset } from "$lib/bar/servings";
     import { TAP_STALE_MS } from "$lib/taps/tapEvents";
     import type { HeardTap, TapStream } from "$lib/taps/tapStream.svelte";
     import StockCard from "./StockCard.svelte";
@@ -43,7 +42,7 @@
             {#each stream.taps as tap (tap.tap)}
                 {@const item = offerItems.find((candidate) => candidate.key === tap.offerItemKey) ?? null}
                 {#snippet badge()}
-                    <TapBadge tap={tap.tap} alive={alive(tap)} />
+                    <TapBadge tap={tap.tap} label={tap.label} alive={alive(tap)} />
                 {/snippet}
                 {#snippet actions(btnAttrs: Record<string, unknown>)}
                     {@render actionsMenu?.(tap, btnAttrs)}
@@ -52,7 +51,7 @@
                 <StockCard
                     {item}
                     title={item?.name ?? tap.offerItemKey ?? m["baroo.bar.tap.nothing_on_tap"]()}
-                    measure={item ? servingPreset(item.servingPreset).measure : "volume"}
+                    measure={item?.measure ?? "volume"}
                     left={tap.stock?.left ?? null}
                     total={tap.stock?.quantity ?? 0}
                     empty={tap.offerItemKey ? m["baroo.bar.stock.not_unsealed"]() : m["baroo.bar.tap.nothing_on_tap"]()}

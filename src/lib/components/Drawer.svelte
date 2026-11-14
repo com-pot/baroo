@@ -11,6 +11,8 @@
 
         ...rest
     }: LayerComponentProps = $props()
+
+    ctrl.created()
 </script>
 
 <button class="drawer-overlay" tabindex="-1" onclick={() => onClose?.('backdrop')} aria-label="Close drawer"></button>

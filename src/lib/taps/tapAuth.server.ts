@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import { error, type RequestEvent } from '@sveltejs/kit';
 import { ClientResponseError } from 'pocketbase';
 import { createTokenDb, type Db } from '$lib/db.server';
@@ -34,7 +35,7 @@ export type TapSession = {
 /** The tap behind a request, marked as seen */
 export async function requireTap(event: RequestEvent): Promise<TapSession> {
     const pb = await Promise.resolve()
-        .then(() => createTokenDb(bearer(event)))
+        .then(() => createTokenDb(env, bearer(event)))
         .catch((err) => {
             event.locals.logger.error(err)
             return error(401, 'tap-not-authorized')

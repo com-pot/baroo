@@ -7,10 +7,11 @@ import { normalizeTag } from '$lib/bar/tags';
 import { barDoUnseal } from '$lib/bar/ops/unseal';
 import { requireTap, type TapSession } from '$lib/taps/tapAuth.server';
 import { broadcastTaps, tapState } from '$lib/taps/tapBoard.server';
-import { lookupCard, lookupDrink, lookupPackageTag, type Package } from '$lib/taps/tapLookup.server';
+import { lookupCard, lookupPackageTag, type Package } from '$lib/taps/tapLookup.server';
 import { openOffer } from '$lib/taps/tapOffers.server';
 import { OFFER_WAIT_MS, tapButtons, tapScreens } from '$lib/taps/tapScreens.server';
 import { cardUid, TAP_UNSEAL_PREFIX, type TapScanResult } from '$lib/taps/tapEvents';
+import { getBarOfferItem } from '$lib/bar/stats/barOfferItems';
 
 const tapScanSchema = z.object({
     uid: cardUid,
@@ -50,7 +51,7 @@ export const POST: RequestHandler = async (event) => {
     }
 
     const offerItemKey = state.offerItemKey;
-    const drink = await lookupDrink(session.pb, barSlug, offerItemKey);
+    const drink = await getBarOfferItem(session.pb, barSlug, offerItemKey);
     // The buttons answer the servings in order, the ones past the last button are not on offer here
     const variants = (drink?.servings ?? [])
         .slice(0, tapButtons(session.tap).length)
@@ -67,7 +68,7 @@ export const POST: RequestHandler = async (event) => {
         barId: session.tap.bar.id,
         tap,
         serialId,
-        memberId: holder.memberId,
+        memberId: holder.id,
         offerItemKey,
         at,
         pb: session.pb,
@@ -95,9 +96,9 @@ async function unsealPackage(
     const barSlug = session.tap.bar.slug;
     const tap = session.ref;
     const { offerItemKey, quantity } = offerPackage;
-    const drink = await lookupDrink(session.pb, barSlug, offerItemKey);
+    const drink = await getBarOfferItem(session.pb, barSlug, offerItemKey);
     const name = drink?.name ?? offerItemKey;
-    const label = offerPackage.label || formatQuantity(drink?.measure ?? 'volume', quantity, locals.locale);
+    const label = offerPackage.label || formatQuantity(drink?.measure ?? 'volume', quantity, locals.i18n.locale);
 
     // Tapped again, the package is on the tap already
     const before = await tapState(session.pb, barSlug, tap);

@@ -14,6 +14,15 @@ export async function getBarOfferIndex(
 
     return indexBy("key", offerItems);
 }
+export async function getBarOfferItem(
+    pb: App.Locals["pb"],
+    barSlug: Bar["slug"],
+    key: BarOfferItem["key"],
+) {
+    return (await pb.collection<BarOfferItem>('bar_offer_items').getFullList({
+        filter: pb.filter('bar.slug = {:barSlug} && key = {:key}', { barSlug, key }),
+    })).at(0);
+}
 
 export type BarOfferIndex = Record<BarOfferItem["key"], BarOfferItem>;
 

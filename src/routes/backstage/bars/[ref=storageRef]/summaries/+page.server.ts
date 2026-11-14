@@ -17,6 +17,8 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
     const summaries = await getMemberSummaries(locals.pb, bar, { barOffer });
     const mappings = await loadBarTagMappings(locals, bar.slug)
 
+    console.log(summaries[0])
+
     const mappingsByMembers = {} as Record<BarMember["id"], TagMapping["serialId"][]>
     for (const mapping of mappings) {
         if(!mappingsByMembers[mapping.member.id]) {

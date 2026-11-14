@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import { createAnonymousDb, readRoles } from "$lib/db.server";
 import type { Handle } from "@sveltejs/kit";
 
@@ -10,7 +11,7 @@ export const safeRedirect = (target: string | null): string => {
 
 export const AUTH_COOKIE = 'pb_auth';
 export const handlePocketBase: Handle = async ({ event, resolve }) => {
-    const pb = event.locals.pb = createAnonymousDb();
+    const pb = event.locals.pb = createAnonymousDb(env);
 
     const cookie = event.request.headers.get('cookie');
     if (cookie) {

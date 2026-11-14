@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import { error, type RequestEvent } from '@sveltejs/kit';
 import { ClientResponseError } from 'pocketbase';
 import { createTokenDb, type Db } from '$lib/db.server';
@@ -17,7 +18,7 @@ export async function resolveDevice(
     barSlug: string,
 ): Promise<{ device: CheckIn['device']; pb: Db; token: string }> {
     const pb = await Promise.resolve()
-        .then(() => createTokenDb(request.headers.get('authorization')?.replace(/^Bearer /i, '').trim()))
+        .then(() => createTokenDb(env, request.headers.get('authorization')?.replace(/^Bearer /i, '').trim()))
         .catch((err) => {
             if (isError(err)) {
                 throw error((err.data?.status ?? 401) as number, err.error)

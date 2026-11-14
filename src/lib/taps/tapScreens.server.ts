@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import z from 'zod';
+import { env } from '$env/dynamic/private';
 import * as m from '$lib/paraglide/messages.js';
 import { formatQuantity } from '$lib/bar/quantity';
 import { servingText } from '$lib/bar/servings';
@@ -9,10 +10,11 @@ import { buttonColor } from './models/tap-tapper_v1.0/palette';
 import { tapLabel } from './barTap';
 import type { TapSession } from './tapAuth.server';
 import { tapState } from './tapBoard.server';
-import { lookupCard, lookupDrink } from './tapLookup.server';
+import { barMemberImage, lookupCard, offerItemImageRef } from './tapLookup.server';
 import { servingKey, type TapScreens, type TapState } from './tapEvents';
 import type { PendingOffer } from './tapOffers.server';
-import { imagesVersion, readImage, type StoredImage } from './tapImages.server';
+import type { PbImageRef } from '$lib/pocketbase';
+import { getBarOfferItem } from '$lib/bar/stats/barOfferItems';
 
 /**
  * TapTapper display screens, rendered by the server as raw RGB565 pixels (high byte first)
@@ -69,13 +71,12 @@ export const screenSpecSchema = z.discriminatedUnion('view', [
 
 export type ScreenSpec = z.input<typeof screenSpecSchema>;
 
-/** TapTappers redraw only when the path changes, hence `v` - and the gauge's numbers in it */
+/** TapTappers redraw only when the path changes, hence the gauge's numbers in it */
 function screenPath(barSlug: string, spec: ScreenSpec): string {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(spec)) {
         if (value !== undefined && value !== null) query.set(key, String(value));
     }
-    query.set('v', String(imagesVersion()));
     return `/api/bars/${encodeURIComponent(barSlug)}/taps/screen?${query}`;
 }
 
@@ -145,7 +146,6 @@ export async function renderScreen(ctx: ScreenCtx, session: TapSession, spec: z.
         tapLabel(session.tap),
         tapButtons(session.tap).join(','),
         ctx.i18n.locale,
-        imagesVersion(),
         JSON.stringify(spec),
     ].join('|');
 
@@ -190,7 +190,7 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
 
     switch (spec.view) {
         case 'idle': {
-            const drink = spec.item ? await lookupDrink(pb, barSlug, spec.item) : null;
+            const drink = spec.item ? await getBarOfferItem(pb, barSlug, spec.item) : null;
             svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
 
             if (!spec.item) {
@@ -201,7 +201,7 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
             }
 
             const name = drink?.name ?? spec.item;
-            await picture(ctx, svg, layers, drink?.image ?? null, name, { left: 45, top: 40, size: 150, shape: 'rounded' });
+            await picture(ctx, svg, layers, offerItemImageRef(drink), name, { left: 45, top: 40, size: 150, shape: 'rounded' });
             svg.push(text(name, { y: 224, size: 28, weight: 700, fill: COLORS.text }));
             if (spec.total) gauge(ctx, svg, 238, spec.left ?? 0, spec.total, drink?.measure);
             svg.push(text(m['baroo.tap_screen.tap_card']({}, { locale: ctx.i18n.locale }), { y: 302, size: 16, fill: COLORS.muted }));
@@ -209,13 +209,13 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
         }
 
         case 'unsealed': {
-            const drink = await lookupDrink(pb, barSlug, spec.item);
+            const drink = await getBarOfferItem(pb, barSlug, spec.item);
             const name = drink?.name ?? spec.item;
 
             svg.push(rect(0, 0, SCREEN_WIDTH, 40, COLORS.ok));
             svg.push(text(`✓ ${m['baroo.tap_screen.unsealed']({}, { locale: ctx.i18n.locale })}`, { y: 27, size: 18, weight: 700, fill: COLORS.text }));
 
-            await picture(ctx, svg, layers, drink?.image ?? null, name, { left: 50, top: 48, size: 140, shape: 'rounded' });
+            await picture(ctx, svg, layers, offerItemImageRef(drink), name, { left: 50, top: 48, size: 140, shape: 'rounded' });
             svg.push(text(name, { y: 220, size: 26, weight: 700, fill: COLORS.text }));
 
             if (spec.total) gauge(ctx, svg, 232, spec.left ?? spec.total, spec.total, drink?.measure);
@@ -227,7 +227,7 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
         case 'served': {
             const [holder, drink] = await Promise.all([
                 lookupCard(pb, barSlug, spec.serial),
-                lookupDrink(pb, barSlug, spec.item),
+                getBarOfferItem(pb, barSlug, spec.item),
             ]);
             const name = holder?.nickName || m['baroo.tap_screen.greeting_unknown']({}, { locale: ctx.i18n.locale });
             const drinkName = drink?.name ?? spec.item;
@@ -235,7 +235,7 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
             svg.push(text(label, { y: 26, size: 16, fill: COLORS.muted }));
 
             if (spec.view === 'served') {
-                await picture(ctx, svg, layers, holder?.image ?? null, holder?.nickName || '?', { left: 60, top: 38, size: 120, shape: 'circle' });
+                await picture(ctx, svg, layers, barMemberImage(holder) ?? null, holder?.nickName || '?', { left: 60, top: 38, size: 120, shape: 'circle' });
                 svg.push(text(name, { y: 190, size: 30, weight: 700, fill: COLORS.text }));
                 svg.push(text(drinkName, { y: 216, size: 20, fill: COLORS.accent }));
 
@@ -250,7 +250,7 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
                 break;
             }
 
-            await picture(ctx, svg, layers, holder?.image ?? null, holder?.nickName || '?', { left: 45, top: 42, size: 150, shape: 'circle' });
+            await picture(ctx, svg, layers, barMemberImage(holder) ?? null, holder?.nickName || '?', { left: 45, top: 42, size: 150, shape: 'circle' });
 
             const variants = (spec.variants ?? '').split(',').filter(Boolean);
             svg.push(text(name, { y: 228, size: 34, weight: 700, fill: COLORS.text }));
@@ -336,18 +336,16 @@ async function picture(
     ctx: Pick<App.Locals, "logger">,
     svg: string[],
     layers: Layer[],
-    image: StoredImage | null,
+    image: PbImageRef | null,
     name: string,
     box: { left: number; top: number; size: number; shape: 'circle' | 'rounded' },
 ): Promise<void> {
-    const bytes = image ? await readImage(ctx, image) : null;
-
-    if (bytes) {
+    if (image) {
         try {
-            layers.push({ input: await cutOut(bytes, box.size, box.shape), top: box.top, left: box.left });
+            layers.push({ input: await cutOutImage(image, box.size, box.shape), top: box.top, left: box.left });
             return;
         } catch (err) {
-            ctx.logger.warn(`[taps] unreadable picture: ${err instanceof Error ? err.message : err}`);
+            ctx.logger.warn(`[taps] picture ${image.filename} unavailable: ${err instanceof Error ? err.message : err}`);
         }
     }
 
@@ -358,6 +356,34 @@ async function picture(
 
     const initial = [...name.trim()][0]?.toLocaleUpperCase() ?? '?';
     svg.push(`<text x="${left + size / 2}" y="${top + size / 2}" dy="0.35em" font-family="${FONT}" font-size="${Math.round(size * 0.5)}" font-weight="700" fill="${COLORS.background}" text-anchor="middle">${escapeXml(initial)}</text>`);
+}
+
+const IMAGE_TIMEOUT_MS = 3000;
+const IMAGE_CACHE_SIZE = 32;
+const imageCache = new Map<string, Buffer>();
+
+/** The filename changes on every upload, so a cached cut-out never goes stale */
+async function cutOutImage(image: PbImageRef, size: number, shape: 'circle' | 'rounded'): Promise<Buffer> {
+    const key = [image.collection, image.recordId, image.filename, size, shape].join('|');
+    const hit = imageCache.get(key);
+    if (hit) {
+        imageCache.delete(key);
+        imageCache.set(key, hit);
+        return hit;
+    }
+
+    const base = env.PB_BASE_URL?.replace(/\/$/, '');
+    if (!base) throw new Error('PB_BASE_URL not set');
+
+    const url = `${base}/api/files/${image.collection}/${image.recordId}/${encodeURIComponent(image.filename)}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const cut = await cutOut(Buffer.from(await response.arrayBuffer()), size, shape);
+    imageCache.set(key, cut);
+    if (imageCache.size > IMAGE_CACHE_SIZE) imageCache.delete(imageCache.keys().next().value!);
+
+    return cut;
 }
 
 async function cutOut(bytes: Buffer, size: number, shape: 'circle' | 'rounded'): Promise<Buffer> {

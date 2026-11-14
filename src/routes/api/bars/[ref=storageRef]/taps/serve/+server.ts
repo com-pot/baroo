@@ -2,7 +2,7 @@ import z from 'zod';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireTap } from '$lib/taps/tapAuth.server';
-import { lookupDrink } from '$lib/taps/tapLookup.server';
+import { getBarOfferItem } from '$lib/bar/stats/barOfferItems';
 import { findOffer, serveOffer } from '$lib/taps/tapOffers.server';
 import { goneScreens, servedScreens } from '$lib/taps/tapScreens.server';
 import { servingKey, type TapServeResult } from '$lib/taps/tapEvents';
@@ -39,7 +39,7 @@ export const POST: RequestHandler = async (event) => {
         return reply({ result: 'served', ...await servedScreens(session, { ...offer, variant: offer.variant ?? variant }) });
     }
 
-    const drink = await lookupDrink(session.pb, barSlug, offer.offerItemKey);
+    const drink = await getBarOfferItem(session.pb, barSlug, offer.offerItemKey);
     if (drink && !drink.servings.some((serving) => serving.key === variant)) error(400, 'size-not-offered');
 
     const served = await serveOffer(locals, barSlug, offer.id, variant);

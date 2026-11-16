@@ -15,14 +15,12 @@
 </script>
 
 <span
-    class="tap-badge"
-    data-alive={alive ?? undefined}
+    class="tap-badge connection"
+    data-line={typeof alive === 'boolean' ? (alive ? 'on' : 'off') : undefined}
     title={alive === null ? undefined : alive ? m["baroo.bar.tap.tapper_alive"]() : m["baroo.bar.tap.tapper_quiet"]()}
 >
-    {#if alive !== null}
-        <span class="dot" aria-hidden="true"></span>
-    {/if}
-    {label || m["baroo.bar.tap.title"]({ tap })}
+    <span class="dot" aria-hidden="true"></span>
+    <span>{label || m["baroo.bar.tap.title"]({ tap })}</span>
 </span>
 
 <style lang="scss">
@@ -37,16 +35,5 @@
         font-size: 0.8rem;
         font-weight: 700;
         white-space: nowrap;
-    }
-
-    .dot {
-        width: 0.55rem;
-        height: 0.55rem;
-        border-radius: 50%;
-        background: #d9534f;
-    }
-
-    [data-alive="true"] .dot {
-        background: #5cb85c;
     }
 </style>

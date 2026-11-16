@@ -6,6 +6,7 @@ import type { DeviceIdentity } from '$lib/offline/types';
 import { readPosConfig } from './device';
 import { type PosEnrollmentCode } from './enrollmentCode';
 import { toIsoDate } from '$lib/pocketbase';
+import { appError } from '$lib/errors';
 
 
 export const EnrollmentCodesCollection = 'pos_enrollment_codes';
@@ -55,6 +56,13 @@ export async function claimEnrollmentCode(code: string): Promise<DeviceIdentity>
         method: 'POST',
         body: { code },
     })
+        .catch((err) => {
+            if (err instanceof ClientResponseError) {
+                console.log(err.originalError)
+                throw appError(err.originalError?.data?.reason ?? err.message, { response: err.response, originalError: err.originalError })
+            }
+            throw err
+        })
 
     return {
         ...claimed,

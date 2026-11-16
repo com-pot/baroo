@@ -1,5 +1,6 @@
 <script lang="ts">
     import * as m from '$lib/paraglide/messages.js';
+    import logo from "$lib/assets/baroo/Baroo-Logotyp01-Colored.svg?raw";
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { readDevice } from '$lib/offline/idb';
@@ -21,7 +22,12 @@
 </script>
 
 <main class="landing">
-    <h1>Baroo</h1>
+    <h1 class="brand">
+        <span class="visually-hidden">Baroo</span>
+        <div role="presentation">
+            {@html logo}
+        </div>
+    </h1>
     {#if checking}
         <p>
             <span role="img">⏳</span>

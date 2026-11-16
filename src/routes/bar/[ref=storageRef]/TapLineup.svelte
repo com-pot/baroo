@@ -32,14 +32,15 @@
 
 {#if !stream.connected || stream.taps.length}
     <section class="tap-lineup">
-        <h2>{m["baroo.bar.tap.lineup_title"]()}</h2>
-
-        {#if !stream.connected}
-            <p class="lost">⚠️ {m["baroo.bar.tap.disconnected"]()}</p>
-        {/if}
+        <header>
+            <h2>
+                <span class="connection" data-line={stream.connected ? 'on' : undefined}><span class="dot"></span></span>
+                <span>{m["baroo.bar.tap.lineup_title"]()}</span>
+            </h2>
+        </header>
 
         <div class="items-grid -tight" style="--item-size: 15rem;">
-            {#each stream.taps as tap (tap.tap)}
+            {#each stream.taps as tap, i (tap.tap)}
                 {@const item = offerItems.find((candidate) => candidate.key === tap.offerItemKey) ?? null}
                 {#snippet badge()}
                     <TapBadge tap={tap.tap} label={tap.label} alive={alive(tap)} />
@@ -58,6 +59,7 @@
                     highlight={!!tap.offerItemKey}
                     {badge}
                     actionsMenu={actionsMenu ? actions : undefined}
+                    style={`--i: ${i};`}
                 />
             {/each}
         </div>
@@ -68,6 +70,15 @@
     .tap-lineup {
         h2 {
             font-size: 1.25rem;
+        }
+
+        :global(.stock-card) {
+            transition: scale 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition-delay: calc(var(--i) * 0.05s);
+
+            @starting-style {
+                scale: 0;
+            }
         }
     }
 

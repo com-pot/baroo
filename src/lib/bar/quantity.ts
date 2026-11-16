@@ -11,7 +11,7 @@ export function formatQuantity(measure: Measure, quantity: number, locale: Local
 }
 
 /** e.g.: "Sud · 50 l", just "50 l" without a label */
-export function packageLabel(offerPackage: { label: string; quantity: number }, measure: Measure): string {
+export function packageLabel(offerPackage: { label?: string; quantity: number }, measure: Measure): string {
     const amount = formatQuantity(measure, offerPackage.quantity);
     return offerPackage.label ? `${offerPackage.label} · ${amount}` : amount;
 }

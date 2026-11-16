@@ -1,7 +1,8 @@
 <script lang="ts">
     import "bootstrap/scss/bootstrap.scss";
     import "$lib/assets/backstage.scss";
-    import * as m from "$lib/paraglide/messages.js";
+    import logo from "$lib/assets/baroo/Baroo-Logotyp01-Colored.svg?raw";
+    import { m } from "$lib/paraglide/messages.js";
 
     import type { LayoutData } from './$types';
     import type { Snippet } from "svelte";
@@ -16,7 +17,12 @@
 <div class="backstage-layout">
     <header class="navbar">
         <div class="navbar-brand">
-            <h1>Baroo</h1>
+            <h1 class="brand">
+                <span class="visually-hidden">Baroo</span>
+                <div role="presentation">
+                    {@html logo}
+                </div>
+            </h1>
             <small>{m["baroo.backstage.title"]()}</small>
         </div>
         <nav class="backstage-nav">

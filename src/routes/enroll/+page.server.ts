@@ -3,7 +3,7 @@ import {
     claimEnrollmentCode,
 } from '$lib/pos/enrollment.server';
 import type { Actions } from './$types';
-import { appError, isError } from '$lib/errors';
+import { isError, sanitizeToAppError } from '$lib/errors';
 import { Throttle } from '$lib/auth/throttle';
 
 const ipThrottle = new Throttle({
@@ -30,11 +30,11 @@ export const actions: Actions = {
         const code = formData.get('code')?.toString().trim() ?? '';
 
         const identity = await claimEnrollmentCode(code)
-            .catch((err) => appError("claim-failed", { err }))
+            .catch((err) => sanitizeToAppError(err))
 
         if (isError(identity)) {
             ipThrottle.fail(locals, ip, Date.now());
-            return fail(400, identity.data);
+            return fail(400, identity);
         }
 
         ipThrottle.clear(ip);

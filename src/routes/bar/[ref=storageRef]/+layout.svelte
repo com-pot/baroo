@@ -75,7 +75,7 @@
 <LayerStack layerManager={layerManager} scope="dialog" component={Dialog} />
 
 <style lang="scss">
-:global(.conn-badge) {
+:global(#app-root .conn-badge) {
     position: fixed;
     inset-block-end: 0.5rem;
     inset-inline-end: 0.5rem;

@@ -9,10 +9,10 @@
         onclick,
     }: {
         online: boolean
-        syncing: boolean,
+        syncing?: boolean,
         pendingCount?: number,
 
-        onclick: () => unknown,
+        onclick?: () => unknown,
     } = $props()
 
     const syncingClass = $derived(syncing ? ' syncing' : '')
@@ -20,8 +20,8 @@
 </script>
 
 <button
-    class="conn-badge{syncingClass}"
-    data-online={online}
+    class="connection conn-badge{syncingClass}"
+    data-line={online ? 'on' : 'off'}
     onclick={onclick}
 >
     <span class="dot" aria-hidden="true"></span>
@@ -44,29 +44,8 @@
     background: rgb(0 0 0 / 0.6);
     color: #fff;
 
-    .dot {
-        width: 0.6rem;
-        height: 0.6rem;
-        border-radius: 50%;
-        background: #5cb85c;
-    }
-
-    &[data-online="false"] .dot {
-        background: #d9534f;
-    }
-
-    &.syncing .dot {
-        animation: conn-pulse 1s ease-in-out infinite;
-    }
-
     .pending {
         font-weight: 600;
-    }
-
-    @keyframes conn-pulse {
-        50% {
-            opacity: 0.25;
-        }
     }
 }
 </style>

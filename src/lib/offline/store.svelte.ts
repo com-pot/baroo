@@ -156,15 +156,15 @@ export class BarOfflineStore {
     }
 
     /** How many packages of each item are registered, unsealed and flushed */
-    get packageCounts(): Record<BarOfferItem['key'], Record<PackageState, number>> {
-        const counts: Record<string, Record<PackageState, number>> = {};
-        const countsOf = (key: string) => counts[key] ??= { registered: 0, unsealed: 0, flushed: 0 };
+    get packageCounts() {
+        const counts: Record<BarOfferItem["key"], Record<PackageState, Pick<OfferPackage, "quantity">[]>> = {};
+        const countsOf = (key: string) => counts[key] ??= { registered: [], unsealed: [], flushed: [] };
 
         for (const [key, flushed] of Object.entries(this.snapshot?.flushedPackages ?? {})) {
-            countsOf(key).flushed = flushed;
+            countsOf(key).flushed.push({quantity: 0});
         }
         for (const offerPackage of this.packages) {
-            countsOf(offerPackage.offerItemKey)[packageState(offerPackage)]++;
+            countsOf(offerPackage.offerItemKey)[packageState(offerPackage)].push({ quantity: offerPackage.quantity });
         }
 
         return counts;

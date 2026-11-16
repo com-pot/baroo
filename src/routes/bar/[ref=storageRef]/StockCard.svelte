@@ -17,6 +17,8 @@
         badge,
         actionsMenu,
         children,
+
+        ...attrs
     }: {
         /** Lends the card its picture */
         item: Pick<BarOfferItem, "id" | "preview_1x1"> | null,
@@ -32,6 +34,7 @@
         actionsMenu?: Snippet<[Record<string, unknown>]>,
         /** Shown in place of the gauge */
         children?: Snippet,
+        style?: string,
     } = $props();
 
     const uid = $props.id();
@@ -47,7 +50,7 @@
 </script>
 
 <article
-    class="card stock-card"
+    class="card stock-card" style={attrs.style}
     data-level={level}
     data-highlight={highlight || undefined}
 >

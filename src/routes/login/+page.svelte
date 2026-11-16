@@ -1,6 +1,7 @@
 <script lang="ts">
     import "bootstrap/scss/bootstrap.scss";
     import "$lib/assets/backstage.scss";
+    import logo from "$lib/assets/baroo/Baroo-Logotyp01-Colored.svg?raw";
     import * as m from "$lib/paraglide/messages.js";
     import { enhance } from "$app/forms";
     import type { PageProps } from "./$types";
@@ -14,54 +15,63 @@
 </svelte:head>
 
 <main class="page-centered">
-    <form
-        method="POST"
-        class="card card-body flow-block"
-        use:enhance={() => {
-            submitting = true;
-            return async ({ update }) => {
-                await update();
-                submitting = false;
-            };
-        }}
-    >
-        <h1>{m["auth.login.title"]()}</h1>
-
-        {#if form?.error}
-            <p class="alert alert-danger" role="alert">
-                {m["auth.login.error_invalid"]()}
-            </p>
-        {/if}
-
-        <input type="hidden" name="redirectTo" value={data.redirectTo ?? ""} />
-
-        <div>
-            <label class="form-label" for="who">{m["auth.login.who"]()}</label>
-            <input
-                class="form-control"
-                id="who"
-                name="who"
-                type="who"
-                autocomplete="username"
-                required
-                value={form?.who ?? ""}
-            />
+    <div class="container-fluid">
+        <div class="card brand">
+            <div class="card-body">
+                {@html logo}
+            </div>
         </div>
+        <div class="card">
+            <form
+                method="POST"
+                class="card-body flow-block"
+                use:enhance={() => {
+                    submitting = true;
+                    return async ({ update }) => {
+                        await update();
+                        submitting = false;
+                    };
+                }}
+            >
+                <h1>{m["auth.login.title"]()}</h1>
 
-        <div>
-            <label class="form-label" for="password">{m["auth.login.password"]()}</label>
-            <input
-                class="form-control"
-                id="password"
-                name="password"
-                type="password"
-                autocomplete="current-password"
-                required
-            />
+                {#if form?.error}
+                    <p class="alert alert-danger" role="alert">
+                        {m["auth.login.error_invalid"]()}
+                    </p>
+                {/if}
+
+                <input type="hidden" name="redirectTo" value={data.redirectTo ?? ""} />
+
+                <div>
+                    <label class="form-label" for="who">{m["auth.login.who"]()}</label>
+                    <input
+                        class="form-control"
+                        id="who"
+                        name="who"
+                        type="who"
+                        autocomplete="username"
+                        required
+                        value={form?.who ?? ""}
+                    />
+                </div>
+
+                <div>
+                    <label class="form-label" for="password">{m["auth.login.password"]()}</label>
+                    <input
+                        class="form-control"
+                        id="password"
+                        name="password"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                    />
+                </div>
+
+                <button class="btn btn-primary" type="submit" disabled={submitting}>
+                    {m["auth.login.submit"]()}
+                </button>
+            </form>
         </div>
-
-        <button class="btn btn-primary" type="submit" disabled={submitting}>
-            {m["auth.login.submit"]()}
-        </button>
-    </form>
+    </div>
 </main>

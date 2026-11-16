@@ -148,7 +148,41 @@ form {
     padding: 1rem;
     padding-block-start: max(15vh, 1rem);
 
-    form {
+    > * {
         width: min(28rem, 100%);
+    }
+
+    .card.brand {
+        width: 80%;
+        margin: 0 auto -1rem;
+        padding-bottom: 1rem;
+
+        svg {
+            width: 100%;
+            height: auto;
+        }
+    }
+}
+
+h1.brand {
+    display: grid;
+
+    > * {
+        grid-area: 1 / 1;
+        place-content: center;
+        place-items: center;
+    }
+    .visually-hidden {
+        letter-spacing: 0.5em;
+        text-align: center;
+        color: transparent;
+    }
+    [role="presentation"] {
+        pointer-events: none;
+        user-select: none;
+    }
+    svg {
+        width: 100%;
+        height: auto;
     }
 }

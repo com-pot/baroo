@@ -1,6 +1,7 @@
 <script lang="ts">
     import "bootstrap/scss/bootstrap.scss";
     import "$lib/assets/backstage.scss";
+    import logo from "$lib/assets/baroo/Baroo-Logotyp01-Colored.svg?raw";
     import { m } from "$lib/paraglide/messages.js";
     import { enhance } from "$app/forms";
     import { onMount } from "svelte";
@@ -10,6 +11,10 @@
     import type { DeviceIdentity } from "$lib/offline/types";
     import type { ActionData } from "./$types";
     import { messageOf } from "$lib/i18n";
+    import type { ActionResult } from "@sveltejs/kit";
+    import { getUiFeedback } from "$lib/ui/uiFeedback.svelte";
+
+    const uiFeedback = getUiFeedback()
 
     let { form }: { form: ActionData } = $props();
 
@@ -47,17 +52,21 @@
         }
     });
 
-    const claimError = $derived.by((): string | null => {
-        if (!form || !("error" in form) || !form.error) return null;
-
-        if (form.error === "throttled") {
-            return m["baroo.enroll.errors.throttled"]({
-                minutes: "retryAfterMinutes" in form ? Number(form.retryAfterMinutes) : 15,
-            });
+    function getErrorMessage(result: ActionResult & {type: "error" | "failure"}) {
+        let error: string = ''
+        if (result.type === "failure") {
+            error = result.data?.error
+        } else if (result.type === "error") {
+            error = result.error
         }
 
-        return messageOf(`baroo.enroll.errors.${form.error}`) ?? m["baroo.enroll.errors.unavailable"]()
-    })
+        if (error === "throttled") {
+            return m["baroo.enroll.errors.throttled"]({ minutes: "retryAfterMinutes" in result ? Number(result.retryAfterMinutes) : 15, });
+        }
+
+        return messageOf(`baroo.enroll.errors.${error}`) ?? m["baroo.enroll.errors.unavailable"]()
+    }
+
 </script>
 
 <svelte:head>
@@ -65,78 +74,92 @@
 </svelte:head>
 
 <main class="page-centered enroll-page">
-    <div class="card card-body">
-        <h1>{m["baroo.enroll.title"]()}</h1>
-
-        {#if existing && !showForm}
-            <p>
-                {m["baroo.enroll.current"]({
-                    label: existing.device.label,
-                    kind: m[`baroo.pos.kind.${existing.device.kind}`](),
-                    barName: existing.bar.name,
-                })}
-            </p>
-            <div class="actions">
-                <a class="btn btn-primary" href="/bar/{existing.bar.slug}">{m["baroo.staff.back_to_kiosk"]()}</a>
-                <button class="btn btn-outline-secondary" type="button" onclick={() => (showForm = true)}>
-                    {m["baroo.enroll.reenroll"]()}
-                </button>
+    <div class="container-fluid">
+        <div class="card brand">
+            <div class="card-body">
+                {@html logo}
             </div>
-        {:else}
-            <p>{m["baroo.enroll.intro"]()}</p>
+        </div>
+        <div class="card card-body">
+            <h1>{m["baroo.enroll.title"]()}</h1>
 
-            {#if error}
-                <p class="alert alert-danger" role="alert">{m["baroo.enroll.error"]({ error })}</p>
-            {:else if claimError}
-                <p class="alert alert-danger" role="alert">{claimError}</p>
-            {/if}
-
-            {#if stage === "priming"}
-                <p class="alert alert-info" role="status">{m["baroo.enroll.priming"]()}</p>
-            {:else if stage === "done"}
-                <p class="alert alert-success" role="status">{m["baroo.enroll.done"]()}</p>
-            {/if}
-
-            <form
-                method="POST"
-                class="flow-block"
-                use:enhance={() => {
-                    stage = "submitting";
-                    error = null;
-                    return async ({ update }) => {
-                        await update({ reset: false });
-                        if (stage === "submitting") stage = "idle";
-                    };
-                }}
-            >
-                <div class="input-pair">
-                    <label class="form-label visually-hidden" for="code">{m["baroo.enroll.code"]()}</label>
-                    <input
-                        class="form-control code-input"
-                        id="code"
-                        name="code"
-                        inputmode="numeric"
-                        autocomplete="one-time-code"
-                        pattern="[0-9]*"
-                        maxlength="4"
-                        minlength="4"
-                        required
-                        bind:value={
-                            () => code,
-                            (value) => code = value.replace(/\D/g, "").slice(0, 4)
-                        }
-                    />
+            {#if existing && !showForm}
+                <p>
+                    {m["baroo.enroll.current"]({
+                        label: existing.device.label,
+                        kind: m[`baroo.pos.kind.${existing.device.kind}`](),
+                        barName: existing.bar.name,
+                    })}
+                </p>
+                <div class="actions">
+                    <a class="btn btn-primary" href="/bar/{existing.bar.slug}">{m["baroo.staff.back_to_kiosk"]()}</a>
+                    <button class="btn btn-outline-secondary" type="button" onclick={() => (showForm = true)}>
+                        {m["baroo.enroll.reenroll"]()}
+                    </button>
                 </div>
+            {:else}
+                <p>{m["baroo.enroll.intro"]()}</p>
 
-                <button
-                    class="btn btn-primary btn-lg"
-                    type="submit"
-                    disabled={stage !== "idle" || code.length !== 4}
+                {#if error}
+                    <p class="alert alert-danger" role="alert">{m["baroo.enroll.error"]({ error })}</p>
+                {/if}
+
+                {#if stage === "priming"}
+                    <p class="alert alert-info" role="status">{m["baroo.enroll.priming"]()}</p>
+                {:else if stage === "done"}
+                    <p class="alert alert-success" role="status">{m["baroo.enroll.done"]()}</p>
+                {/if}
+
+                <form
+                    method="POST"
+                    class="flow-block"
+                    use:enhance={({ submitter }) => {
+                        stage = "submitting";
+                        error = null;
+                        return async ({ update, result }) => {
+                            await update({ reset: false });
+
+                            if (result.type === "failure" || result.type === "error") {
+                                const errorMessage = getErrorMessage(result)
+                                uiFeedback.plopResult(errorMessage, {
+                                    fromEl: submitter!,
+                                    level: "danger",
+                                })
+                            }
+
+                            if (stage === "submitting") stage = "idle";
+                        };
+                    }}
                 >
-                    {stage === "idle" ? m["baroo.enroll.submit"]() : m["baroo.enroll.submitting"]()}
-                </button>
-            </form>
-        {/if}
+                    <div class="input-pair">
+                        <label class="form-label visually-hidden" for="code">{m["baroo.enroll.code"]()}</label>
+                        <input
+                            class="form-control code-input"
+                            id="code"
+                            name="code"
+                            inputmode="numeric"
+                            autocomplete="one-time-code"
+                            pattern="[0-9]*"
+                            maxlength="4"
+                            minlength="4"
+                            required
+                            bind:value={
+                                () => code,
+                                (value) => code = value.replace(/\D/g, "").slice(0, 4)
+                            }
+                        />
+                    </div>
+
+                    <button
+                        class="btn btn-primary btn-lg"
+                        type="submit"
+                        disabled={stage !== "idle" || code.length !== 4}
+                    >
+                        {stage === "idle" ? m["baroo.enroll.submit"]() : m["baroo.enroll.submitting"]()}
+                    </button>
+                </form>
+            {/if}
+        </div>
     </div>
 </main>
 

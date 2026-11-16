@@ -558,7 +558,7 @@
     z-index: 50;
 }
 
-:global(:is(.stock-board, .tap-lineup)) {
+:global(:is(.stock-board)) {
     margin-block-start: 2rem;
 
     width: min(72rem, calc(100vw - 2rem));

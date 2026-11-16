@@ -1,0 +1,19 @@
+.connection {
+    .dot {
+        display: inline-block;
+        width: 0.6em;
+        height: 0.6em;
+        border-radius: 50%;
+        background: var(--dot-color, #565656);
+    }
+    &[data-line="on"] { --dot-color: #5cb85c; }
+    &[data-line="off"] { --dot-color: #d9534f; }
+
+    &.syncing .dot {
+        animation: conn-pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes conn-pulse {
+        50% { opacity: 0.25; }
+    }
+}

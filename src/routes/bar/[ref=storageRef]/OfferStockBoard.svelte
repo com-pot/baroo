@@ -5,6 +5,7 @@
     import type { Snippet } from "svelte";
     import { compareTaps, type OfferStock } from "$lib/bar/stats/barOfferItems";
     import StockCard from "./StockCard.svelte";
+    import { packageLabel } from "$lib/bar/quantity";
 
     let {
         store,
@@ -40,9 +41,18 @@
                 actionsMenu={actionsMenu ? actions : undefined}
             >
                 <div class="package-counts">
-                    <span title={m["baroo.backstage.offer.packages_registered"]()}>{counts?.registered ?? 0}</span>
-                    <span class="text-primary" title={m["baroo.backstage.offer.packages_unsealed"]()}>{counts?.unsealed ?? 0}</span>
-                    <span class="text-muted" title={m["baroo.backstage.offer.packages_flushed"]()}>{counts?.flushed ?? 0}</span>
+                    {#each counts?.registered || [] as pkg}
+                        <span title={m["baroo.backstage.offer.packages_registered"]()}>{packageLabel(pkg, entry.item.measure)}</span>
+                    {/each}
+                    {#each counts?.unsealed || [] as pkg}
+                        <span class="text-primary" title={m["baroo.backstage.offer.packages_unsealed"]()}>{packageLabel(pkg, entry.item.measure)}</span>
+                    {/each}
+                    {#each counts?.flushed || [] as pkg}
+                        <span class="text-muted text-decoration-line-through" title={m["baroo.backstage.offer.packages_flushed"]()}>{packageLabel(pkg, entry.item.measure)}</span>
+                    {/each}
+                    {#if !counts?.registered?.length && !counts?.unsealed?.length && !counts?.flushed?.length}
+                        <span>{m["baroo.bar.stock.empty"]()}</span>
+                    {/if}
                 </div>
             </StockCard>
         {:else}

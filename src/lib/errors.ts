@@ -33,3 +33,14 @@ export async function fromResponse(message: string, response: Response): Promise
         data: details,
     }
 }
+
+export function sanitizeToAppError(err: unknown): AppError {
+    if (isError(err)) return err
+
+    if (err instanceof Error) {
+        return { error: err.message }
+    }
+
+    console.warn("Unsanitizable app error", err)
+    return { error: String(err) }
+}

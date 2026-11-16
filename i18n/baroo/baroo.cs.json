@@ -34,7 +34,6 @@
             },
             "tap": {
                 "title": "Pípa {tap}",
-                "disconnected": "Pípy nejsou připojené",
                 "nothing_on_tap": "nic nečepuje",
                 "lineup_title": "Pípy",
                 "tapper_alive": "PípaPípač je připojený",
@@ -360,11 +359,11 @@
             "reenroll": "Spárovat znovu",
             "code": "Párovací kód",
             "errors": {
-                "unknown-code": "Takový kód neznám. Zkontroluj ho, nebo si nech vygenerovat nový.",
-                "expired": "Kód už propadl. Nech si dát nový.",
-                "device-inactive": "Zařízení je deaktivované. Ať ho v backstage aktivují.",
+                "unknown-code": "Takový kód neznám",
+                "expired": "Kód už propadl",
+                "device-inactive": "Zařízení je deaktivované",
                 "throttled": "Moc pokusů. Zkus to za {minutes} min.",
-                "unavailable": "Párování teď nejde. Zkus to znovu, nebo se ozvi správci."
+                "unavailable": "Párování teď nejde"
             }
         },
         "offline": {

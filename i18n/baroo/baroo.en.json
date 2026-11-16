@@ -34,7 +34,6 @@
             },
             "tap": {
                 "title": "Tap {tap}",
-                "disconnected": "Not connected to the taps",
                 "nothing_on_tap": "nothing on tap",
                 "lineup_title": "Taps",
                 "tapper_alive": "TapTapper connected",
@@ -356,11 +355,11 @@
             "reenroll": "Pair again",
             "code": "Pairing code",
             "errors": {
-                "unknown-code": "No such code. Check it, or have a new one made.",
-                "expired": "That code has expired. Ask for a new one.",
-                "device-inactive": "This device is deactivated. Have it activated in backstage.",
+                "unknown-code": "No such code",
+                "expired": "That code has expired",
+                "device-inactive": "This device is deactivated",
                 "throttled": "Too many tries. Try again in {minutes} min.",
-                "unavailable": "Pairing isn't available right now. Try again, or tell an admin."
+                "unavailable": "Pairing isn't available right now"
             }
         },
         "offline": {

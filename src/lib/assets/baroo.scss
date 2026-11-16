@@ -1,5 +1,7 @@
 @use "modern-normalize/modern-normalize.css";
 
+@use "./styles/connection.scss";
+@use "./styles/page.scss";
 @use "./styles/uiFeedback.scss";
 
 @import url('/static/assets/fonts/Not\ Jam\ Signature\ 17/njs21.css');
@@ -31,3 +33,25 @@ button, input, select, textarea {
 // code, pre, kbd, samp {
 //     font-family: var(--font-not-jam-mono-old-peculiar);
 // }
+
+#app-root {
+    .frame.logo {
+        position: fixed;
+        inset-block-start: 2rem;
+        inset-inline-end: 2rem;
+        rotate: 0.05turn;
+        opacity: 0.05;
+
+        block-size: 60vw;
+
+        svg {
+            width: 100%; height: auto;
+            pointer-events: none;
+        }
+
+        + * {
+            position: relative;
+            z-index: 2;
+        }
+    }
+}

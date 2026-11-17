@@ -1,11 +1,12 @@
 import type { DeviceConfigOp } from './ops/DeviceConfigOp';
+import type { FlushOp } from './ops/FlushOp';
 import type { MemberCreateOp } from './ops/MemberCreateOp';
 import type { OrderOp } from './ops/OrderOp';
 import type { SettlementOp } from './ops/SettlementOp';
 import type { TagMappingOp } from './ops/TagMappingOp';
 import type { UnsealOp } from './ops/UnsealOp';
 
-export type { DeviceConfigOp, MemberCreateOp, OrderOp, SettlementOp, TagMappingOp, UnsealOp };
+export type { DeviceConfigOp, FlushOp, MemberCreateOp, OrderOp, SettlementOp, TagMappingOp, UnsealOp };
 
 export type BarOp =
     | OrderOp
@@ -13,6 +14,7 @@ export type BarOp =
     | SettlementOp
     | MemberCreateOp
     | UnsealOp
+    | FlushOp
     | DeviceConfigOp;
 
 export type OpKind = BarOp['kind'];

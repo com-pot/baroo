@@ -20,6 +20,8 @@ export type MemberTimelineEntry = { date: string; } & (
         data: {
             key: string;
             variant: string;
+            /** The package it drew from, missing on orders from before packages */
+            package?: string;
         };
     }
     | {
@@ -37,12 +39,10 @@ export function computeTotalPrice(
 ): number {
     let total = 0;
     for (const order of orderItems) {
-        const pricing = barOffer[order.key]?.pricing;
-        const price = pricing?.[order.variant];
-        if (price) {
-            total += price;
-        }
+        const price = barOffer[order.key]?.servings.find((serving) => serving.key === order.variant)?.price ?? 0;
+        total += price;
     }
+
     return total
 }
 
@@ -66,7 +66,7 @@ export function computeMemberStanding(input: {
 }
 
 export function buildMemberTimeline(input: {
-    orderItems: Pick<BarOrderItem, "key" | "variant" | "orderedAt">[],
+    orderItems: (Pick<BarOrderItem, "key" | "variant" | "orderedAt"> & { package?: string })[],
     settlementEvents: { occurredAt: string, data: { amountDue: number, amountPaid: number } }[],
 }): MemberTimelineEntry[] {
     const timeline: MemberTimelineEntry[] = [];
@@ -78,6 +78,7 @@ export function buildMemberTimeline(input: {
             data: {
                 key: orderItem.key,
                 variant: orderItem.variant,
+                ...(orderItem.package ? { package: orderItem.package } : {}),
             },
         });
     }

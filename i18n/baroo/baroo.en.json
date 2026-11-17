@@ -18,7 +18,8 @@
                 "title_summary": "Summary - {userName}",
                 "items": "Items",
                 "confirm": "Confirm",
-                "cancel": "Cancel"
+                "cancel": "Cancel",
+                "off_tap": "Off tap"
             },
             "summary": {
                 "item": "Item",
@@ -31,14 +32,26 @@
                 "idle": "Idle",
                 "unknown_member_seq": "Nobody holds badge number {seq}"
             },
+            "tap": {
+                "title": "Tap {tap}",
+                "disconnected": "Not connected to the taps",
+                "nothing_on_tap": "nothing on tap",
+                "lineup_title": "Taps",
+                "tapper_alive": "TapTapper connected",
+                "tapper_quiet": "TapTapper not checking in",
+                "none": "No tap",
+                "unseal_onto": "Tap a new package"
+            },
             "nfc": "NFC",
             "stock": {
                 "title": "Stock",
                 "actions": "Actions",
                 "unseal_new": "Unseal new package",
+                "flush": "Flush the package",
+                "flush_confirm": "Close the {name} package? {left} left, it gets written off.",
                 "remaining": "Remaining",
                 "of_total": "of {total}",
-                "not_unsealed": "Unsealed",
+                "not_unsealed": "Not unsealed",
                 "empty": "This bar has nothing on offer yet."
             }
         },
@@ -56,19 +69,17 @@
                 "dashboard_title": "{barName} Dashboard",
                 "create_title": "Create New Bar",
                 "kiosek": "Kiosk",
-                "local_info": "This is a local (localStorage) bar.",
-                "local_info_details": "Local bars cannot be edited through the backstage. They are managed locally in the browser.",
                 "bar_info": "Bar Information",
                 "manage": "Manage",
-                "offer_items": "Offer Items",
                 "delete_bar": "Delete Bar",
                 "delete_confirm": "Are you sure you want to delete this bar?",
                 "slug": "ID",
-                "slug_help": "Lowercase letters, numbers, and hyphens only (2-40 characters)",
+                "slug.help": "Lowercase letters, numbers, and hyphens only (2-40 characters)",
+                "slug.placeholder": "my-bar",
                 "name": "Name",
-                "name_help": "Display name for your bar (minimum 2 characters)",
-                "placeholder_slug": "my-bar",
-                "placeholder_name": "My Awesome Bar",
+                "name.help": "Display name for your bar (minimum 2 characters)",
+                "name.placeholder": "My Awesome Bar",
+                "currency": "Bar currency",
                 "create_bar": "Create Bar",
                 "save_changes": "Save Changes",
                 "save_success": "Bar saved successfully!",
@@ -77,6 +88,7 @@
                 "most_orders": "Most orders",
                 "unseal": "Unseal",
                 "unseal_quantity": "Quantity ({measure})",
+                "taps": "Taps",
                 "quantity_left": "{left} left of {total}",
                 "package_sequenced": "Package #{sequenceNumber}",
                 "total_quantity": "Total:",
@@ -87,7 +99,8 @@
                     "overview": "Overview",
                     "offer": "Offer",
                     "members": "Members",
-                    "pos": "PoS's"
+                    "pos": "PoS's",
+                    "taps": "Taps"
                 },
                 "other_variants": "Other"
             },
@@ -114,34 +127,54 @@
             },
             "offer": {
                 "title": "Manage bar items",
-                "local_info": "This is a local (localStorage) bar.",
-                "local_info_details": "Items for local bars cannot be managed through the backstage. They are managed locally in the browser.",
-                "offer_items": "Offer Items",
                 "add_item": "Add Item",
                 "no_items": "No items yet. Add your first offer item.",
                 "key": "Key",
+                "key.help": "3-10 characters, lowercase, numbers, hyphens",
+                "key.placeholder": "beer-500",
                 "name": "Name",
+                "name.placeholder": "Beer 500ml",
                 "pricing": "Pricing",
                 "actions": "Actions",
-                "no_pricing": "No pricing",
                 "edit": "Edit",
                 "delete": "Delete",
                 "delete_confirm": "Delete this item?",
                 "edit_item": "Edit Item",
                 "create_item": "Create Item",
-                "key_help": "3-10 characters, lowercase, numbers, hyphens",
-                "placeholder_key": "beer-500",
-                "placeholder_name": "Beer 500ml",
                 "variant_price": "Price",
                 "variant_price_placeholder": "e.g., 50",
                 "update": "Update",
                 "create": "Create",
                 "cancel": "Cancel",
-                "serving_preset": "Serving preset",
-                "serving_prices": "Serving prices",
+                "servingPreset": "Fill in from a preset",
+                "serving_preset_none": "— pick one to fill in —",
+                "servings": "Servings",
+                "serving_key": "Key",
+                "serving_label": "Label",
+                "serving_quantity": "Quantity",
+                "serving_name": "Name ({locale})",
+                "add_serving": "Add serving",
+                "remove_serving": "Remove serving",
+                "servings_invalid": "Servings need a unique key, a label, a quantity above zero and a name.",
                 "picture": "Picture",
                 "picture_hint": "Square, {max} at most.",
-                "picture_current": "Current picture"
+                "picture_current": "Current picture",
+                "packages": "Packages",
+                "packages_info": "A package of the item and what it holds — a 50 l keg, a case of 24. Its tag tapped on a TapTapper taps the package onto that tap.",
+                "packages_registered": "Registered",
+                "packages_unsealed": "Unsealed",
+                "packages_flushed": "Flushed",
+                "add_package": "Add package",
+                "package_item_unknown": "This item is not the bar's.",
+                "package_label": "Label",
+                "package_label_placeholder": "e.g. Keg",
+                "package_quantity": "Holds",
+                "package_quantity_help": "In the item's measure, litres or pieces.",
+                "tagSerial": "Package NFC tag",
+                "tag_serial_placeholder": "e.g. 04a1b2c3d4e5f6",
+                "tag_serial_help": "Tapping it on a TapTapper taps the package onto its tap. To find the tag id, tap it on a TapTapper — it shows it as an unknown card. Once the package is flushed, the tag may go on a new one.",
+                "tag_serial_taken": "This tag already belongs to the package {name}.",
+                "tag_serial_card": "This is {name}'s member card."
             },
             "summaries": {
                 "title": "Member Summaries",
@@ -208,16 +241,71 @@
                 "device-in-use": "This device is live; deactivate it instead of deleting.",
                 "missing-fields": "Fill in the device name and type."
             },
-            "price_list": {
-                "breadcrumb": "Price list",
-                "title": "Price list",
-                "no_items": "No offer items.",
-                "no_pricing": "No price"
-            },
             "settlement": {
                 "nada": "Nothing due",
                 "due": "Due {amountWithCurrency}",
                 "toReturn": "To return {amountWithCurrency}"
+            },
+            "taps": {
+                "title": "Taps",
+                "create": "Add a tap",
+                "none": "No taps yet. Add one, configure it and authorize it — its TapTapper gets the config file.",
+                "tap": "Tap",
+                "now_serving": "On tap",
+                "pos_device": "POS device",
+                "last_seen": "Last seen",
+                "authorization": "Authorization",
+                "authorization.unauthorized": "Not authorized",
+                "authorization.expired": "Token expired",
+                "authorization.changed": "Changed config not authorized",
+                "authorization.authorized": "Authorized",
+                "valid_through": "Valid through {date}",
+                "configure": "Configure",
+                "delete": "Delete",
+                "delete_confirm": "Delete {tap}? Its TapTapper stops working.",
+                "name": "Name",
+                "config_legend": "Config ({model})",
+                "authorize": "Authorize",
+                "authorize_confirm": "Authorize {tap} again? The TapTapper stops working until it gets the new config.py.",
+                "authorize_hint": "Authorizing issues the tap a new token, in its config.py. The TapTapper gets the tap's saved config with it.",
+                "wifi": {
+                    "title": "Wifi networks",
+                    "hint": "The networks the taps of this bar can join. A changed network needs the taps using it authorized again.",
+                    "ssid": "Network name (SSID)",
+                    "password": "Password",
+                    "password_keep": "Unchanged",
+                    "country": "Country",
+                    "remove_confirm": "Remove the network {ssid}?"
+                },
+                "authorize_title": "Authorize {tap}",
+                "authorize_revokes": "The current token, valid through {date}, stops working.",
+                "authorize_download_title": "Config file",
+                "authorize_download_hint": "Copy it to the Pico by hand, as the TapTapper's README describes.",
+                "authorize_download": "Download config.py",
+                "save_hint": "A saved config reaches the TapTapper once the tap is authorized again.",
+                "upload": {
+                    "title": "Upload over USB",
+                    "hint": "Uploads config.py and the TapTapper's program to the Pico, then restarts it. Close Thonny and anything else using the Pico first.",
+                    "unsupported": "Uploading straight to a TapTapper over USB works in Chrome and Edge.",
+                    "none": "No device yet: plug the Pico in by USB and add it.",
+                    "pick": "Add a device…",
+                    "start": "Upload",
+                    "step": {
+                        "connecting": "Connecting…",
+                        "file": "Uploading {file}…",
+                        "authorizing": "Authorizing…",
+                        "restarting": "Restarting…"
+                    },
+                    "done": "Uploaded. The TapTapper is restarting.",
+                    "issued_hint": "The tap is authorized, but its config.py didn't reach the TapTapper. Download it and copy it over, or upload again.",
+                    "error": {
+                        "busy": "The device is in use: close Thonny or anything else using it, and try again.",
+                        "disconnected": "The device disconnected.",
+                        "timeout": "The device didn't answer. Is it a Pico with MicroPython?",
+                        "exec": "The device failed: {detail}",
+                        "missing": "The device is missing {files}. Set it up first, as the TapTapper's README describes."
+                    }
+                }
             }
         },
         "pos": {
@@ -240,6 +328,19 @@
                 "kiosk": "Self-service kiosk",
                 "staff": "Staff register"
             }
+        },
+        "tap_screen": {
+            "tap_card": "Tap your card",
+            "no_drink": "No drink",
+            "tap_package_tag": "Tap a package tag",
+            "unsealed": "Tapped",
+            "greeting_unknown": "Hi!",
+            "no_sizes": "No size buttons",
+            "no_sizes_hint": "Tell the barman",
+            "already_on_tap": "Already on tap {tap}",
+            "already_open": "Already open",
+            "unset_title": "Nothing on this tap",
+            "unknown_card": "Unknown card"
         },
         "enroll": {
             "title": "Pair this device",
@@ -290,6 +391,7 @@
             "op_mapping": "Tag {serialId} → {nickName}",
             "op_settlement": "Settled {nickName}: {amountPaid}",
             "op_unseal": "Opened {offerItem}",
+            "op_flush": "Flushed {offerItem}",
             "op_device_config": "Device preferences",
             "device_prefs": "Device preferences",
             "device_prefs_title": "{label} preferences",
@@ -303,6 +405,10 @@
             "unseal_section": "Open a package",
             "unseal_item": "Offer item",
             "unseal_quantity": "Quantity ({measure})",
+            "unseal_package": "Package",
+            "unseal_package_new": "New package",
+            "unseal_tap": "Onto tap",
+            "unseal_flush_current_hint": "{name} gets flushed, the {left} left are written off.",
             "unseal_submit": "Open it",
             "unauthorized": "This is a guest kiosk. Enrol it as a staff device to get here.",
             "op_member": "New member {nickName} (#{seq})",
@@ -342,6 +448,30 @@
             "deactivate": "Deactivate",
             "activate": "Activate",
             "enrolled_by": "Enrolled by"
+        },
+        "tap": {
+            "config": {
+                "server": "Server address",
+                "server.help": "Where baroo runs, by IP address — the TapTapper cannot resolve .local names.",
+                "wifiNetwork": "Wifi network",
+                "buzzerPin": "Buzzer pin",
+                "buzzerPin.help": "GPIO of the buzzer module, empty for the on-board LED only.",
+                "buzzerActiveLow": "Buzzer sounds on LOW",
+                "display": "Display",
+                "displayMadctl": "Display orientation",
+                "displayMadctl.value": {
+                    "0x48": "Normal",
+                    "0x40": "Red and blue swapped",
+                    "0x88": "Upside down",
+                    "0x08": "Mirrored"
+                },
+                "buttons": "Size buttons",
+                "buttons.help": "Left to right. They serve the sizes the drink on tap comes in, smallest first.",
+                "buttons.pin": "GPIO pin",
+                "buttons.color": "Color",
+                "watchdog": "Watchdog",
+                "watchdog.help": "Reboots a TapTapper that hangs. Off while working in Thonny."
+            }
         }
     }
 }

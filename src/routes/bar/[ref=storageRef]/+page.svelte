@@ -10,7 +10,9 @@
     import { Boot } from "$lib/boot";
     import { greetingFor, orderConfirmation } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
-    import { normalizeTag, type TagMapping } from "$lib/bar/tags";
+    import type { TagMapping } from "$lib/bar/tags";
+    import { normalizeTag } from "$lib/bar/tags";
+    import { formatQuantity } from "$lib/bar/quantity";
     import { Narrator } from "$lib/speech.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
     import Gzt from "$lib/eggs/Gzt.svelte";
@@ -20,7 +22,13 @@
     import StaffDrawer from "./StaffDrawer.svelte";
     import NewOrderDialogContent from "./NewOrderDialogContent.svelte";
     import UnsealWidget from "./UnsealWidget.svelte";
+    import type { BarOfferItem } from "$lib/bar/BarModel";
+    import type { Measure } from "$lib/si/measure";
+    import { TapStream, type HeardTap } from "$lib/taps/tapStream.svelte";
+    import TapLineup from "./TapLineup.svelte";
+    import { getUiFeedback } from "$lib/ui/uiFeedback.svelte";
 
+    const uiFeedback = getUiFeedback()
     const uiLayers = getUiLayers()
 
     const {
@@ -42,8 +50,9 @@
             label: m["baroo.bar.pos.action.summary"],
         },
     ] as const
+    type DialogMode = typeof modes[number]["name"]
 
-    let mode = $state<typeof modes[number]["name"]>("order");
+    let mode = $state<DialogMode>("order");
     let userIdInput = $state("");
     function selectMode(opt: typeof modes[number]) {
         if (userIdInput.length) {
@@ -58,10 +67,21 @@
         const layer = uiLayers.pushComponent(NewOrderDialogContent, {
             store,
             activeMapping: mapping,
+            taps: tapStream?.connected
+                ? tapStream.taps
+                : store.taps.map((assignment) => ({ tap: assignment.tap, offerItemKey: assignment.offerItemKey })),
             items: [],
             onOrderDone() {
                 if (narrationEnabled) narrator?.speak(orderConfirmation());
                 layer.ctrl.close()
+
+                const orderButton = document.querySelector(`[data-name="submitMode"] [data-mode="${"order" satisfies DialogMode}"]`) as HTMLButtonElement
+                if (orderButton) {
+                    uiFeedback.plopResult("Ok", {
+                        fromEl: orderButton,
+                        level: "success",
+                    })
+                }
             },
         }, { scope: "dialog", onDestroyed })
 
@@ -106,24 +126,12 @@
         const mapping = store.findMapping(normalizeTag(raw), store.config.idInput.includes("member"));
 
         if (!mapping) {
-            if (narrationEnabled) narrator?.speak("Cožeto? Neznám!")
-
-            if (BADGE_NUMBER.test(raw)) {
-                setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: raw }));
-                return;
-            }
-
-            store.noteUnknownTag(raw);
-            setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId: raw }));
+            reportUnknown(raw);
             return;
         }
 
         const displayName = mapping.member.nickName || "???";
-        const greeting = greetingFor(store.config, {
-            nickName: displayName,
-            greeting: typeof mapping.extra?.greeting === "string" ? mapping.extra.greeting : undefined,
-        });
-        if (greeting) narrator?.speak(greeting);
+        greet(mapping, displayName);
 
         userIdInput = ""
         if (action === "summary") {
@@ -138,6 +146,84 @@
             layer: startOrder(mapping, () => currentDialog = null),
             id: mapping.member.id
         }
+    }
+
+    function reportUnknown(raw: string) {
+        if (narrationEnabled) narrator?.speak("Cožeto? Neznám!")
+
+        if (BADGE_NUMBER.test(raw)) {
+            setStatus("⚠️", m["baroo.bar.status.unknown_member_seq"]({ seq: raw }));
+            return;
+        }
+
+        store.noteUnknownTag(raw);
+        setStatus("⚠️", m["baroo.bar.status.unknown_tag"]({ serialId: raw }));
+    }
+
+    function greet(mapping: TagMapping, displayName: string) {
+        const greeting = greetingFor(store.config, {
+            nickName: displayName,
+            greeting: typeof mapping.extra?.greeting === "string" ? mapping.extra.greeting : undefined,
+        });
+        if (greeting) narrator?.speak(greeting);
+    }
+
+    let tapStream = $state<TapStream | undefined>();
+
+    /** The bar's taps, with what is on them - live from the server, or from this device's data */
+    const knownTaps = $derived([
+        ...(tapStream?.taps ?? []).map((state) => ({ tap: state.tap, offerItemKey: state.offerItemKey })),
+        ...store.taps.map((assignment) => ({ tap: assignment.tap, offerItemKey: assignment.offerItemKey })),
+        ...(store.snapshot?.taps ?? []).map((tap) => ({ tap: String(tap.sequence), offerItemKey: null })),
+    ]);
+
+    function openUnseal(opts: { itemKey?: string, tap?: string }) {
+        const item = opts.itemKey ? store.barOffer[opts.itemKey] : undefined;
+        const layer = uiLayers.pushComponent(UnsealWidget, {
+            store,
+            lockedItemKey: item?.key,
+            tap: opts.tap,
+            taps: knownTaps,
+            onDone: () => uiLayers.close(layer.id),
+        }, {
+            heading: `${m["baroo.bar.stock.unseal_new"]()} — ${item?.name ?? m["baroo.bar.tap.title"]({ tap: opts.tap ?? "" })}`,
+        });
+    }
+
+    async function flushPackage(
+        item: BarOfferItem,
+        packageId: string,
+        left: { measure: Measure, quantity: number | null },
+        tap?: string | null,
+    ) {
+        const confirmed = confirm(m["baroo.bar.stock.flush_confirm"]({
+            name: item.name,
+            left: left.quantity === null ? "?" : formatQuantity(left.measure, left.quantity),
+        }));
+        if (!confirmed) return;
+
+        try {
+            await store.process("flush", {
+                packageId,
+                offerItemKey: item.key,
+                offerItemName: item.name,
+                tap: tap ?? null,
+            });
+        } catch (error) {
+            console.error(error);
+            setStatus("❌", errorText(error));
+        }
+    }
+
+    // Ticks so TapTappers that went quiet show as stale on the stock board
+    let now = $state(Date.now());
+    onMount(() => {
+        const timer = setInterval(() => (now = Date.now()), 5_000);
+        return () => clearInterval(timer);
+    });
+
+    function errorText(error: unknown): string {
+        return error instanceof Error ? error.message : String(error);
     }
 
     function submitSelectForm(e: SubmitEvent) {
@@ -208,6 +294,20 @@
                 return narrator
             },
         },
+        {
+            name: "taps",
+            isEnabled: () => !!store.device?.token && !!store.snapshot?.taps?.length,
+            init: async () => {
+                const stream = new TapStream({
+                    barSlug: store.barSlug,
+                    token: () => store.device?.token ?? null,
+                });
+                tapStream = stream;
+
+                // Not awaiting the connection, it keeps retrying in the background
+                return stream.start();
+            },
+        },
     ], {
         stepInitMinMs: 137,
     });
@@ -256,6 +356,7 @@
                         {#each modes as opt (opt.name)}
                         <button class="btn btn-baroo {opt.name === mode ? 'btn-primary' : 'btn-outline-primary'}"
                             type="button"
+                            data-mode={opt.name}
                             onclick={() => selectMode(opt)}
                         >
                             <span class="text">{opt.label()}</span>
@@ -293,31 +394,69 @@
             {/if}
         </div>
 
+        {#if tapStream}
+            <TapLineup stream={tapStream} offerItems={store.offerItems}
+                actionsMenu={store.isStaffDevice ? tapActions : undefined}
+            />
+        {/if}
+
         {#if store.isStaffDevice}
             <OfferStockBoard {store}>
-                {#snippet actionsMenu(item, btnAttrs)}
+                {#snippet actionsMenu(entry, btnAttrs)}
                     <li>
                         <button
                             type="button"
                             {...btnAttrs}
-                            onclick={() => {
-                                const layer = uiLayers.pushComponent(UnsealWidget, {
-                                    store,
-                                    lockedItemKey: item.key,
-                                    onDone: () => ( uiLayers.close(layer.id) )
-                                }, {
-                                    heading: `${m["baroo.bar.stock.unseal_new"]()} — ${item.name}`,
-                                })
-                            }}
+                            onclick={() => openUnseal({ itemKey: entry.item.key })}
                         >
                             {m["baroo.bar.stock.unseal_new"]()}
                         </button>
                     </li>
+                    {#if entry.package}
+                        {@const offerPackage = entry.package}
+                        <li>
+                            <button
+                                type="button"
+                                {...btnAttrs}
+                                onclick={() => flushPackage(entry.item, offerPackage.id, { measure: entry.measure, quantity: entry.left }, offerPackage.tap)}
+                            >
+                                {m["baroo.bar.stock.flush"]()}
+                            </button>
+                        </li>
+                    {/if}
                 {/snippet}
             </OfferStockBoard>
         {/if}
     </div>
 </main>
+
+{#snippet tapActions(tap: HeardTap, btnAttrs: Record<string, unknown>)}
+    {@const item = tap.offerItemKey ? store.barOffer[tap.offerItemKey] : undefined}
+    {@const packageId = tap.stock?.packageId ?? store.taps.find((assignment) => assignment.tap === tap.tap)?.packageId}
+    <li>
+        <button
+            type="button"
+            {...btnAttrs}
+            onclick={() => openUnseal({ tap: tap.tap })}
+        >
+            {m["baroo.bar.tap.unseal_onto"]()}
+        </button>
+    </li>
+    {#if item && packageId}
+        <li>
+            <button
+                type="button"
+                {...btnAttrs}
+                onclick={() => flushPackage(item, packageId, {
+                    measure: item.measure,
+                    quantity: tap.stock?.left ?? null,
+                }, tap.tap)}
+            >
+                {m["baroo.bar.stock.flush"]()}
+            </button>
+        </li>
+    {/if}
+{/snippet}
 
 <style lang="scss">
 @property --hide-rate {
@@ -419,7 +558,7 @@
     z-index: 50;
 }
 
-:global(.stock-board) {
+:global(:is(.stock-board, .tap-lineup)) {
     margin-block-start: 2rem;
 
     width: min(72rem, calc(100vw - 2rem));

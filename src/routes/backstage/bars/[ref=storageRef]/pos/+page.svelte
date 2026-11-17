@@ -6,6 +6,7 @@
     import { configSchema, deviceKinds, readPosConfig, type PosDeviceConfig } from "$lib/pos/device";
     import { getUiLayers, type UiLayer } from "$lib/ui/uiLayers.svelte";
     import { getRenderer } from "$lib/rendering.svelte";
+    import { messageOf } from "$lib/i18n";
 
     const uiLayers = getUiLayers()
     const renderer = getRenderer()
@@ -67,7 +68,7 @@
 
     {#if formError}
         <p class="alert alert-danger" role="alert">
-            {(m[`baroo.backstage.pos.${formError}`] ?? (() => formError))()}
+            {messageOf(`baroo.backstage.pos.${formError}`) ?? formError}
         </p>
     {/if}
 
@@ -284,7 +285,7 @@
     .create-device {
         margin-bottom: 2rem;
 
-        :global(.pos-config) {
+        :global(.schema-form) {
             display: contents;
         }
     }

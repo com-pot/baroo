@@ -11,7 +11,7 @@ export const load: LayoutServerLoad = async ({ params, route, locals }) => {
             error(404, 'bar-not-created');
         }
 
-        return { layoutRouteId, ref, bar: null };
+        return { layoutRouteId, ref, bar: { id: '', name: '', slug: '', currency: "czk" } satisfies Bar };
     }
 
     const bar = await locals.pb.collection<Bar>('bars').getFirstListItem(`slug="${ref}"`);

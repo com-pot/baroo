@@ -7,6 +7,7 @@ type UiLayerCommon<Type extends string> = {
 
     heading?: Snippet | string,
 
+    onCreate?: () => void,
     onDestroyed?: () => void,
 }
 export type UiComponentLayer<Props extends Record<string, unknown> = Record<string, unknown>> = UiLayerCommon<'component'> & { component: Component, props: Props }
@@ -17,6 +18,7 @@ type OpenOpts = Omit<UiLayerCommon<string>, "id" | "type" | "ctrl">
 
 export type UiLayerCtrl = {
     readonly id: string,
+    created: () => void,
     close: () => void,
 }
 
@@ -70,8 +72,14 @@ export class UiLayerManager {
             throw new Error("Invalid scope " + scope)
         }
 
+        let created = false
         const ctrl: UiLayerCtrl = Object.freeze({
             id: this.uniqueId(scope),
+            created: () => {
+                if (created) return
+                layerConfig.onCreate?.()
+                created = true
+            },
             close: () => {
                 this.close(ctrl.id, scope)
             },

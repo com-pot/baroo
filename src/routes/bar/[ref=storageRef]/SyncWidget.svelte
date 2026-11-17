@@ -37,6 +37,8 @@
                 });
             case "unseal":
                 return m["baroo.staff.op_unseal"]({ offerItem: op.offerItemName });
+            case "flush":
+                return m["baroo.staff.op_flush"]({ offerItem: op.offerItemName });
             case "device-config":
                 return m["baroo.staff.op_device_config"]();
         }

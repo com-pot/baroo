@@ -1,9 +1,9 @@
 import { error, type RequestEvent } from '@sveltejs/kit';
 import { ClientResponseError } from 'pocketbase';
-import { createTokenDb, type Db } from '$lib/db.server';
+import type { Db } from '$lib/db.server';
+import { getAuthorizedPb } from '$lib/auth/client';
 import type { Bar } from '$lib/bar/BarModel';
 import type { DeviceIdentity } from '$lib/offline/types';
-import { isError } from '$lib/errors';
 
 type CheckIn = Pick<DeviceIdentity, 'token' | 'device'> & {
     bar: Pick<Bar, 'id' | 'slug' | 'name'>;
@@ -16,15 +16,7 @@ export async function resolveDevice(
     request: RequestEvent["request"],
     barSlug: string,
 ): Promise<{ device: CheckIn['device']; pb: Db; token: string }> {
-    const pb = await Promise.resolve()
-        .then(() => createTokenDb(request.headers.get('authorization')?.replace(/^Bearer /i, '').trim()))
-        .catch((err) => {
-            if (isError(err)) {
-                throw error((err.data?.status ?? 401) as number, err.error)
-            }
-
-            throw error(500, "pb-unreachable")
-        })
+    const pb = await getAuthorizedPb(request.headers.get('authorization'));
 
     const checkIn = await pb.send<CheckIn>(`/api/baroo/device/check-in`, {
         method: 'POST',

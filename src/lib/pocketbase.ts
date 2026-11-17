@@ -12,3 +12,6 @@ export function pbResponseErrorMessage(err: unknown): string {
     const message = response?.message || (err instanceof Error ? err.message : String(err));
     return message
 }
+
+/** A PocketBase file, the filename changes on every upload */
+export type PbImageRef = { collection: string; recordId: string; filename: string };

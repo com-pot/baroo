@@ -5,6 +5,8 @@ import { readPosConfig } from '$lib/pos/device';
 import { serverMemberId, type BarOp, type OrderOp, type OutboxOp } from '$lib/offline/op';
 import type { SyncOpResult } from '$lib/offline/sync';
 import { barDoUnseal } from '$lib/bar/ops/unseal';
+import { barDoFlush } from '$lib/bar/ops/flush';
+import { resolveOrderSource } from '$lib/bar/ops/orderPackage.server';
 
 type Ctx = { pb: Db; bar: Bar };
 
@@ -25,7 +27,7 @@ const opMap: {
     [Kind in OutboxOp["kind"]]: (ctx: Ctx, op: OutboxOp & BarOp & { kind: Kind }) => Promise<SyncOpResult>;
 } = {
     'order': async (ctx, op) => {
-        const { pb } = ctx
+        const { pb, bar } = ctx
         const customer = await resolveOrderCustomer(ctx, op);
 
         const existing = await pb.collection('bar_order_items').getFullList({
@@ -44,6 +46,7 @@ const opMap: {
                 variant: item.variant,
                 orderedAt: op.occurredAt,
                 clientId,
+                ...await resolveOrderSource(pb, bar, { key: item.key, tap: item.tap, at: op.occurredAt }),
             });
             written++;
         }
@@ -129,7 +132,27 @@ const opMap: {
         return { clientId: op.clientId, status: 'applied' };
     },
     'unseal': async (ctx, op) => {
-        await barDoUnseal(ctx, ctx.bar.slug, op)
+        await barDoUnseal(ctx, ctx.bar.slug, {
+            offerItemKey: op.offerItemKey,
+            packageId: op.packageId,
+            quantity: op.quantity,
+            label: op.label,
+            tap: op.tap,
+            clientId: op.clientId,
+            occurredAt: op.occurredAt,
+        })
+
+        return { clientId: op.clientId, status: 'applied' };
+    },
+    'flush': async (ctx, op) => {
+        // Ops from before packages flushed the item, nothing they knew of is open now
+        if (!op.packageId) return { clientId: op.clientId, status: 'duplicate' };
+
+        await barDoFlush(ctx, ctx.bar.slug, {
+            packageId: op.packageId,
+            clientId: op.clientId,
+            occurredAt: op.occurredAt,
+        })
 
         return { clientId: op.clientId, status: 'applied' };
     },

@@ -4,6 +4,9 @@ node_modules
 project.inlang/cache
 project.inlang/project_id
 
+.*
+!.gitignore
+
 # Output
 .output
 .vercel

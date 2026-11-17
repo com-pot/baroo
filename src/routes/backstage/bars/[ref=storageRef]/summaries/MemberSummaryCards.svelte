@@ -3,7 +3,7 @@ import * as m from '$lib/paraglide/messages.js';
 
 import type { MemberSummaryEntry, MemberTimelineEntry } from '$lib/bar/stats/memberSummaries';
 import { aggregateMemberOrders } from '$lib/bar/stats/memberOrderOverview';
-import type { BarOfferItem } from '$lib/bar/BarModel';
+import type { Bar, BarOfferItem } from '$lib/bar/BarModel';
 import TimelineMemberHistory from './TimelineMemberHistory.svelte';
 import ProfileBadge from './ProfileBadge.svelte';
 import type { Snippet } from 'svelte';
@@ -12,12 +12,14 @@ import { getRenderer } from '$lib/rendering.svelte';
 const renderer = getRenderer()
 
 const {
+    bar,
     summary,
     timeline,
     barOffer,
 
     settlementFormSnippet,
 }: {
+    bar: Pick<Bar, "currency">,
     summary: MemberSummaryEntry,
     timeline: MemberTimelineEntry[],
     barOffer: Record<string, BarOfferItem>,
@@ -90,7 +92,7 @@ function saveProfileBadgeImg() {
         </div>
         <div class="card card-stat" data-slots="2">
             <div class="label">{m["baroo.backstage.summaries.amount_due"]()}</div>
-            <div class="value">{renderer.formatCurrency("czk", summary.standing.amountDue)}</div>
+            <div class="value">{renderer.formatCurrency(bar.currency, summary.standing.amountDue)}</div>
         </div>
     </div>
 
@@ -100,7 +102,7 @@ function saveProfileBadgeImg() {
     </div>
     {/if}
 
-    <TimelineMemberHistory timeline={timeline!} />
+    <TimelineMemberHistory bar={bar} timeline={timeline!} />
 </div>
 
 <style lang="scss">

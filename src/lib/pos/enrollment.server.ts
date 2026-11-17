@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import { randomInt } from 'node:crypto';
 import { ClientResponseError } from 'pocketbase';
 import { createAnonymousDb, type Db } from '$lib/db.server';
@@ -50,7 +51,7 @@ export async function revokeEnrollmentCode(ctx: Pick<App.Locals, "pb" | "logger"
 }
 
 export async function claimEnrollmentCode(code: string): Promise<DeviceIdentity> {
-    const claimed = await createAnonymousDb().send<DeviceIdentity>('/api/baroo/device/enroll', {
+    const claimed = await createAnonymousDb(env).send<DeviceIdentity>('/api/baroo/device/enroll', {
         method: 'POST',
         body: { code },
     })

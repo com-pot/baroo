@@ -29,6 +29,11 @@
             label: m["baroo.backstage.bar.tabs.pos"](),
             match: [`${data.layoutRouteId}/pos`],
         },
+        {
+            href: `${base}/taps`,
+            label: m["baroo.backstage.bar.tabs.taps"](),
+            match: [`${data.layoutRouteId}/taps`],
+        },
     ]);
 
     const isActive = (match: string[]) => match.includes(page.route.id ?? '');

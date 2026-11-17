@@ -1,4 +1,5 @@
-import { createAnonymousDb, readRoles } from "$lib/db.server";
+import { env } from '$env/dynamic/private';
+import { createAnonymousDb, createDb, readRoles, type Db } from "$lib/db.server";
 import type { Handle } from "@sveltejs/kit";
 
 /**
@@ -8,9 +9,14 @@ export const safeRedirect = (target: string | null): string => {
     return target && target.startsWith('/') && !target.startsWith('//') ? target : '/backstage/bars';
 }
 
+/** Acting as whoever the `Authorization` header value is of, e.g.: a tap or a kiosk */
+export function getAuthorizedPb(authorization: string | null): Promise<Db> {
+    return createDb(env, { header: authorization });
+}
+
 export const AUTH_COOKIE = 'pb_auth';
 export const handlePocketBase: Handle = async ({ event, resolve }) => {
-    const pb = event.locals.pb = createAnonymousDb();
+    const pb = event.locals.pb = createAnonymousDb(env);
 
     const cookie = event.request.headers.get('cookie');
     if (cookie) {

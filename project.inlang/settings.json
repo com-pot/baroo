@@ -8,6 +8,7 @@
         "pathPattern": [
             "./i18n/generic/generic.{locale}.json",
             "./i18n/generic/auth.{locale}.json",
+            "./i18n/generic/credits.{locale}.json",
             "./i18n/baroo/baroo.{locale}.json"
         ]
     },

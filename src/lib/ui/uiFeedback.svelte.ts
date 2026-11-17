@@ -22,9 +22,13 @@ export class UiFeedback {
         const fromRect = opts.fromEl.getBoundingClientRect()
         const offset = round(Math.random())
         const rotateNorm = (offset - 0.5) * 2
+
+        const container = opts.fromEl.closest('dialog')
+        const containerOffset = container?.getBoundingClientRect()
+
         const from = {
-            x: fromRect.x + fromRect.width * offset,
-            y: fromRect.y,
+            x: fromRect.x + fromRect.width * offset - (containerOffset?.x ?? 0),
+            y: fromRect.y - (containerOffset?.y ?? 0),
         }
 
         const el = document.createElement("span")
@@ -40,7 +44,11 @@ export class UiFeedback {
         el.addEventListener("animationend", () => {
             el.remove()
         }, { once: true })
-        document.body.append(el)
+
+        const parent = opts.fromEl.closest('dialog')
+        console.log(opts.fromEl, parent, el)
+
+        ;(parent ?? document.body).append(el)
     }
 }
 

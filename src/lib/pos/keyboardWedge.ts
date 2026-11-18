@@ -1,5 +1,5 @@
 const DEFAULTS = {
-    maxGapMs: 30,
+    maxGapMs: 50,
     idleFlushMs: 120,
     minLength: 4,
 };

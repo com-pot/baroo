@@ -25,3 +25,13 @@ export function normalizeTag(serial: string): string {
         .replaceAll(/\:/g, '')
         .toLowerCase()
 }
+
+export function decimalToHex(raw: string): string {
+    const digits = raw.trim()
+    if (!/^\d+$/.test(digits)) return digits
+
+    let hex = BigInt(digits).toString(16)
+    hex = hex.padStart(Math.max(8, hex.length + hex.length % 2), '0')
+
+    return hex.match(/../g)!.reverse().join('')
+}

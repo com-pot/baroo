@@ -7,6 +7,7 @@ import type { SyncOpResult } from '$lib/offline/sync';
 import { barDoUnseal } from '$lib/bar/ops/unseal';
 import { barDoFlush } from '$lib/bar/ops/flush';
 import { resolveOrderSource } from '$lib/bar/ops/orderPackage.server';
+import { normalizeTag } from '$lib/bar/tags';
 
 type Ctx = { pb: Db; bar: Bar };
 
@@ -71,6 +72,8 @@ const opMap: {
         return { clientId: op.clientId, status: 'applied' };
     },
     'tag-mapping': async (ctx, op) => {
+        op = { ...op, serialId: normalizeTag(op.serialId) }
+
         const { pb, bar } = ctx
         // A `local:` id points at a member enrolled on the tablet, whose `member-create` op
         // ran earlier in this batch — the nickname is what links the two.

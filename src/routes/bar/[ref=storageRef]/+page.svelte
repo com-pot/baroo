@@ -11,7 +11,7 @@
     import { greetingFor, orderConfirmation } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import type { TagMapping } from "$lib/bar/tags";
-    import { normalizeTag } from "$lib/bar/tags";
+    import { normalizeTag, decimalToHex } from "$lib/bar/tags";
     import { formatQuantity } from "$lib/bar/quantity";
     import { Narrator } from "$lib/speech.svelte";
     import OfferStockBoard from "./OfferStockBoard.svelte";
@@ -319,7 +319,9 @@
     }
 
     onMount(() => () => boot.destroy());
-    onMount(() => listenForKeyboardWedge(document, { onScan: handleScan }))
+    onMount(() => listenForKeyboardWedge(document, {
+        onScan: (raw) => handleScan(decimalToHex(raw)),
+    }))
 </script>
 
 <main class="grid-stack" data-theme={store.config.theme}>

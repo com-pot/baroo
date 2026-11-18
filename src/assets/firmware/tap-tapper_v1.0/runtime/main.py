@@ -223,6 +223,9 @@ class _NoDisplay:
     def message(self, lines, tone="normal"):
         pass
 
+    def busy(self):
+        pass
+
 
 def open_display():
     if not getattr(config, "DISPLAY", False):
@@ -457,6 +460,9 @@ def main():
         uid = read_card(reader)
         if uid:
             if uid != last_serial or time.ticks_diff(time.ticks_ms(), last_seen) > CARD_GONE_MS:
+                # Seen, before the server is asked: its answer is a second or two away.
+                # Whatever comes of the scan redraws the whole screen.
+                display.busy()
                 reply = handle_scan(uid)
                 watchdog.feed()
                 show_reply(reply)
@@ -474,6 +480,8 @@ def main():
         if button is not None and waiting and button < len(waiting["variants"]):
             offer, waiting = waiting, None
             variant = offer["variants"][button]["key"]
+            # As for a card: pressed, before the server is asked.
+            display.busy()
             blocking(lambda: show_reply(handle_size(offer["id"], variant)))
 
         now = time.ticks_ms()

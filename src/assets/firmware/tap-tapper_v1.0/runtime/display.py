@@ -2,9 +2,10 @@
 The TapTapper's display: a 2.8" ILI9341 panel, 240x320, on SPI1. Wiring in README.md.
 
 The server draws every screen, and the TapTapper streams the pixels to the panel as
-they arrive without looking at them. The only screens drawn here are the ones that have
-to work without a server: starting up, server unreachable. They use MicroPython's own
-8x8 font, which has no diacritics, so they are plain ASCII.
+they arrive without looking at them. The only things drawn here are the ones that have
+to work without a server, or before it answers: starting up, server unreachable, and the
+band that says a card was read or a size button pressed. They use MicroPython's own 8x8 font, which has no
+diacritics, so they are plain ASCII.
 """
 
 import io
@@ -39,6 +40,11 @@ BACKGROUND = 0x10C4  # #111827
 TEXT = 0xFFFF
 MUTED = 0x9D15  # #9ca3af
 ERROR = 0xD924  # #dc2626
+ACCENT = 0xFDE4  # #fbbf24
+
+# The band over the foot of the screen while the server answers a card or a size button:
+# where the idle screen asks for a card, and an offer has its size buttons.
+BUSY_HEIGHT = 48
 
 # The usual ILI9341 start-up sequence: power, VCOM, 16-bit pixels, gamma.
 _INIT = (
@@ -78,6 +84,28 @@ def _header(response, name):
         if key.lower() == name:
             return value
     return None
+
+
+def _native_body(response):
+    """The body as a stream the decompressor can read — it reads only native ones.
+
+    Off the socket as it arrives, never the whole body at once: a screen with a photo is
+    30 KB and more even compressed, past what the heap has in one piece. Inflating holds
+    only the 4 KB window the server compresses with.
+
+    requests of MicroPython 1.29 hands the body over as its own BodyStream, a Python
+    object; the socket under it, TLS or not, is native. With the body sent whole, as the
+    server does (Content-Length, not chunked), the body is all that is left on it.
+    """
+    raw = response.raw
+    sock = getattr(raw, "_sock", None)
+    if sock is None:
+        # An older requests: the socket itself.
+        return raw
+    if not getattr(raw, "_chunk", False):
+        return sock
+    # Chunked: BodyStream has to take the chunks apart, so the body is read whole after all.
+    return io.BytesIO(response.content)
 
 
 class Display:
@@ -126,13 +154,9 @@ class Display:
                 raise RuntimeError("screen: HTTP {}".format(response.status_code))
             etag = _header(response, "etag")
 
+            stream = response.raw
             if deflate:
-                # The decompressor reads only native streams, and requests hands the body
-                # over as a Python one — so the few KB of it are read first, then
-                # inflated from memory straight onto the panel.
-                stream = deflate.DeflateIO(io.BytesIO(response.content), deflate.ZLIB)
-            else:
-                stream = response.raw
+                stream = deflate.DeflateIO(_native_body(response), deflate.ZLIB)
             view = memoryview(self._chunk)
             left = SCREEN_BYTES
 
@@ -166,6 +190,16 @@ class Display:
             self.text(line, y, color=color, background=background)
             y += line_height
 
+    def busy(self, text="Moment..."):
+        """Says at once that a card was read or a size pressed, over the foot of the screen.
+
+        The server's answer takes a second or two and its screen replaces all of this;
+        the band is up in a few milliseconds.
+        """
+        top = HEIGHT - BUSY_HEIGHT
+        self.rect(0, top, WIDTH, BUSY_HEIGHT, ACCENT)
+        self.text(text, top + (BUSY_HEIGHT - 24) // 2, scale=3, color=BACKGROUND, background=ACCENT)
+
     def text(self, text, y, scale=2, color=TEXT, background=BACKGROUND):
         text = "".join(_PLAIN.get(ch, ch if ord(ch) < 128 else "?") for ch in text)
         text = text[: WIDTH // (8 * scale)]
@@ -190,10 +224,13 @@ class Display:
             self._end()
 
     def fill(self, color):
-        row = bytes((color >> 8, color & 0xFF)) * WIDTH
-        self._begin(0, 0, WIDTH - 1, HEIGHT - 1)
+        self.rect(0, 0, WIDTH, HEIGHT, color)
+
+    def rect(self, x, y, width, height, color):
+        row = bytes((color >> 8, color & 0xFF)) * width
+        self._begin(x, y, x + width - 1, y + height - 1)
         try:
-            for _ in range(HEIGHT):
+            for _ in range(height):
                 self.spi.write(row)
         finally:
             self._end()

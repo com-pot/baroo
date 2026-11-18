@@ -112,10 +112,14 @@ the reader or the buzzer.
 - Red and blue swapped, upside down or mirrored: pick it as the config's *Orientace displeje*.
 
 The display shows the drink on tap and a gauge of the package — green, amber below a fifth
-left, red when it is gone — until someone taps; then their name and photo, or the
-package just tapped on, or what went wrong. The screens come from the server,
-compressed to a few KB each, and the TapTapper redraws only when one changes. When the
-server cannot be reached, the TapTapper falls back to plain text of its own.
+left, red when it is gone — until someone taps; then their name and photo, or the package
+just tapped on, or what went wrong. A card or tag is acknowledged the moment it is read,
+and a size button the moment it is pressed: an amber *Moment...* band across the foot of
+the screen, drawn by the TapTapper itself, while the server answers. The screens come from
+the server compressed — a few KB, a few dozen with a photo — and inflate onto the panel
+straight off the network, so not one of them has to fit in the Pico's memory. The
+TapTapper redraws only when one changes. When the server cannot be reached, the TapTapper
+falls back to plain text of its own.
 
 The gauge counts what is left of the package by default. Set the config's *Ukazatel na
 displeji* to *Doposud načepováno* and it counts what got poured from it instead. The server

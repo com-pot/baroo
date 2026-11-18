@@ -11,7 +11,8 @@
         "prepare": "svelte-kit sync || echo ''",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-        "tap-sim": "node scripts/tap-sim.mjs"
+        "tap-sim": "node scripts/tap-sim.mjs",
+        "deploy-pi": "bash scripts/deploy-pi.sh"
     },
     "devDependencies": {
         "@inlang/paraglide-js": "^2.3.2",

@@ -333,6 +333,7 @@
             "no_drink": "No drink",
             "tap_package_tag": "Tap a package tag",
             "unsealed": "Tapped",
+            "poured": "Poured {quantity}",
             "greeting_unknown": "Hi!",
             "no_sizes": "No size buttons",
             "no_sizes_hint": "Tell the barman",
@@ -463,6 +464,12 @@
                     "0x40": "Red and blue swapped",
                     "0x88": "Upside down",
                     "0x08": "Mirrored"
+                },
+                "gauge": "Display gauge",
+                "gauge.help": "What the gauge under the drink counts. Takes effect without a new authorization.",
+                "gauge.value": {
+                    "left": "How much is left",
+                    "poured": "Poured so far"
                 },
                 "buttons": "Size buttons",
                 "buttons.help": "Left to right. They serve the sizes the drink on tap comes in, smallest first.",

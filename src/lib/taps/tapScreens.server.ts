@@ -15,7 +15,7 @@ import { barMemberImage, lookupCard, offerItemImageRef } from './tapLookup.serve
 import { servingKey, type TapScreen } from './tapEvents';
 import type { PendingOffer } from './tapOffers.server';
 import { toIsoDate, type PbImageRef } from '$lib/pocketbase';
-import { getBarOfferItem } from '$lib/bar/stats/barOfferItems';
+import { getBarOfferItem, roundQuantity } from '$lib/bar/stats/barOfferItems';
 
 /**
  * TapTapper display screens, rendered by the server as raw RGB565 pixels (high byte first)
@@ -150,6 +150,25 @@ export function tapButtons(tap: TapSession["tap"]): number[] {
     return (buttons ?? []).map((button) => button.color);
 }
 
+/** What the tap's gauge counts: what is left of the package, or what got poured from it */
+export type GaugeMode = 'left' | 'poured';
+
+export function tapGauge(tap: TapSession["tap"]): GaugeMode {
+    const model = tapModel(tap.model);
+    if (!model) return 'left';
+
+    const { gauge } = readTapConfig(model, tap.config) as { gauge?: GaugeMode };
+    return gauge === 'poured' ? 'poured' : 'left';
+}
+
+/**
+ * ETag of the idle screen: when it last changed, and how its gauge counts - so a TapTapper
+ * redraws on its next check once backstage switches the gauge
+ */
+export async function idleScreenEtag(session: TapSession): Promise<string> {
+    return `"${(await idleScreenUpdatedAt(session)) ?? 'never'}/${tapGauge(session.tap)}"`;
+}
+
 /** What drawing a screen needs of the request */
 type ScreenCtx = Pick<App.Locals, "logger" | "i18n">;
 
@@ -182,6 +201,7 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
     const { pb } = session;
     const barSlug = session.tap.bar.slug;
     const label = tapLabel(session.tap);
+    const gaugeMode = tapGauge(session.tap);
 
     switch (spec.view) {
         case 'idle': {
@@ -198,7 +218,7 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
             const name = drink?.name ?? spec.item;
             await picture(ctx, svg, layers, offerItemImageRef(drink), name, { left: 45, top: 40, size: 150, shape: 'rounded' });
             svg.push(text(name, { y: 224, size: 28, weight: 700, fill: COLORS.text }));
-            if (spec.total) gauge(ctx, svg, 238, spec.left ?? 0, spec.total, drink?.measure);
+            if (spec.total) gauge(ctx, svg, 238, gaugeMode, spec.left ?? 0, spec.total, drink?.measure);
             svg.push(text(m['baroo.tap_screen.tap_card']({}, { locale: ctx.i18n.locale }), { y: 302, size: 16, fill: COLORS.muted }));
             break;
         }
@@ -213,7 +233,7 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
             await picture(ctx, svg, layers, offerItemImageRef(drink), name, { left: 50, top: 48, size: 140, shape: 'rounded' });
             svg.push(text(name, { y: 220, size: 26, weight: 700, fill: COLORS.text }));
 
-            if (spec.total) gauge(ctx, svg, 232, spec.left ?? spec.total, spec.total, drink?.measure);
+            if (spec.total) gauge(ctx, svg, 232, gaugeMode, spec.left ?? spec.total, spec.total, drink?.measure);
             if (spec.label) svg.push(text(spec.label, { y: 292, size: 18, fill: COLORS.accent }));
             break;
         }
@@ -292,13 +312,30 @@ async function draw(ctx: ScreenCtx, session: TapSession, spec: z.output<typeof s
     return sharp(Buffer.from(frame)).composite(layers).removeAlpha().raw().toBuffer();
 }
 
-/** What is left of the package, as a bar with "32,5 / 50 l" on it */
-function gauge(ctx: ScreenCtx, svg: string[], top: number, left: number, total: number, measure: Measure = 'volume'): void {
+/**
+ * The package as a bar: what is left of it with "32,5 / 50 l" on it, or what got poured from
+ * it with "Načepováno 17,5 l". Either way amber when little is left and red once it is gone
+ */
+function gauge(
+    ctx: ScreenCtx,
+    svg: string[],
+    top: number,
+    mode: GaugeMode,
+    left: number,
+    total: number,
+    measure: Measure = 'volume',
+): void {
     const x = 16;
     const width = SCREEN_WIDTH - 2 * x;
     const height = 26;
-    const share = Math.max(0, Math.min(1, left / total));
-    const fill = share <= 0 ? COLORS.error : share <= LOW_SHARE ? COLORS.low : COLORS.ok;
+    const leftShare = Math.max(0, Math.min(1, left / total));
+    const fill = leftShare <= 0 ? COLORS.error : leftShare <= LOW_SHARE ? COLORS.low : COLORS.ok;
+
+    const poured = roundQuantity(total - left);
+    const share = mode === 'poured' ? 1 - leftShare : leftShare;
+    const caption = mode === 'poured'
+        ? m['baroo.tap_screen.poured']({ quantity: formatQuantity(measure, poured, ctx.i18n.locale) }, { locale: ctx.i18n.locale })
+        : `${formatQuantity(measure, left, ctx.i18n.locale)} / ${formatQuantity(measure, total, ctx.i18n.locale)}`;
 
     svg.push(`<rect x="${x}" y="${top}" width="${width}" height="${height}" rx="${height / 2}" fill="${COLORS.track}"/>`);
     if (share > 0) {
@@ -306,10 +343,7 @@ function gauge(ctx: ScreenCtx, svg: string[], top: number, left: number, total: 
         svg.push(`<rect x="${x}" y="${top}" width="${Math.max(height, width * share)}" height="${height}" rx="${height / 2}" fill="${fill}"/>`);
     }
 
-    svg.push(text(
-        `${formatQuantity(measure, left, ctx.i18n.locale)} / ${formatQuantity(measure, total, ctx.i18n.locale)}`,
-        { y: top + 18, size: 15, weight: 700, fill: COLORS.text },
-    ));
+    svg.push(text(caption, { y: top + 18, size: 15, weight: 700, fill: COLORS.text, maxWidth: width - 16 }));
 }
 
 /** Falls back to the name's initial on a colored shape */

@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 import { requireTap } from '$lib/taps/tapAuth.server';
 import {
     idleScreen,
-    idleScreenUpdatedAt,
+    idleScreenEtag,
     renderScreen,
     screenSpecSchema,
     SCREEN_HEIGHT,
@@ -15,9 +15,10 @@ import {
  * TapTapper screen pixels
  *
  * Without `view` it is the idle screen - the tap as it is now - at the TapTapper's own
- * `IDLE_SCREEN`. Its `ETag` is when it last changed: a TapTapper asking `If-None-Match` with
- * the one on its panel gets `304 Not Modified` until something happens on the tap. The other
- * screens' URLs come from the scan and serve replies, all they show is in them.
+ * `IDLE_SCREEN`. Its `ETag` is when it last changed and how its gauge counts: a TapTapper
+ * asking `If-None-Match` with the one on its panel gets `304 Not Modified` until something
+ * happens on the tap. The other screens' URLs come from the scan and serve replies, all they
+ * show is in them.
  *
  * `z=1` compresses with a 4 KB zlib window, small enough for a Pico to inflate while streaming
  */
@@ -29,7 +30,7 @@ export const GET: RequestHandler = async (event) => {
 
     if (!searchParams.has('view')) {
         // Taken before the state it is drawn from: whatever lands in between is drawn once more
-        const etag = `"${(await idleScreenUpdatedAt(session)) ?? 'never'}"`;
+        const etag = await idleScreenEtag(session);
         if (matches(event.request.headers.get('if-none-match'), etag)) {
             event.locals.logger.info({ msg: 'screen-etag-valid', tap: session.ref, etag });
             return new Response(null, { status: 304, headers: { etag, 'cache-control': 'no-cache' } });

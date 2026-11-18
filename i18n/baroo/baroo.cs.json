@@ -337,6 +337,7 @@
             "no_drink": "Bez nápoje",
             "tap_package_tag": "Přilož štítek balení",
             "unsealed": "Naraženo",
+            "poured": "Načepováno {quantity}",
             "greeting_unknown": "Ahoj!",
             "no_sizes": "Chybí tlačítka velikostí",
             "no_sizes_hint": "Řekni to barmanovi",
@@ -467,6 +468,12 @@
                     "0x40": "Prohozená červená a modrá",
                     "0x88": "Vzhůru nohama",
                     "0x08": "Zrcadlově"
+                },
+                "gauge": "Ukazatel na displeji",
+                "gauge.help": "Co ukazatel pod nápojem počítá. Změna se projeví bez nové autorizace.",
+                "gauge.value": {
+                    "left": "Kolik zbývá",
+                    "poured": "Doposud načepováno"
                 },
                 "buttons": "Tlačítka velikostí",
                 "buttons.help": "Zleva doprava. Odpovídají velikostem, ve kterých se nápoj na pípě nabízí, od nejmenší.",

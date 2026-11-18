@@ -17,6 +17,13 @@ export const configSchema = z.object({
     displayMadctl: z.enum(['0x48', '0x40', '0x88', '0x08']).default('0x48').meta({
         optionsI18nPrefix: 'baroo.tap.config.displayMadctl.value.',
     }),
+    /**
+     * What the screen's gauge counts: what is left of the package, or what got poured from it.
+     * Drawn by the server, so not in the config file - changing it needs no new authorization
+     */
+    gauge: z.enum(['left', 'poured']).default('left').meta({
+        optionsI18nPrefix: 'baroo.tap.config.gauge.value.',
+    }),
 
     buttons: z.array(z.object({
         pin: gpio.default(0),

@@ -323,7 +323,7 @@
                     "member-serial": "Člen / tag"
                 },
                 "greetingTemplate": "Šablona pozdravu",
-                "greetingTemplate.help": "\\{name\\} se nahradí přezdívkou. Prázdné = kiosek mlčí.",
+                "greetingTemplate.help": "{name} se nahradí přezdívkou. Prázdné = kiosek mlčí.",
                 "customGreetings": "Vlastní pozdravy členů",
                 "customGreetings.help": "Má-li člen vlastní pozdrav, použije se místo šablony."
             },

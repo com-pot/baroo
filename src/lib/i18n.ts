@@ -20,7 +20,10 @@ export function printMessageRef<T extends string & keyof typeof m>(ref: MessageR
     return (m[ref.$t] as (data: unknown) => string)(ref.data)
 }
 
+/** Inputs that print each variable as its own `{placeholder}` - the message format has no way to escape braces */
+const selfPlaceholders = new Proxy({}, { get: (_, name) => `{${String(name)}}` })
+
 export function messageOf(key: string): string | undefined {
-    const messages = m as unknown as Record<string, (() => string) | undefined>;
-    return key in messages ? messages[key]?.() : undefined;
+    const messages = m as unknown as Record<string, ((inputs: unknown) => string) | undefined>;
+    return key in messages ? messages[key]?.(selfPlaceholders) : undefined;
 }

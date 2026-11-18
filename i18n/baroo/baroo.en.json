@@ -319,7 +319,7 @@
                     "member-serial": "Member / tag"
                 },
                 "greetingTemplate": "Greeting template",
-                "greetingTemplate.help": "\\{name\\} is replaced with the nickname. Empty = the kiosk stays silent.",
+                "greetingTemplate.help": "{name} is replaced with the nickname. Empty = the kiosk stays silent.",
                 "customGreetings": "Custom member greetings",
                 "customGreetings.help": "A member's own greeting replaces the template when they have one."
             },

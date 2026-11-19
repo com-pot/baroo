@@ -2,6 +2,7 @@
     import z from "zod";
     import { describeField } from "$lib/zchem/field";
     import { messageOf } from "$lib/i18n";
+    import SchemaInput from "./SchemaInput.svelte"
     import SchemaForm from "./SchemaForm.svelte";
     import { m } from "$lib/paraglide/messages.js";
     import { getOptionsLists, type OptionsList } from "./optionsLists";
@@ -65,10 +66,14 @@
 
     const element = $derived(field.base instanceof z.ZodArray ? field.base.element as z.ZodType : null)
 
-    function addRow() {
+    const addRow = $derived(() => {
         if (!element) return
-        value = [...(value ?? []), element.parse({})]
-    }
+        if (element instanceof z.ZodObject) {
+            value = [...(value ?? []), element.parse({})]
+            return
+        }
+        value = [...(value ?? []), element.parse("")]
+    })
 
     function removeRow(index: number) {
         value = (value ?? []).filter((_: unknown, i: number) => i !== index)
@@ -169,11 +174,12 @@
         </select>
         {@render helpBlock()}
     </div>
-{:else if field.kind === 'array' && element instanceof z.ZodObject}
+{:else if field.kind === 'array'}
     <fieldset class="input-pair rows {wrapperClass}" data-name={name}>
         <legend class="form-label">{caption}</legend>
         {#if help}<small>{help}</small>{/if}
 
+        {#if element instanceof z.ZodObject}
         {#each value ?? [] as _, index (index)}
             <div class="row-item">
                 <SchemaForm
@@ -189,8 +195,25 @@
                 </button>
             </div>
         {/each}
+        {:else if element}
+            {#each value ?? [] as _, index (index)}
+                <div class="row-item">
+                    <SchemaInput
+                        inputSchema={element}
+                        name={`${name}[${index}]`}
+                        bind:value={value[index]}
+                        i18nPrefix={`${i18nPrefix}${name}.`}
+                        fieldId={(nested) => fieldId(`${name}-${index}-${nested}`)}
+                        {readonly}
+                    />
+                    <button class="btn btn-sm btn-outline-danger" type="button" onclick={() => removeRow(index)}>
+                        {m["generic.action.remove"]()}
+                    </button>
+                </div>
+            {/each}
+        {/if}
 
-        {#if (value?.length ?? 0) < maxRows}
+        {#if (value?.length ?? 0) < maxRows && addRow}
             <button class="btn btn-sm btn-outline-secondary" type="button" onclick={addRow}>
                 {m["generic.action.add"]()}
             </button>

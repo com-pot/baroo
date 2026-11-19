@@ -8,7 +8,7 @@
     import type { PageData } from "./$types";
     import { onMount } from "svelte";
     import { Boot } from "$lib/boot";
-    import { greetingFor, orderConfirmation } from "$lib/pos/device";
+    import { greetingFor } from "$lib/pos/device";
     import { listenForKeyboardWedge } from "$lib/pos/keyboardWedge";
     import type { TagMapping } from "$lib/bar/tags";
     import { normalizeTag, decimalToHex } from "$lib/bar/tags";
@@ -28,6 +28,7 @@
     import TapLineup from "./TapLineup.svelte";
     import { getUiFeedback } from "$lib/ui/uiFeedback.svelte";
     import BrandMascot from "$lib/eggs/BrandMascot.svelte";
+    import { randArrItem } from "$lib/random";
 
     const uiFeedback = getUiFeedback()
     const uiLayers = getUiLayers()
@@ -73,7 +74,8 @@
                 : store.taps.map((assignment) => ({ tap: assignment.tap, offerItemKey: assignment.offerItemKey })),
             items: [],
             onOrderDone() {
-                if (narrationEnabled) narrator?.speak(orderConfirmation());
+                const confirmation = randArrItem(store.config.orderConfirmationUtterances)
+                if (narrationEnabled && confirmation?.length) narrator?.speak(confirmation);
                 layer.ctrl.close()
 
                 const orderButton = document.querySelector(`[data-name="submitMode"] [data-mode="${"order" satisfies DialogMode}"]`) as HTMLButtonElement

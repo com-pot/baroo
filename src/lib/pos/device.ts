@@ -33,6 +33,13 @@ export const configSchema = z.object({
 
     greetingTemplate: z.string().default("Ave, {name}"),
     customGreetings: z.boolean().default(true),
+    orderConfirmationUtterances: z.array(z.string()).default([
+        'Ča čing',
+        'Muhehe',
+        'Díky. Přijďte zas',
+        'Bude to stačit?',
+        'testovací potvrzovací hláška šest',
+    ]),
 })
 
 export type PosDeviceConfig = z.infer<typeof configSchema>
@@ -49,18 +56,6 @@ export function greetingFor(
     }
 
     return template.replaceAll(GREETING_NAME_TOKEN, member.nickName || '');
-}
-
-export const ORDER_CONFIRMATIONS = [
-    'Ča čing',
-    'Muhehe',
-    'Díky. Přijďte zas',
-    'Bude to stačit?',
-    'testovací potvrzovací hláška šest',
-] as const;
-
-export function orderConfirmation(): string {
-    return ORDER_CONFIRMATIONS[Math.floor(Math.random() * ORDER_CONFIRMATIONS.length)];
 }
 
 export function readPosConfig(raw: unknown): PosDeviceConfig {

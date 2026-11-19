@@ -2,7 +2,7 @@
     import "bootstrap/scss/bootstrap.scss";
     import "$lib/assets/bar.scss";
     import "$lib/assets/boot.scss";
-    import * as m from "$lib/paraglide/messages.js";
+    import { m } from "$lib/paraglide/messages.js";
     import { page } from "$app/state";
 
     import type { PageData } from "./$types";
@@ -335,7 +335,7 @@
         </div>
         <div class="card -form grid-stack">
             <div class="card-body" data-boot-init>
-                <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>Tak to rozjedem</button>
+                <button class="btn btn-xl btn-primary" onclick={() => boot.run()}>{m["baroo.pos.startCta"]()}</button>
             </div>
             <form name="selectBadgeForm" class="card-body" onsubmit={submitSelectForm} data-boot>
                 {#if store.config.idInput}

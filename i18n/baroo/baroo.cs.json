@@ -330,7 +330,8 @@
             "kind": {
                 "kiosk": "Samoobslužný kiosek",
                 "staff": "Pokladna"
-            }
+            },
+            "startCta": "Jdem na to!"
         },
         "tap_screen": {
             "tap_card": "Přilož kartu",

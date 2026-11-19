@@ -326,7 +326,8 @@
             "kind": {
                 "kiosk": "Self-service kiosk",
                 "staff": "Staff register"
-            }
+            },
+            "startCta": "Let's go!"
         },
         "tap_screen": {
             "tap_card": "Tap your card",

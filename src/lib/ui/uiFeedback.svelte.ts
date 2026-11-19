@@ -45,9 +45,12 @@ export class UiFeedback {
             el.remove()
         }, { once: true })
 
-        const parent = opts.fromEl.closest('dialog')
-        console.log(opts.fromEl, parent, el)
+        const elPosition = opts.fromEl.computedStyleMap().get('position')?.toString()
+        if (elPosition === 'fixed') {
+            el.style.position = "fixed"
+        }
 
+        const parent = opts.fromEl.closest('dialog')
         ;(parent ?? document.body).append(el)
     }
 }

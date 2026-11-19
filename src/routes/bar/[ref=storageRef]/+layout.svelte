@@ -78,7 +78,7 @@
 :global(#app-root .conn-badge) {
     position: fixed;
     inset-block-end: 0.5rem;
-    inset-inline-end: 0.5rem;
+    inset-inline-start: 0.5rem;
     z-index: 50;
 }
 

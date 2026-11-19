@@ -27,6 +27,7 @@
     import { TapStream, type HeardTap } from "$lib/taps/tapStream.svelte";
     import TapLineup from "./TapLineup.svelte";
     import { getUiFeedback } from "$lib/ui/uiFeedback.svelte";
+    import BrandMascot from "$lib/eggs/BrandMascot.svelte";
 
     const uiFeedback = getUiFeedback()
     const uiLayers = getUiLayers()
@@ -430,6 +431,7 @@
             </OfferStockBoard>
         {/if}
     </div>
+    <BrandMascot />
 </main>
 
 {#snippet tapActions(tap: HeardTap, btnAttrs: Record<string, unknown>)}

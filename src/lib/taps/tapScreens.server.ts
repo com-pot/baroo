@@ -334,7 +334,7 @@ function gauge(
     const poured = roundQuantity(total - left);
     const share = mode === 'poured' ? 1 - leftShare : leftShare;
     const caption = mode === 'poured'
-        ? m['baroo.tap_screen.poured']({ quantity: formatQuantity(measure, poured, ctx.i18n.locale) }, { locale: ctx.i18n.locale })
+        ? m[`baroo.tap_screen.${measure === 'volume' ? 'poured' : 'served'}`]({ quantity: formatQuantity(measure, poured, ctx.i18n.locale) }, { locale: ctx.i18n.locale })
         : `${formatQuantity(measure, left, ctx.i18n.locale)} / ${formatQuantity(measure, total, ctx.i18n.locale)}`;
 
     svg.push(`<rect x="${x}" y="${top}" width="${width}" height="${height}" rx="${height / 2}" fill="${COLORS.track}"/>`);

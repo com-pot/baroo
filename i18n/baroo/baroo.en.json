@@ -335,6 +335,7 @@
             "tap_package_tag": "Tap a package tag",
             "unsealed": "Tapped",
             "poured": "Poured {quantity}",
+            "served": "Served {quantity}",
             "greeting_unknown": "Hi!",
             "no_sizes": "No size buttons",
             "no_sizes_hint": "Tell the barman",

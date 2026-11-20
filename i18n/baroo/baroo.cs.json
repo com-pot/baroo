@@ -339,6 +339,7 @@
             "tap_package_tag": "Přilož štítek balení",
             "unsealed": "Naraženo",
             "poured": "Načepováno {quantity}",
+            "served": "Podáno {quantity}",
             "greeting_unknown": "Ahoj!",
             "no_sizes": "Chybí tlačítka velikostí",
             "no_sizes_hint": "Řekni to barmanovi",

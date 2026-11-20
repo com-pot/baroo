@@ -186,3 +186,16 @@ h1.brand {
         height: auto;
     }
 }
+
+footer:has(.build-info) {
+    margin-block: 2rem 3rem;
+}
+
+.build-info {
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-variant-numeric: tabular-nums;
+}

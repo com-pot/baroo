@@ -1,11 +1,9 @@
 <script lang="ts">
     import { getUiLayers } from "$lib/ui/uiLayers.svelte";
     import { AppVersion, AppHomepage, formatBuildDate } from "$lib/version";
-    import { onMount } from "svelte";
     import Credits from "./Credits.svelte";
 
     const uiLayers = getUiLayers()
-
 
     function versionClicked() {
         const scope = 'dialog' in uiLayers.scopes ? 'dialog' : 'default'
@@ -16,8 +14,8 @@
 </script>
 
 <div class="build-info">
-    <a href={AppHomepage} target="_blank">Baroo</a>
-    <button class="btn btn-text" onclick={versionClicked}>{(AppVersion)}</button>
+    <span>Baroo</span>
+    <button class="btn btn-text btn-link" onclick={versionClicked}>{(AppVersion)}</button>
     <span role="separator">⊙</span>
     <span>{formatBuildDate()}</span>
 </div>
@@ -29,3 +27,4 @@
         </div>
     </div>
 {/snippet}
+

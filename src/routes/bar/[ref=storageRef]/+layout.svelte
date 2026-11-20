@@ -2,19 +2,18 @@
     import { onMount } from "svelte";
     import type { LayoutProps } from "./$types";
     import * as m from "$lib/paraglide/messages.js";
-    import { setUiLayers, UiLayerManager } from "$lib/ui/uiLayers.svelte";
-    import LayerStack from "$lib/ui/LayerStack.svelte";
     import SyncDrawer from "./SyncDrawer.svelte";
     import BuildInfo from "$lib/components/BuildInfo.svelte";
-    import Dialog from "$lib/components/Dialog.svelte";
+
     import { resolve } from "$app/paths";
     import ConnectionBadge from "$lib/components/ConnectionBadge.svelte";
+    import { getUiLayers } from "$lib/ui/uiLayers.svelte";
+
+    const uiLayers = getUiLayers()
 
     let { data, children, params }: LayoutProps = $props();
     const store = $derived(data.bar);
     const barSync = $derived(data.barSync)
-
-    const layerManager = setUiLayers(new UiLayerManager(['dialog']))
 
     onMount(() => store.lineCheck.watchConnectivity({
         onChange(online) {
@@ -63,16 +62,13 @@
     syncing={!!barSync.syncing}
     pendingCount={store.pending.length}
 
-    onclick={() => layerManager.pushComponent(SyncDrawer, {
+    onclick={() => uiLayers.pushComponent(SyncDrawer, {
         store,
         barSync,
     }, {
         heading: m["baroo.staff.sync_section"](),
     })}
 />
-
-<LayerStack layerManager={layerManager} />
-<LayerStack layerManager={layerManager} scope="dialog" component={Dialog} />
 
 <style lang="scss">
 :global(#app-root .conn-badge) {
@@ -82,16 +78,4 @@
     z-index: 50;
 }
 
-footer {
-    margin-block: 2rem 3rem;
-
-    :global(.build-info) {
-        display: flex;
-        justify-content: center;
-        gap: 0.4rem;
-        font-size: 0.75rem;
-        color: #9ca3af;
-        font-variant-numeric: tabular-nums;
-    }
-}
 </style>

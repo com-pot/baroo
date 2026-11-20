@@ -30,6 +30,7 @@
             "Ave, Já!",
             "Řekni sýr",
             "Dejte si výborný Guláš!",
+            "Potřebuju Flat White!"
         ],
     }
     function utter(utterance: string) {

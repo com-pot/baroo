@@ -6,10 +6,6 @@
 
     import type { LayoutData } from './$types';
     import type { Snippet } from "svelte";
-    import { setUiLayers, UiLayerManager } from "$lib/ui/uiLayers.svelte";
-    import LayerStack from "$lib/ui/LayerStack.svelte";
-
-    const layerManager = setUiLayers(new UiLayerManager())
 
     let { data, children }: { data: LayoutData; children: Snippet } = $props();
 </script>
@@ -48,6 +44,4 @@
     </header>
 
     {@render children()}
-
-    <LayerStack layerManager={layerManager} />
 </div>

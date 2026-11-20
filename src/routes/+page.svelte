@@ -4,6 +4,7 @@
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { readDevice } from '$lib/offline/idb';
+    import BuildInfo from '$lib/components/BuildInfo.svelte';
 
     let checking = $state(true);
 
@@ -41,6 +42,10 @@
     {/if}
 </main>
 
+<footer>
+    <BuildInfo />
+</footer>
+
 <style lang="scss">
 .landing {
     display: flex;
@@ -51,5 +56,13 @@
     padding: 1rem 0.25rem;
 
     width: 100vw; height: 100vh;
+
+    + footer {
+        position: fixed;
+        z-index: 3;
+        bottom: 0rem;
+        left: 50%;
+        translate: -50% 0;
+    }
 }
 </style>

@@ -4,7 +4,10 @@
     import { getLocale } from "$lib/paraglide/runtime.js";
 
     import { Renderer, setRenderer } from "$lib/rendering.svelte";
+    import LayerStack from "$lib/ui/LayerStack.svelte";
+    import Dialog from "$lib/components/Dialog.svelte";
     import { setUiFeedback, UiFeedback } from "$lib/ui/uiFeedback.svelte";
+    import { setUiLayers, UiLayerManager } from "$lib/ui/uiLayers.svelte";
 
     let { children } = $props();
 
@@ -12,6 +15,7 @@
         get locale() { return getLocale() },
     }))
     const uiFeedback = setUiFeedback(new UiFeedback(renderer))
+    const layerManager = setUiLayers(new UiLayerManager(['dialog']))
 </script>
 
 <div class="frame logo" style="aspect-ratio: 22.137 / 18.447;">
@@ -19,3 +23,6 @@
 </div>
 
 {@render children?.()}
+
+<LayerStack layerManager={layerManager} />
+<LayerStack layerManager={layerManager} scope="dialog" component={Dialog} />

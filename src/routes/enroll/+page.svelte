@@ -13,6 +13,7 @@
     import { messageOf } from "$lib/i18n";
     import type { ActionResult } from "@sveltejs/kit";
     import { getUiFeedback } from "$lib/ui/uiFeedback.svelte";
+    import BuildInfo from "$lib/components/BuildInfo.svelte";
 
     const uiFeedback = getUiFeedback()
 
@@ -162,6 +163,9 @@
         </div>
     </div>
 </main>
+<footer>
+    <BuildInfo />
+</footer>
 
 <style lang="scss">
     .enroll-page {
